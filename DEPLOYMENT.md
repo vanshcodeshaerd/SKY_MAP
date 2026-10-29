@@ -17,6 +17,43 @@ This architecture completely eliminates CORS issues, requires only a single port
 
 ---
 
+## ⚡ Option 0: Deploy on Vercel (Frontend on `your-app.vercel.app` + Cloud Backend)
+
+If you want your web application accessible at a **Vercel domain** (`https://your-app.vercel.app`):
+
+### Architecture
+- **Frontend**: Hosted on **Vercel** Edge CDN (lightning-fast React + Three.js + AR client).
+- **Backend**: Hosted on **Render.com**, **Railway.app**, or **Koyeb** (Python FastAPI + NASA JPL DE421 ephemeris).
+- **Integration**: Vercel talks to the backend via `VITE_API_BASE_URL` with zero CORS issues (CORS is pre-configured to allow all origins).
+
+---
+
+### Step 1: Deploy Backend to Render (Free, 2 Minutes)
+1. Go to [Render Dashboard](https://dashboard.render.com/) -> **New +** -> **Web Service**.
+2. Connect your GitHub repository: `https://github.com/vanshcodeshaerd/SKY_MAP.git`.
+3. Choose **Docker** environment (or set Root Directory to `backend` and run `uvicorn app.main:app --host 0.0.0.0 --port $PORT`).
+4. Click **Create Web Service**.
+5. Once deployed, copy your backend URL (e.g. `https://skygazer-api.onrender.com`).
+   *Test it in your browser: `https://skygazer-api.onrender.com/api/health` should return `{"status":"healthy"}`.*
+
+---
+
+### Step 2: Deploy Frontend to Vercel (1 Click)
+1. Go to [Vercel Dashboard](https://vercel.com/new).
+2. Import your GitHub repository: `https://github.com/vanshcodeshaerd/SKY_MAP.git`.
+3. In **Project Settings**:
+   - **Framework Preset**: `Vite`
+   - **Root Directory**: `frontend` (or leave default `./` as the repository has root `vercel.json` preconfigured)
+   - **Build Command**: `npm run build`
+   - **Output Directory**: `dist`
+4. Expand **Environment Variables** and add:
+   - **Key**: `VITE_API_BASE_URL`
+   - **Value**: `https://skygazer-api.onrender.com` *(your backend URL from Step 1)*
+5. Click **Deploy**!
+6. Your app is now live at `https://your-project.vercel.app` with instant global SSL, mobile AR camera access, and live NASA planetary telemetry!
+
+---
+
 ## 🛠️ Option 1: Local & VPS Deployment (Docker / Docker Compose)
 
 ### A. Run with Docker Compose

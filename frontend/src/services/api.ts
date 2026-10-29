@@ -4,7 +4,8 @@
 
 import { SolarCoordinates, DiurnalWaypoint, SolarEvents, VisionProcessResult } from '../types/astronomy';
 
-const API_BASE = '/api';
+const rawBase = import.meta.env.VITE_API_BASE_URL || '';
+const API_BASE = rawBase ? `${rawBase.replace(/\/$/, '')}/api` : '/api';
 
 export async function fetchServerHealth(): Promise<{
   status: string;
