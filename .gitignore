@@ -1,0 +1,15 @@
+node_modules/
+.venv/
+backend/.venv/
+**/de421.bsp
+dist/
+backend/static/
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+*.egg-info/
+.DS_Store
+.env
+.env.local

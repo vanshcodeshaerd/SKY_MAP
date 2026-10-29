@@ -1,0 +1,1 @@
+"""SkyGazer AR FastAPI backend."""
