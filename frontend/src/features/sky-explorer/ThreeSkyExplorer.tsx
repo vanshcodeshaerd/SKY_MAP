@@ -769,28 +769,37 @@ export function ThreeSkyExplorer({
         </div>
       )}
 
-      {/* 3D Viewport Card */}
-      <div className="glass-panel rounded-2xl overflow-hidden relative border border-slate-800 bg-slate-950 shadow-2xl">
-        {/* Top Info Bar */}
-        <div className="absolute top-4 left-4 z-10 bg-slate-950/85 backdrop-blur-md px-3.5 py-2.5 rounded-xl border border-slate-800 text-xs space-y-1 shadow-lg">
-          <div className="flex items-center gap-2 text-slate-100 font-semibold">
-            <Compass className="w-4 h-4 text-amber-400" />
-            <span>
-              {activeBodyMeta.symbol} {activeBodyMeta.name} — Realistic 3D Planetarium
+      {/* 3D Viewport Card - Responsive Height & Edge-to-Edge Canvas */}
+      <div className="glass-panel rounded-2xl sm:rounded-3xl overflow-hidden relative border border-slate-800 bg-slate-950 shadow-2xl h-[65vh] min-h-[440px] max-h-[720px]">
+        {/* Top Info Bar - Responsive Layout */}
+        <div className="absolute top-3 left-3 z-10 bg-slate-950/90 backdrop-blur-md px-3 py-1.5 sm:px-3.5 sm:py-2.5 rounded-xl border border-slate-800 text-xs shadow-lg max-w-[60vw] sm:max-w-none">
+          <div className="flex items-center gap-1.5 text-slate-100 font-semibold truncate">
+            <Compass className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+            <span className="truncate">
+              {activeBodyMeta.symbol} {activeBodyMeta.name}
+            </span>
+            <span
+              className={`px-1.5 py-0.2 rounded text-[9px] uppercase font-bold hidden sm:inline-block ${
+                isBelowHorizon
+                  ? 'bg-indigo-950/80 text-indigo-300 border border-indigo-800'
+                  : 'bg-emerald-950/80 text-emerald-300 border border-emerald-800'
+              }`}
+            >
+              {isBelowHorizon ? 'Sub-Horizon' : 'Visible'}
             </span>
           </div>
-          <div className="flex items-center gap-3 text-slate-300 font-mono text-[11px]">
+          <div className="flex flex-wrap items-center gap-x-2.5 gap-y-0.5 text-slate-300 font-mono text-[10px] sm:text-[11px] pt-0.5">
             <span>
-              Az: <strong className="text-amber-400">{activeCoords.azimuthDeg.toFixed(2)}°</strong>
+              Az: <strong className="text-amber-400">{activeCoords.azimuthDeg.toFixed(1)}°</strong>
             </span>
             <span>
               Alt:{' '}
               <strong className={isBelowHorizon ? 'text-indigo-400' : 'text-emerald-400'}>
                 {activeCoords.altitudeDeg >= 0 ? '+' : ''}
-                {activeCoords.altitudeDeg.toFixed(2)}°
+                {activeCoords.altitudeDeg.toFixed(1)}°
               </strong>
             </span>
-            <span>
+            <span className="hidden md:inline">
               Dist:{' '}
               <strong className="text-slate-200">
                 {activeCoords.distanceAu < 0.01
@@ -798,75 +807,62 @@ export function ThreeSkyExplorer({
                   : `${activeCoords.distanceAu.toFixed(3)} AU`}
               </strong>
             </span>
-            {activeCoords.phaseFraction !== undefined && (
-              <span>
-                Phase: <strong className="text-amber-300">{Math.round(activeCoords.phaseFraction * 100)}% ({activeCoords.phaseName || 'Lit'})</strong>
-              </span>
-            )}
-            <span
-              className={`px-2 py-0.5 rounded text-[10px] uppercase font-bold ${
-                isBelowHorizon
-                  ? 'bg-indigo-950/80 text-indigo-300 border border-indigo-800'
-                  : 'bg-emerald-950/80 text-emerald-300 border border-emerald-800'
-              }`}
-            >
-              {isBelowHorizon ? 'Sub-Horizon' : 'Visible in Sky'}
-            </span>
           </div>
         </div>
 
-        {/* Camera Preset Quick Bar */}
-        <div className="absolute top-4 right-4 z-10 bg-slate-950/85 backdrop-blur-md p-1.5 rounded-xl border border-slate-800 flex items-center gap-1.5 shadow-lg">
+        {/* Camera Preset Quick Bar - Responsive Scrollable Bar */}
+        <div className="absolute top-3 right-3 z-10 bg-slate-950/90 backdrop-blur-md p-1 rounded-xl border border-slate-800 flex items-center gap-1 shadow-lg max-w-[38vw] sm:max-w-none overflow-x-auto scrollbar-none">
           <button
             onClick={() => setCameraView('default')}
-            className="px-2.5 py-1 rounded-lg text-[11px] font-medium text-slate-300 hover:bg-slate-800 hover:text-white transition"
+            className="px-2 py-1 rounded-lg text-[10px] sm:text-[11px] font-medium text-slate-300 hover:bg-slate-800 hover:text-white transition whitespace-nowrap"
           >
-            Cinematic (45°)
+            45° Orbit
           </button>
           <button
             onClick={() => setCameraView('focusBody')}
-            className="px-2.5 py-1 rounded-lg text-[11px] font-medium text-amber-300 hover:bg-amber-950/60 border border-amber-500/30 transition flex items-center gap-1"
+            className="px-2 py-1 rounded-lg text-[10px] sm:text-[11px] font-medium text-amber-300 hover:bg-amber-950/60 border border-amber-500/30 transition whitespace-nowrap"
           >
-            <span>Focus {activeBodyMeta.name}</span>
+            Focus
           </button>
           <button
             onClick={() => setCameraView('closeUp')}
-            className={`px-2.5 py-1 rounded-lg text-[11px] font-medium transition flex items-center gap-1 ${
+            className={`px-2 py-1 rounded-lg text-[10px] sm:text-[11px] font-medium transition flex items-center gap-1 whitespace-nowrap ${
               isCloseUp
                 ? 'bg-amber-500 text-slate-950 font-bold'
                 : 'text-amber-400 hover:bg-slate-800 border border-amber-500/30'
             }`}
-            title="Inspect high-detail planetary surface, craters, and rings"
+            title="Inspect 3D Surface"
           >
-            <ZoomIn className="w-3.5 h-3.5" />
-            <span>Inspect 3D Surface</span>
+            <ZoomIn className="w-3 h-3" />
+            <span className="hidden sm:inline">Inspect</span>
           </button>
           <button
             onClick={() => setShowConstellations(!showConstellations)}
-            className={`px-2.5 py-1 rounded-lg text-[11px] font-medium transition ${
+            className={`px-2 py-1 rounded-lg text-[10px] sm:text-[11px] font-medium transition whitespace-nowrap ${
               showConstellations
                 ? 'bg-sky-500/20 text-sky-300 border border-sky-500/40'
                 : 'text-slate-400 hover:text-slate-200'
             }`}
           >
-            {showConstellations ? '✨ Constellations ON' : 'Constellations OFF'}
+            {showConstellations ? '✨ Stars ON' : 'Stars OFF'}
           </button>
           <button
             onClick={() => setShowAllBodies(!showAllBodies)}
-            className={`px-2.5 py-1 rounded-lg text-[11px] font-medium transition ${
+            className={`px-2 py-1 rounded-lg text-[10px] sm:text-[11px] font-medium transition whitespace-nowrap ${
               showAllBodies
                 ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
                 : 'text-slate-400 hover:text-slate-200'
             }`}
           >
-            {showAllBodies ? 'Showing All Bodies' : 'Solo Target Mode'}
+            {showAllBodies ? 'All' : 'Solo'}
           </button>
         </div>
 
         {/* Orbit Control Hint */}
-        <div className="absolute bottom-4 left-4 z-10 bg-slate-950/80 backdrop-blur-md px-3 py-1.5 rounded-lg border border-slate-800/80 text-[11px] text-slate-300 flex items-center gap-2">
-          <Eye className="w-3.5 h-3.5 text-amber-400" />
-          <span>Left-Drag: <strong>Orbit 360°</strong> | Right-Drag: <strong>Pan</strong> | Scroll: <strong>Zoom to Surface</strong></span>
+        <div className="absolute bottom-3 left-3 z-10 bg-slate-950/80 backdrop-blur-md px-2.5 py-1 rounded-lg border border-slate-800/80 text-[10px] text-slate-300 flex items-center gap-1.5 shadow-md">
+          <Eye className="w-3 h-3 text-amber-400" />
+          <span className="hidden sm:inline">Drag to Orbit 360° · Scroll to Zoom · Click Planet to Target</span>
+          <span className="sm:hidden">Touch & Drag to Orbit 360°</span>
         </div>
 
         {/* Ground Mode Toggle */}

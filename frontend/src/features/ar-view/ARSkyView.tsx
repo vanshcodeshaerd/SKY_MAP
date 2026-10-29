@@ -2,16 +2,16 @@ import { useEffect, useRef, useState, useMemo } from 'react';
 import {
   Camera,
   RefreshCw,
-  Sparkles,
   SlidersHorizontal,
   Eye,
   Glasses,
-  Moon,
-  Orbit,
   Compass,
   Navigation,
   Target,
   RotateCcw,
+  Layers,
+  X,
+  Sliders,
 } from 'lucide-react';
 import {
   GeodeticLocation,
@@ -76,6 +76,10 @@ export function ARSkyView({
   const [showAllPlanetsInAR, setShowAllPlanetsInAR] = useState<boolean>(true);
   const [showEcliptic, setShowEcliptic] = useState<boolean>(true);
   const [skyOpacity, setSkyOpacity] = useState<number>(0.6);
+
+  // Modern UI states: clean popover menus to eliminate screen clutter
+  const [isLayersOpen, setIsLayersOpen] = useState<boolean>(false);
+  const [isTrimOpen, setIsTrimOpen] = useState<boolean>(false);
 
   // Quick compass trim for real-life magnetic alignment (+/- degrees on the fly)
   const [quickAzimuthNudge, setQuickAzimuthNudge] = useState<number>(0);
@@ -214,8 +218,6 @@ export function ARSkyView({
     const renderLoop = () => {
       animId = requestAnimationFrame(renderLoop);
 
-      // 1. Determine target attitude angles from device sensor or manual drags
-      // Uses the upgraded true compass heading and elevation pitch from useDeviceOrientation
       const hasSensor =
         orientation.compassHeading !== undefined &&
         orientation.compassHeading !== null &&
@@ -224,9 +226,10 @@ export function ARSkyView({
 
       const targetAlpha = hasSensor ? orientation.compassHeading! : manualYaw;
       const targetBeta = hasSensor ? orientation.cameraPitch! : manualPitch;
-      const targetGamma = orientation.cameraRoll !== undefined && orientation.cameraRoll !== null ? orientation.cameraRoll! : manualRoll;
+      const targetGamma =
+        orientation.cameraRoll !== undefined && orientation.cameraRoll !== null ? orientation.cameraRoll! : manualRoll;
 
-      // 2. Exponential smoothing (low-pass filter) to eliminate phone sensor jitter
+      // Exponential smoothing low-pass filter
       const smoothFactor = hasSensor ? 0.25 : 0.45;
       smoothedAnglesRef.current.heading += (targetAlpha - smoothedAnglesRef.current.heading) * smoothFactor;
       smoothedAnglesRef.current.pitch += (targetBeta - smoothedAnglesRef.current.pitch) * smoothFactor;
@@ -236,7 +239,6 @@ export function ARSkyView({
       const rawBeta = smoothedAnglesRef.current.pitch;
       const rawGamma = smoothedAnglesRef.current.roll;
 
-      // Apply magnetic declination, calibration nudge, and on-the-fly quick trim
       const effectiveHeading =
         (rawAlpha + calibration.declinationDeg + calibration.azimuthNudgeDeg + quickAzimuthNudge + 360) % 360;
       const effectivePitch = Math.max(-89.9, Math.min(89.9, rawBeta + calibration.altitudeNudgeDeg));
@@ -245,7 +247,7 @@ export function ARSkyView({
       setHudHeading(effectiveHeading);
       setHudPitch(effectivePitch);
 
-      // 3. Project all 9 Solar System bodies using mathematically exact ENU-to-Camera Orthonormal Matrix
+      // Project all 9 Solar System bodies using Orthonormal Camera Matrix
       const bodyProjs: Record<CelestialBodyId, any> = {} as any;
       CELESTIAL_BODY_LIST.forEach((body) => {
         const pos = allPositions[body.id];
@@ -264,7 +266,7 @@ export function ARSkyView({
       });
       setProjectedBodies(bodyProjs);
 
-      // 4. Project Ecliptic golden arc
+      // Project Ecliptic golden arc
       if (showEcliptic) {
         const eclipticCoords = eclipticEnuPoints.map((vec) => {
           const p = projectEnuToScreen(
@@ -281,7 +283,7 @@ export function ARSkyView({
         setProjectedEcliptic(eclipticCoords);
       }
 
-      // 5. Project Horizon Cardinal Points (N, E, S, W)
+      // Project Horizon Cardinal Points (N, E, S, W)
       const cardinalCoords = cardinalEnuPoints.map((c) => {
         const p = projectEnuToScreen(
           c.enu,
@@ -296,7 +298,7 @@ export function ARSkyView({
       });
       setProjectedCardinals(cardinalCoords);
 
-      // 6. Project stars and constellation lines
+      // Project stars and constellation lines
       if (showConstellations) {
         const projectedStarCoords = new Map<string, { u: number; v: number; inFront: boolean }>();
         const starList: any[] = [];
@@ -374,7 +376,6 @@ export function ARSkyView({
     elevationOffsetDeg: 0,
   };
 
-  // Is active planet within visible screen bounds
   const isTargetOnScreen =
     activeProj.isInFront &&
     activeProj.u >= 35 &&
@@ -382,7 +383,6 @@ export function ARSkyView({
     activeProj.v >= 35 &&
     activeProj.v <= viewport.height - 35;
 
-  // Is target locked (centered in reticle within 5.5 degrees)
   const isTargetLocked = isTargetOnScreen && activeProj.angularSeparationDeg < 5.5;
 
   // Screen perimeter guidance beacon calculation
@@ -419,7 +419,7 @@ export function ARSkyView({
     };
   }, [activeProj, isTargetOnScreen, viewport]);
 
-  // Compute flight guidance turn instructions
+  // Turn guidance instructions
   const guidanceInstruction = useMemo(() => {
     if (isTargetLocked) return 'TARGET LOCKED';
 
@@ -427,27 +427,25 @@ export function ARSkyView({
     const elDiff = activeProj.elevationOffsetDeg;
 
     const parts: string[] = [];
-
     if (Math.abs(azDiff) > 2.5) {
-      if (azDiff > 0) parts.push(`Turn Right ${Math.abs(azDiff).toFixed(0)}°`);
-      else parts.push(`Turn Left ${Math.abs(azDiff).toFixed(0)}°`);
+      if (azDiff > 0) parts.push(`Right ${Math.abs(azDiff).toFixed(0)}°`);
+      else parts.push(`Left ${Math.abs(azDiff).toFixed(0)}°`);
     }
 
     if (Math.abs(elDiff) > 2.5) {
-      if (elDiff > 0) parts.push(`Tilt Up ${Math.abs(elDiff).toFixed(0)}°`);
-      else parts.push(`Tilt Down ${Math.abs(elDiff).toFixed(0)}°`);
+      if (elDiff > 0) parts.push(`Up ${Math.abs(elDiff).toFixed(0)}°`);
+      else parts.push(`Down ${Math.abs(elDiff).toFixed(0)}°`);
     }
 
-    if (parts.length === 0) return 'Aligning crosshair...';
-    return parts.join(' & ');
+    if (parts.length === 0) return 'Centering...';
+    return parts.join(' · ');
   }, [activeProj, isTargetLocked]);
 
-  // Guidance Arrow Rotation Angle (points directly along 2D turn direction)
   const guidanceArrowAngle = useMemo(() => {
     return (Math.atan2(-activeProj.elevationOffsetDeg, activeProj.azimuthOffsetDeg) * 180) / Math.PI;
   }, [activeProj]);
 
-  // Compass Tape Ticks Generation (around current heading)
+  // Compass Tape Ticks Generation
   const compassTicks = useMemo(() => {
     const ticks: { deg: number; label: string }[] = [];
     const cardinalLabels: Record<number, string> = {
@@ -470,16 +468,14 @@ export function ARSkyView({
     return ticks;
   }, []);
 
-  // Quick Align Compass to Currently Selected Body (Sun or Moon in daylight/night)
   const handleSnapCompassToBody = () => {
-    // Aligns current heading to match the selected celestial body's true azimuth
     const trueAz = activeCoords.azimuthDeg;
     const diff = trueAz - hudHeading;
     setQuickAzimuthNudge((prev) => (prev + diff + 360) % 360);
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       {/* Horizontal Multi-Planet Selector Strip */}
       <CelestialBodySelector
         selectedBody={selectedBody}
@@ -487,29 +483,27 @@ export function ARSkyView({
         allPositions={allPositions}
       />
 
-      {/* iOS / Mobile Gyro Permission Banner */}
+      {/* Mobile Gyro Permission Banner */}
       {needsOrientationPermission && (
-        <div className="p-3 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-between text-amber-300 text-xs shadow-lg">
+        <div className="p-2.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-between text-amber-300 text-xs shadow-lg">
           <div className="flex items-center gap-2">
-            <Compass className="w-4 h-4 text-amber-400" />
-            <span>Enable device motion sensors for real-time sky orientation tracking</span>
+            <Compass className="w-4 h-4 text-amber-400 shrink-0" />
+            <span className="text-[11px] sm:text-xs">Enable motion sensors for live sky tracking</span>
           </div>
           <button
             onClick={onRequestOrientationPermission}
-            className="px-3 py-1 rounded-xl bg-amber-500 text-slate-950 font-bold text-xs hover:bg-amber-400 transition"
+            className="px-3 py-1 rounded-xl bg-amber-500 text-slate-950 font-bold text-xs hover:bg-amber-400 transition shrink-0 ml-2"
           >
             Enable Gyro
           </button>
         </div>
       )}
 
-      {/* Main AR / VR Viewport Container */}
+      {/* Main AR / VR Viewport Container - Fully Responsive Height */}
       <div
         ref={containerRef}
-        className={`relative w-full h-[580px] rounded-3xl overflow-hidden shadow-2xl border transition-colors select-none ${
-          nightVisionMode
-            ? 'bg-red-950/90 border-red-800 ring-2 ring-red-600/30'
-            : 'bg-slate-950 border-slate-800'
+        className={`relative w-full h-[68vh] min-h-[440px] max-h-[720px] rounded-2xl sm:rounded-3xl overflow-hidden shadow-2xl border transition-colors select-none ${
+          nightVisionMode ? 'bg-red-950/90 border-red-800' : 'bg-slate-950 border-slate-800'
         }`}
       >
         {/* Layer 1: Real-World Video Feed (AR Mode) */}
@@ -535,9 +529,9 @@ export function ARSkyView({
           }}
         />
 
-        {/* Layer 3: SVG Celestial Vector Canvas (Constellations, Ecliptic, Stars, Horizon) */}
+        {/* Layer 3: SVG Celestial Vector Canvas */}
         <svg className="absolute inset-0 w-full h-full pointer-events-none z-5">
-          {/* Glowing Golden Ecliptic Line (Planetary Highway) */}
+          {/* Ecliptic Line */}
           {showEcliptic && projectedEcliptic.length > 2 && (
             <g opacity={nightVisionMode ? 0.35 : 0.65}>
               {projectedEcliptic.map((pt, i) => {
@@ -553,7 +547,7 @@ export function ARSkyView({
                     x2={next.x}
                     y2={next.y}
                     stroke={nightVisionMode ? '#ef4444' : '#F59E0B'}
-                    strokeWidth={1.75}
+                    strokeWidth={1.5}
                     strokeDasharray="4 4"
                   />
                 );
@@ -561,7 +555,7 @@ export function ARSkyView({
             </g>
           )}
 
-          {/* Glowing Constellation Lines */}
+          {/* Constellation Lines */}
           {showConstellations &&
             projectedConstellations.map((line, i) => (
               <line
@@ -570,34 +564,29 @@ export function ARSkyView({
                 y1={line.y1}
                 x2={line.y2}
                 stroke={nightVisionMode ? '#ef4444' : '#38bdf8'}
-                strokeWidth={1.25}
+                strokeWidth={1.2}
                 strokeDasharray="3 3"
-                opacity={nightVisionMode ? 0.4 : 0.55}
+                opacity={nightVisionMode ? 0.35 : 0.55}
               />
             ))}
 
-          {/* Star Field Points & Labels */}
+          {/* Stars */}
           {showConstellations &&
             projectedStars.map((star, i) => (
               <g key={`star-${i}`} transform={`translate(${star.u}, ${star.v})`}>
                 <circle
-                  r={Math.max(1.5, 4.2 - star.mag * 0.75)}
+                  r={Math.max(1.5, 4.0 - star.mag * 0.75)}
                   fill={nightVisionMode ? '#f87171' : star.color}
                   opacity={0.9}
                 />
-                <circle
-                  r={Math.max(3, 7.5 - star.mag * 1.2)}
-                  fill={nightVisionMode ? '#ef4444' : star.color}
-                  opacity={0.25}
-                />
-                {star.mag < 1.8 && (
+                {star.mag < 1.6 && (
                   <text
-                    x={8}
+                    x={7}
                     y={3}
                     fill={nightVisionMode ? '#fca5a5' : '#94a3b8'}
                     fontSize={9}
                     fontFamily="monospace"
-                    opacity={0.7}
+                    opacity={0.65}
                   >
                     {star.name}
                   </text>
@@ -605,19 +594,19 @@ export function ARSkyView({
               </g>
             ))}
 
-          {/* Projected Cardinal Horizon Markers (N, E, S, W) */}
+          {/* Horizon Cardinal Markers (N, E, S, W) */}
           {projectedCardinals.map((c, i) => {
             if (!c.inFront || c.x < -30 || c.x > viewport.width + 30 || c.y < -30 || c.y > viewport.height + 30)
               return null;
 
             return (
               <g key={`cardinal-${i}`} transform={`translate(${c.x}, ${c.y})`}>
-                <circle r={12} fill="rgba(15, 23, 42, 0.7)" stroke="#10b981" strokeWidth={1} opacity={0.8} />
+                <circle r={11} fill="rgba(15, 23, 42, 0.75)" stroke="#10b981" strokeWidth={1} opacity={0.8} />
                 <text
                   textAnchor="middle"
                   dominantBaseline="central"
                   fill="#34d399"
-                  fontSize={10}
+                  fontSize={9}
                   fontWeight="bold"
                   fontFamily="monospace"
                 >
@@ -631,207 +620,242 @@ export function ARSkyView({
         {/* Camera Inactive Fallback Prompt in AR Mode */}
         {viewMode === 'ar' && !isCameraActive && (
           <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center bg-slate-950/90 z-0 space-y-3">
-            <div className="w-14 h-14 rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-center text-amber-400 mb-1">
-              <Camera className="w-7 h-7" />
+            <div className="w-12 h-12 rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-center text-amber-400 mb-1">
+              <Camera className="w-6 h-6" />
             </div>
-            <h3 className="text-base font-semibold text-slate-100">Live Camera Stream Inactive</h3>
+            <h3 className="text-sm sm:text-base font-semibold text-slate-100">Live Camera Stream Inactive</h3>
             <p className="text-xs text-slate-400 max-w-sm">
-              Enable your camera to blend the virtual star map and planets over the real sky, or switch to{' '}
-              <strong>VR Gyro Planetarium</strong> mode!
+              Enable your camera to blend the virtual star map over the real sky, or switch to <strong>VR Gyro</strong>!
             </p>
             {cameraError && (
-              <p className="text-xs text-red-400 font-mono bg-red-950/40 px-3 py-1.5 rounded-lg border border-red-900/60 max-w-md">
+              <p className="text-[11px] text-red-400 font-mono bg-red-950/40 px-3 py-1.5 rounded-lg border border-red-900/60 max-w-md">
                 {cameraError}
               </p>
             )}
-            <div className="flex items-center gap-3 pt-2">
+            <div className="flex items-center gap-2.5 pt-1">
               <button
                 onClick={startCamera}
-                className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-semibold text-xs transition shadow-lg shadow-amber-500/20"
+                className="px-4 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-semibold text-xs transition shadow-lg shadow-amber-500/20"
               >
                 Enable Camera
               </button>
               <button
                 onClick={() => setViewMode('vr')}
-                className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-semibold text-xs transition"
+                className="px-4 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-semibold text-xs transition"
               >
-                Switch to VR Gyro Mode
+                VR Gyro Mode
               </button>
             </div>
           </div>
         )}
 
-        {/* Star Walk Style Top Compass Azimuth Tape HUD */}
-        <div className="absolute top-0 inset-x-0 h-11 bg-gradient-to-b from-slate-950/90 to-transparent flex items-center justify-center overflow-hidden pointer-events-none z-10 border-b border-slate-800/40">
-          <div className="relative w-80 h-full flex items-center justify-center">
-            {/* Center Pointer Triangle */}
-            <div className="absolute top-1 text-amber-400 text-xs">▼</div>
-            {/* Compass Scale */}
+        {/* Minimalist Compass Ribbon at Top */}
+        <div className="absolute top-0 inset-x-0 h-9 bg-gradient-to-b from-slate-950/90 to-transparent flex items-center justify-center overflow-hidden pointer-events-none z-10 border-b border-slate-800/30">
+          <div className="relative w-72 h-full flex items-center justify-center">
+            <div className="absolute top-0.5 text-amber-400 text-[10px]">▼</div>
             <div
-              className="flex items-center gap-6 transition-transform duration-75"
+              className="flex items-center gap-5 transition-transform duration-75"
               style={{
-                transform: `translateX(${-((hudHeading % 360) * 4)}px)`,
+                transform: `translateX(${-((hudHeading % 360) * 3.5)}px)`,
               }}
             >
               {[...compassTicks, ...compassTicks, ...compassTicks].map((tick, i) => (
-                <div key={i} className="flex flex-col items-center min-w-[32px] text-[10px] font-mono">
+                <div key={i} className="flex flex-col items-center min-w-[28px] text-[9px] font-mono">
                   <span className={tick.label.length <= 2 ? 'text-amber-400 font-bold' : 'text-slate-400'}>
                     {tick.label}
                   </span>
-                  <span className="w-0.5 h-1.5 bg-slate-600 mt-0.5" />
+                  <span className="w-0.5 h-1 bg-slate-700 mt-0.5" />
                 </div>
               ))}
             </div>
           </div>
         </div>
 
-        {/* Flight-Grade Guidance Banner at Top Center */}
-        <div className="absolute top-12 inset-x-4 flex justify-center pointer-events-none z-20">
+        {/* Sleek Floating Guidance Pill at Top Center */}
+        <div className="absolute top-11 inset-x-2 flex justify-center pointer-events-none z-20">
           <div
-            className={`px-4 py-1.5 rounded-full backdrop-blur-md border shadow-2xl flex items-center gap-2 text-xs font-mono transition-all ${
+            className={`px-3 py-1 rounded-full backdrop-blur-md border shadow-xl flex items-center gap-1.5 text-[11px] font-mono transition-all max-w-[90vw] truncate ${
               isTargetLocked
-                ? 'bg-emerald-950/90 border-emerald-500 text-emerald-300 ring-2 ring-emerald-500/40 animate-pulse'
-                : 'bg-slate-950/90 border-amber-500/60 text-amber-300'
+                ? 'bg-emerald-950/90 border-emerald-500 text-emerald-300 ring-2 ring-emerald-500/40'
+                : 'bg-slate-950/90 border-amber-500/50 text-amber-300'
             }`}
           >
             {isTargetLocked ? (
-              <Target className="w-4 h-4 text-emerald-400 animate-spin" />
+              <Target className="w-3.5 h-3.5 text-emerald-400 animate-spin shrink-0" />
             ) : (
               <div
-                className="w-4 h-4 flex items-center justify-center transition-transform"
+                className="w-3.5 h-3.5 flex items-center justify-center transition-transform shrink-0"
                 style={{ transform: `rotate(${guidanceArrowAngle}deg)` }}
               >
-                <Navigation className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
+                <Navigation className="w-3 h-3 text-amber-400 fill-amber-400" />
               </div>
             )}
             <span className="font-semibold">{guidanceInstruction}</span>
-            <span className="text-[10px] text-slate-400 font-normal">
-              ({activeMeta.name}: {activeProj.angularSeparationDeg.toFixed(0)}° away)
-            </span>
+            <span className="text-[10px] text-slate-400 truncate">({activeMeta.name})</span>
           </div>
         </div>
 
-        {/* Pitch Ladder Elevation Indicator (Left Side) */}
-        <div className="absolute left-3 top-20 bottom-20 w-10 flex flex-col justify-between items-center pointer-events-none z-10 text-[10px] font-mono text-slate-400">
-          <span>+90°</span>
-          <span>+60°</span>
-          <span>+30°</span>
-          <span className="text-amber-400 font-bold bg-slate-950/80 px-1 py-0.5 rounded border border-amber-500/40">
-            {hudPitch >= 0 ? '+' : ''}{hudPitch.toFixed(0)}°
-          </span>
-          <span>-30°</span>
-          <span>-60°</span>
-          <span>-90°</span>
-        </div>
-
-        {/* Top Control Action Bar (Right Side) */}
-        <div className="absolute top-14 right-4 z-20 flex flex-wrap items-center gap-2 pointer-events-auto">
-          {/* Mode Switch (AR vs VR) */}
+        {/* Uncluttered Top Right Action Bar (Mode Pill + Layers Button) */}
+        <div className="absolute top-10 right-3 z-30 flex items-center gap-1.5 pointer-events-auto">
+          {/* Mode Switch Pill */}
           <button
             onClick={() => setViewMode(viewMode === 'ar' ? 'vr' : 'ar')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 border backdrop-blur-md transition shadow-lg ${
+            className={`px-2.5 py-1 rounded-xl text-xs font-semibold flex items-center gap-1 border backdrop-blur-md transition shadow-md ${
               viewMode === 'vr'
-                ? 'bg-purple-600 text-white border-purple-500'
+                ? 'bg-purple-600/90 text-white border-purple-500'
                 : 'bg-slate-900/80 text-slate-200 border-slate-800 hover:bg-slate-800'
             }`}
-            title="Toggle between Camera AR Overlay and Gyro VR Planetarium"
+            title="Switch between AR Camera and VR Planetarium"
           >
             <Glasses className="w-3.5 h-3.5" />
-            <span>{viewMode === 'ar' ? 'AR Camera' : 'VR Planetarium'}</span>
+            <span className="text-[11px] hidden xs:inline">{viewMode === 'ar' ? 'AR' : 'VR'}</span>
           </button>
 
-          {/* Red Night Vision Mode Toggle */}
+          {/* Unified Layers & Controls Button (Unclutters the viewport!) */}
           <button
-            onClick={() => setNightVisionMode(!nightVisionMode)}
-            className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 border backdrop-blur-md transition shadow-lg ${
-              nightVisionMode
-                ? 'bg-red-600 text-white border-red-500 ring-2 ring-red-500/50'
+            onClick={() => setIsLayersOpen(!isLayersOpen)}
+            className={`p-1.5 rounded-xl text-xs font-semibold flex items-center gap-1 border backdrop-blur-md transition shadow-md ${
+              isLayersOpen
+                ? 'bg-amber-500 text-slate-950 border-amber-400'
                 : 'bg-slate-900/80 text-slate-200 border-slate-800 hover:bg-slate-800'
             }`}
-            title="Toggle Red Night Vision Mode for Dark Adaptation"
+            title="Display Layers & Options"
           >
-            <Moon className="w-3.5 h-3.5" />
-            <span>Red Mode</span>
-          </button>
-
-          {/* Ecliptic Orbit Highway Toggle */}
-          <button
-            onClick={() => setShowEcliptic(!showEcliptic)}
-            className={`px-3 py-1.5 rounded-xl text-xs font-semibold border backdrop-blur-md transition shadow-lg ${
-              showEcliptic
-                ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
-                : 'bg-slate-900/80 text-slate-400 border-slate-800'
-            }`}
-            title="Toggle the Golden Ecliptic Zodiac Path"
-          >
-            <Orbit className="w-3.5 h-3.5 inline mr-1" />
-            <span>Ecliptic</span>
-          </button>
-
-          {/* Constellations Overlay Toggle */}
-          <button
-            onClick={() => setShowConstellations(!showConstellations)}
-            className={`px-3 py-1.5 rounded-xl text-xs font-semibold border backdrop-blur-md transition shadow-lg ${
-              showConstellations
-                ? 'bg-sky-500/20 text-sky-300 border-sky-500/40'
-                : 'bg-slate-900/80 text-slate-400 border-slate-800'
-            }`}
-          >
-            Constellations
-          </button>
-
-          {/* All Planets in AR Toggle */}
-          <button
-            onClick={() => setShowAllPlanetsInAR(!showAllPlanetsInAR)}
-            className={`px-3 py-1.5 rounded-xl text-xs font-semibold border backdrop-blur-md transition shadow-lg ${
-              showAllPlanetsInAR
-                ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
-                : 'bg-slate-900/80 text-slate-400 border-slate-800'
-            }`}
-          >
-            {showAllPlanetsInAR ? 'All Planets ON' : 'Solo Target'}
-          </button>
-
-          {isCameraActive && viewMode === 'ar' && (
-            <>
-              <button
-                onClick={toggleFacingMode}
-                className="p-2 rounded-xl bg-slate-900/80 hover:bg-slate-800 text-slate-200 border border-slate-800 backdrop-blur-md text-xs transition shadow-lg"
-                title={`Switch camera (current: ${facingMode})`}
-              >
-                <RefreshCw className="w-4 h-4" />
-              </button>
-              <button
-                onClick={stopCamera}
-                className="px-2.5 py-1.5 rounded-xl bg-red-950/80 hover:bg-red-900/80 text-red-200 border border-red-800/80 backdrop-blur-md text-xs transition shadow-lg"
-              >
-                Stop
-              </button>
-            </>
-          )}
-
-          <button
-            onClick={onOpenCalibration}
-            className="px-3 py-1.5 rounded-xl bg-slate-900/80 hover:bg-slate-800 text-slate-200 border border-slate-800 backdrop-blur-md text-xs flex items-center gap-1.5 transition shadow-lg"
-          >
-            <SlidersHorizontal className="w-3.5 h-3.5 text-amber-400" />
-            <span>Calibrate</span>
+            <Layers className="w-3.5 h-3.5" />
           </button>
         </div>
 
-        {/* Center Crosshair (Weapon / Science HUD Style) */}
+        {/* Uncluttered Display & Tools Popover Menu */}
+        {isLayersOpen && (
+          <div className="absolute top-20 right-3 w-64 max-w-[85vw] bg-slate-950/95 backdrop-blur-xl border border-slate-800 p-3.5 rounded-2xl shadow-2xl z-40 space-y-3 pointer-events-auto text-xs animate-fade-in">
+            <div className="flex items-center justify-between pb-1.5 border-b border-slate-800">
+              <span className="font-semibold text-slate-200 flex items-center gap-1.5">
+                <Sliders className="w-3.5 h-3.5 text-amber-400" />
+                <span>Display & Tools</span>
+              </span>
+              <button
+                onClick={() => setIsLayersOpen(false)}
+                className="p-1 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
+            {/* Layer Toggles */}
+            <div className="space-y-1.5">
+              <button
+                onClick={() => setShowConstellations(!showConstellations)}
+                className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-xl border transition ${
+                  showConstellations
+                    ? 'bg-sky-500/20 text-sky-200 border-sky-500/40'
+                    : 'bg-slate-900/60 text-slate-400 border-slate-800'
+                }`}
+              >
+                <span>✨ Constellations & Stars</span>
+                <span className="text-[10px] font-mono">{showConstellations ? 'ON' : 'OFF'}</span>
+              </button>
+
+              <button
+                onClick={() => setShowEcliptic(!showEcliptic)}
+                className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-xl border transition ${
+                  showEcliptic
+                    ? 'bg-amber-500/20 text-amber-200 border-amber-500/40'
+                    : 'bg-slate-900/60 text-slate-400 border-slate-800'
+                }`}
+              >
+                <span>🪐 Ecliptic Zodiac Orbit</span>
+                <span className="text-[10px] font-mono">{showEcliptic ? 'ON' : 'OFF'}</span>
+              </button>
+
+              <button
+                onClick={() => setShowAllPlanetsInAR(!showAllPlanetsInAR)}
+                className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-xl border transition ${
+                  showAllPlanetsInAR
+                    ? 'bg-emerald-500/20 text-emerald-200 border-emerald-500/40'
+                    : 'bg-slate-900/60 text-slate-400 border-slate-800'
+                }`}
+              >
+                <span>🌌 All Planets in Sky</span>
+                <span className="text-[10px] font-mono">{showAllPlanetsInAR ? 'ALL' : 'SOLO'}</span>
+              </button>
+
+              <button
+                onClick={() => setNightVisionMode(!nightVisionMode)}
+                className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-xl border transition ${
+                  nightVisionMode
+                    ? 'bg-red-600 text-white border-red-500'
+                    : 'bg-slate-900/60 text-slate-400 border-slate-800'
+                }`}
+              >
+                <span>🔴 Red Night Vision</span>
+                <span className="text-[10px] font-mono">{nightVisionMode ? 'ACTIVE' : 'OFF'}</span>
+              </button>
+            </div>
+
+            {/* Camera Options in AR Mode */}
+            {isCameraActive && viewMode === 'ar' && (
+              <div className="flex items-center gap-2 pt-1 border-t border-slate-800">
+                <button
+                  onClick={toggleFacingMode}
+                  title={`Switch camera lens (current: ${facingMode})`}
+                  className="flex-1 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 flex items-center justify-center gap-1.5 text-[11px]"
+                >
+                  <RefreshCw className="w-3 h-3" />
+                  <span>Switch Lens</span>
+                </button>
+                <button
+                  onClick={stopCamera}
+                  className="py-1.5 px-3 rounded-xl bg-red-950/80 hover:bg-red-900 text-red-300 border border-red-800/80 text-[11px]"
+                >
+                  Stop
+                </button>
+              </div>
+            )}
+
+            {/* Sky Transparency Slider */}
+            <div className="pt-1.5 border-t border-slate-800 space-y-1">
+              <div className="flex items-center justify-between text-[11px] text-slate-400">
+                <span>Sky Opacity:</span>
+                <span className="font-mono text-amber-300">{(skyOpacity * 100).toFixed(0)}%</span>
+              </div>
+              <input
+                type="range"
+                min="0.1"
+                max="1"
+                step="0.05"
+                value={skyOpacity}
+                onChange={(e) => setSkyOpacity(parseFloat(e.target.value))}
+                className="w-full accent-amber-500 cursor-pointer h-1.5 bg-slate-800 rounded-lg"
+              />
+            </div>
+
+            {/* Calibration Trigger */}
+            <button
+              onClick={() => {
+                setIsLayersOpen(false);
+                onOpenCalibration();
+              }}
+              className="w-full py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-amber-300 border border-amber-500/30 flex items-center justify-center gap-1.5 text-[11px] transition"
+            >
+              <SlidersHorizontal className="w-3.5 h-3.5" />
+              <span>Sensor Calibration</span>
+            </button>
+          </div>
+        )}
+
+        {/* Center Crosshair */}
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
-          <div className="relative w-8 h-8 flex items-center justify-center opacity-40">
+          <div className="relative w-7 h-7 flex items-center justify-center opacity-30">
             <div className="absolute w-full h-[1px] bg-slate-400" />
             <div className="absolute h-full w-[1px] bg-slate-400" />
-            <div className="w-3 h-3 rounded-full border border-slate-400" />
+            <div className="w-2.5 h-2.5 rounded-full border border-slate-400" />
           </div>
         </div>
 
         {/* Render ALL Visible Solar System Planets with Photorealistic 3D Appearance */}
         {showAllPlanetsInAR &&
           CELESTIAL_BODY_LIST.map((b) => {
-            if (b.id === selectedBody) return null; // handled by primary target lock reticle below
+            if (b.id === selectedBody) return null;
             const proj = projectedBodies[b.id];
             if (!proj || !proj.isInFront) return null;
             if (proj.u < 15 || proj.u > viewport.width - 15 || proj.v < 15 || proj.v > viewport.height - 15) return null;
@@ -854,12 +878,12 @@ export function ARSkyView({
                   <img
                     src={thumbUrl}
                     alt={b.name}
-                    className="relative w-9 h-9 object-contain drop-shadow-[0_0_8px_rgba(0,0,0,0.8)]"
+                    className="relative w-8 h-8 object-contain drop-shadow-[0_0_8px_rgba(0,0,0,0.8)]"
                     loading="lazy"
                   />
                 </div>
 
-                <div className="mt-1 flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-slate-950/90 border border-slate-800 text-[10px] font-mono shadow-md backdrop-blur-sm">
+                <div className="mt-0.5 flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-slate-950/90 border border-slate-800 text-[9px] font-mono shadow-md backdrop-blur-sm">
                   <span
                     className={`w-1.5 h-1.5 rounded-full ${
                       isPlanetAboveHorizon ? 'bg-emerald-400 animate-pulse' : 'bg-slate-600'
@@ -871,7 +895,7 @@ export function ARSkyView({
             );
           })}
 
-        {/* Primary Selected Target AR Reticle (Star Walk / Flight HUD Lock) */}
+        {/* Primary Selected Target AR Reticle */}
         {isTargetOnScreen && (
           <div
             className="absolute pointer-events-none transform -translate-x-1/2 -translate-y-1/2 transition-transform duration-75 ease-out z-25 flex flex-col items-center"
@@ -879,7 +903,7 @@ export function ARSkyView({
           >
             <div className="relative flex items-center justify-center">
               <div
-                className={`w-28 h-28 rounded-full border-2 border-dashed ${
+                className={`w-24 h-24 sm:w-28 sm:h-28 rounded-full border-2 border-dashed ${
                   isTargetLocked
                     ? 'animate-[spin_4s_linear_infinite] border-amber-400 ring-4 ring-amber-400/25'
                     : 'animate-[spin_12s_linear_infinite]'
@@ -888,16 +912,16 @@ export function ARSkyView({
               />
 
               <div
-                className="absolute w-20 h-20 rounded-full border border-current opacity-85"
+                className="absolute w-18 h-18 rounded-full border border-current opacity-85"
                 style={{ color: activeMeta.color }}
               />
 
               <div
-                className="absolute w-24 h-24 border-t-2 border-l-2 border-current opacity-75 -top-1 -left-1"
+                className="absolute w-20 h-20 border-t-2 border-l-2 border-current opacity-75 -top-1 -left-1"
                 style={{ color: activeMeta.color }}
               />
               <div
-                className="absolute w-24 h-24 border-b-2 border-r-2 border-current opacity-75 -bottom-1 -right-1"
+                className="absolute w-20 h-20 border-b-2 border-r-2 border-current opacity-75 -bottom-1 -right-1"
                 style={{ color: activeMeta.color }}
               />
 
@@ -909,51 +933,38 @@ export function ARSkyView({
                 <img
                   src={getPlanetThumbnail(activeMeta.id, 128)}
                   alt={activeMeta.name}
-                  className="relative w-14 h-14 object-contain drop-shadow-[0_0_16px_rgba(0,0,0,0.9)]"
+                  className="relative w-12 h-12 sm:w-14 sm:h-14 object-contain drop-shadow-[0_0_16px_rgba(0,0,0,0.9)]"
                 />
               </div>
             </div>
 
-            <div className="mt-3 bg-slate-950/95 backdrop-blur-md px-3.5 py-1.5 rounded-xl border border-slate-800 text-center font-mono text-[11px] space-y-0.5 shadow-2xl">
+            <div className="mt-2 bg-slate-950/95 backdrop-blur-md px-3 py-1 rounded-xl border border-slate-800 text-center font-mono text-[10px] space-y-0.5 shadow-2xl">
               <div className="flex items-center justify-center gap-1.5">
-                <span className="font-bold text-white text-xs">
-                  {activeMeta.symbol} {activeMeta.name}
-                </span>
-                {isTargetLocked ? (
-                  <span className="px-1.5 py-0.2 rounded text-[9px] bg-emerald-500 text-slate-950 font-bold uppercase animate-pulse">
-                    TARGET ACQUIRED
-                  </span>
-                ) : (
-                  <span className="px-1.5 py-0.2 rounded text-[9px] bg-amber-500/20 text-amber-300 font-semibold">
-                    {activeProj.angularSeparationDeg.toFixed(1)}° OFF
+                <span className="font-bold text-white text-xs">{activeMeta.name}</span>
+                {isTargetLocked && (
+                  <span className="px-1.5 py-0.2 rounded text-[8px] bg-emerald-500 text-slate-950 font-bold uppercase">
+                    LOCKED
                   </span>
                 )}
               </div>
-              <div className="text-amber-300 text-[10px]">
+              <div className="text-amber-300">
                 Az: {activeCoords.azimuthDeg.toFixed(1)}° | Alt: {activeCoords.altitudeDeg.toFixed(1)}°
               </div>
-              {activeCoords.distanceAu && (
-                <div className="text-slate-400 text-[9px]">
-                  {activeCoords.distanceAu < 0.01
-                    ? `${(activeCoords.distanceKm || 0).toLocaleString()} km`
-                    : `${activeCoords.distanceAu.toFixed(3)} AU`}
-                </div>
-              )}
             </div>
           </div>
         )}
 
-        {/* Flight-Grade Screen-Edge Radar Pointer (Guides user directly to off-screen planet) */}
+        {/* Screen-Edge Radar Pointer */}
         {edgeRadar && (
           <div
             className="absolute pointer-events-auto cursor-pointer transform -translate-x-1/2 -translate-y-1/2 z-30 transition-all duration-75 ease-out animate-pulse"
             style={{ left: `${edgeRadar.x}px`, top: `${edgeRadar.y}px` }}
             onClick={() => onSelectBody && onSelectBody(activeMeta.id)}
-            title={`Pan towards ${activeMeta.name} (${edgeRadar.separation.toFixed(0)}° away)`}
+            title={`Pan towards ${activeMeta.name} (${edgeRadar.separation.toFixed(0)}°)`}
           >
-            <div className="flex items-center gap-1.5 bg-slate-950/95 border-2 border-amber-400 px-2.5 py-1.5 rounded-full shadow-2xl backdrop-blur-md text-slate-100">
+            <div className="flex items-center gap-1.5 bg-slate-950/95 border border-amber-400 px-2 py-1 rounded-full shadow-xl backdrop-blur-md text-slate-100">
               <div
-                className="text-amber-400 text-sm font-bold flex items-center justify-center"
+                className="text-amber-400 text-xs font-bold"
                 style={{ transform: `rotate(${edgeRadar.angleDeg}deg)` }}
               >
                 ➔
@@ -961,111 +972,70 @@ export function ARSkyView({
               <img
                 src={getPlanetThumbnail(activeMeta.id, 64)}
                 alt={activeMeta.name}
-                className="w-5 h-5 rounded-full object-contain"
+                className="w-4 h-4 rounded-full object-contain"
               />
-              <span className="font-bold text-[11px] text-white">{activeMeta.name}</span>
-              <span className="text-[10px] font-mono text-amber-300 bg-amber-500/20 px-1 rounded">
+              <span className="font-bold text-[10px] text-white">{activeMeta.name}</span>
+              <span className="text-[9px] font-mono text-amber-300 bg-amber-500/20 px-1 rounded">
                 {edgeRadar.separation.toFixed(0)}°
               </span>
             </div>
           </div>
         )}
 
-        {/* Target Acquisition Observatory Dossier Card (Star Walk style when target locked) */}
-        {isTargetLocked && (
-          <div className="absolute bottom-16 left-6 right-6 md:left-auto md:right-6 md:w-84 bg-slate-950/95 backdrop-blur-md p-4 rounded-2xl border border-emerald-500/60 shadow-2xl z-30 space-y-2.5 pointer-events-auto animate-fade-in">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <img
-                  src={getPlanetThumbnail(activeMeta.id, 96)}
-                  alt={activeMeta.name}
-                  className="w-10 h-10 object-contain drop-shadow-[0_0_8px_rgba(16,185,129,0.5)]"
-                />
-                <div>
-                  <h4 className="font-bold text-white text-sm">{activeMeta.name}</h4>
-                  <span className="text-[10px] text-emerald-400 font-mono uppercase font-semibold">
-                    {activeMeta.category.replace('_', ' ')}
-                  </span>
-                </div>
-              </div>
-              <span className="text-xs font-mono text-emerald-400 font-bold bg-emerald-950/60 border border-emerald-500/40 px-2 py-0.5 rounded-lg animate-pulse">
-                100% IN VIEW
-              </span>
-            </div>
-            <p className="text-[11px] text-slate-300 leading-relaxed">{activeMeta.description}</p>
-            <div className="grid grid-cols-2 gap-2 pt-1 border-t border-slate-800 text-[10px] font-mono">
-              <div className="bg-slate-900/60 p-1.5 rounded-lg">
-                <span className="text-slate-400 block">Atmosphere</span>
-                <span className="text-slate-200 font-semibold">{activeMeta.color}</span>
-              </div>
-              <div className="bg-slate-900/60 p-1.5 rounded-lg">
-                <span className="text-slate-400 block">Separation</span>
-                <span className="text-emerald-400 font-semibold">
-                  {activeProj.angularSeparationDeg.toFixed(2)}° (Locked)
-                </span>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Bottom AR HUD Control Strip & Real-World Compass Alignment Controls */}
-        <div className="absolute bottom-3 inset-x-4 flex flex-wrap items-center justify-between pointer-events-auto z-20 gap-2">
-          {/* Compass Heading & Field of View Badge */}
-          <div className="flex items-center gap-2 bg-slate-950/90 backdrop-blur-md px-3 py-1.5 rounded-xl border border-slate-800 text-xs text-slate-300 shadow-lg">
-            <Eye className="w-3.5 h-3.5 text-amber-400" />
-            <span className="font-mono text-[10px]">
-              Heading: {hudHeading.toFixed(0)}° | Pitch: {hudPitch.toFixed(0)}° | FOV: {calibration.fieldOfViewDeg}°
+        {/* Minimalist Bottom Control Strip */}
+        <div className="absolute bottom-2.5 inset-x-3 flex items-center justify-between pointer-events-auto z-20 gap-2">
+          {/* Heading & Pitch Chip */}
+          <div className="flex items-center gap-1.5 bg-slate-950/90 backdrop-blur-md px-2.5 py-1 rounded-xl border border-slate-800 text-[10px] text-slate-300 shadow-md">
+            <Eye className="w-3 h-3 text-amber-400" />
+            <span className="font-mono">
+              {hudHeading.toFixed(0)}° Az · {hudPitch.toFixed(0)}° Alt
             </span>
           </div>
 
-          {/* Quick Real-Life Compass Alignment Controls */}
-          <div className="flex items-center gap-1.5 bg-slate-950/90 backdrop-blur-md px-2.5 py-1 rounded-xl border border-slate-800 text-xs shadow-lg">
-            <span className="text-[10px] text-slate-400 font-mono">Compass Trim:</span>
+          {/* Quick Compass Trim Capsule */}
+          <div className="flex items-center gap-1 bg-slate-950/90 backdrop-blur-md px-2 py-1 rounded-xl border border-slate-800 text-[10px] shadow-md">
             <button
-              onClick={() => setQuickAzimuthNudge((prev) => prev - 5)}
-              className="px-2 py-0.5 rounded bg-slate-900 hover:bg-slate-800 text-amber-400 font-mono text-[10px] border border-slate-800"
-              title="Nudge Compass 5 degrees left"
+              onClick={() => setIsTrimOpen(!isTrimOpen)}
+              className="text-slate-400 hover:text-white flex items-center gap-1 font-mono pr-1"
             >
-              -5°
+              <span>Trim</span>
+              {quickAzimuthNudge !== 0 && (
+                <span className="text-amber-400 font-bold">({quickAzimuthNudge > 0 ? '+' : ''}{quickAzimuthNudge}°)</span>
+              )}
             </button>
-            <button
-              onClick={() => setQuickAzimuthNudge((prev) => prev + 5)}
-              className="px-2 py-0.5 rounded bg-slate-900 hover:bg-slate-800 text-amber-400 font-mono text-[10px] border border-slate-800"
-              title="Nudge Compass 5 degrees right"
-            >
-              +5°
-            </button>
-            {quickAzimuthNudge !== 0 && (
-              <button
-                onClick={() => setQuickAzimuthNudge(0)}
-                className="p-1 rounded bg-slate-900 hover:bg-slate-800 text-slate-400 text-[10px]"
-                title="Reset compass trim"
-              >
-                <RotateCcw className="w-3 h-3" />
-              </button>
-            )}
-            <button
-              onClick={handleSnapCompassToBody}
-              className="px-2 py-0.5 rounded bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 font-semibold text-[10px] border border-amber-500/40 ml-1 transition"
-              title={`Snap compass heading directly to ${activeMeta.name} in the sky`}
-            >
-              Snap to {activeMeta.name}
-            </button>
-          </div>
 
-          {/* Sky Opacity Slider */}
-          <div className="hidden sm:flex items-center gap-2 bg-slate-950/90 backdrop-blur-md px-3 py-1.5 rounded-xl border border-slate-800 text-xs text-slate-300 shadow-lg">
-            <Sparkles className="w-3.5 h-3.5 text-sky-400" />
-            <span className="text-[10px]">Sky Blend:</span>
-            <input
-              type="range"
-              min="0.1"
-              max="1"
-              step="0.05"
-              value={skyOpacity}
-              onChange={(e) => setSkyOpacity(parseFloat(e.target.value))}
-              className="w-20 accent-amber-500 cursor-pointer"
-            />
+            {isTrimOpen && (
+              <div className="flex items-center gap-1 pl-1 border-l border-slate-800 animate-fade-in">
+                <button
+                  onClick={() => setQuickAzimuthNudge((prev) => prev - 5)}
+                  className="px-1.5 py-0.5 rounded bg-slate-900 text-amber-400 font-mono text-[9px] border border-slate-800"
+                >
+                  -5°
+                </button>
+                <button
+                  onClick={() => setQuickAzimuthNudge((prev) => prev + 5)}
+                  className="px-1.5 py-0.5 rounded bg-slate-900 text-amber-400 font-mono text-[9px] border border-slate-800"
+                >
+                  +5°
+                </button>
+                {quickAzimuthNudge !== 0 && (
+                  <button
+                    onClick={() => setQuickAzimuthNudge(0)}
+                    className="p-1 rounded bg-slate-900 text-slate-400"
+                    title="Reset"
+                  >
+                    <RotateCcw className="w-2.5 h-2.5" />
+                  </button>
+                )}
+                <button
+                  onClick={handleSnapCompassToBody}
+                  className="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 font-semibold text-[9px] border border-amber-500/40"
+                  title={`Snap compass heading to ${activeMeta.name}`}
+                >
+                  Snap
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </div>
