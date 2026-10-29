@@ -3,7 +3,6 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import {
   Compass,
-  Sun as SunIcon,
   Play,
   Pause,
   Clock,
@@ -11,11 +10,25 @@ import {
   Sunset,
   Eye,
   Layers,
-  AlertCircle
+  AlertCircle,
+  Sparkles,
 } from 'lucide-react';
-import { GeodeticLocation, SolarCoordinates, SolarEvents } from '../../types/astronomy';
-import { getClientSolarPosition, getClientSolarEvents, getClientDiurnalPath } from '../../services/astronomyEngine';
+import {
+  GeodeticLocation,
+  DiurnalWaypoint,
+  CelestialBodyId,
+  CelestialCoordinates,
+  CelestialEvents,
+  CELESTIAL_BODIES,
+  CELESTIAL_BODY_LIST,
+} from '../../types/astronomy';
+import {
+  getAllCelestialPositions,
+  getClientCelestialDiurnalPath,
+  getClientCelestialEvents,
+} from '../../services/astronomyEngine';
 import { azAltToEnuVector, enuToThreeJsVector } from '../../services/coordinateTransforms';
+import { CelestialBodySelector } from '../../components/CelestialBodySelector';
 
 interface ThreeSkyExplorerProps {
   location: GeodeticLocation;
@@ -23,6 +36,8 @@ interface ThreeSkyExplorerProps {
   setCurrentDate?: (d: Date) => void;
   isLive?: boolean;
   setIsLive?: (live: boolean) => void;
+  selectedBody?: CelestialBodyId;
+  onSelectBody?: (body: CelestialBodyId) => void;
 }
 
 export function ThreeSkyExplorer({
@@ -31,6 +46,8 @@ export function ThreeSkyExplorer({
   setCurrentDate,
   isLive = true,
   setIsLive,
+  selectedBody = 'Sun',
+  onSelectBody,
 }: ThreeSkyExplorerProps) {
   const mountRef = useRef<HTMLDivElement | null>(null);
 
@@ -40,11 +57,34 @@ export function ThreeSkyExplorer({
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const controlsRef = useRef<OrbitControls | null>(null);
 
-  const sunMeshRef = useRef<THREE.Mesh | null>(null);
+  // Dictionary of meshes for all 9 bodies
+  const bodyMeshesRef = useRef<Record<CelestialBodyId, THREE.Mesh | null>>({
+    Sun: null,
+    Moon: null,
+    Mercury: null,
+    Venus: null,
+    Mars: null,
+    Jupiter: null,
+    Saturn: null,
+    Uranus: null,
+    Neptune: null,
+  });
+
+  const bodyLabelsRef = useRef<Record<CelestialBodyId, THREE.Sprite | null>>({
+    Sun: null,
+    Moon: null,
+    Mercury: null,
+    Venus: null,
+    Mars: null,
+    Jupiter: null,
+    Saturn: null,
+    Uranus: null,
+    Neptune: null,
+  });
+
   const sunCoronaRef = useRef<THREE.Sprite | null>(null);
-  const sunRayRef = useRef<THREE.Line | null>(null);
-  const sunProjectionRef = useRef<THREE.Line | null>(null);
-  const sunSpriteLabelRef = useRef<THREE.Sprite | null>(null);
+  const activeRayRef = useRef<THREE.Line | null>(null);
+  const activeProjectionRef = useRef<THREE.Line | null>(null);
   const pointLightRef = useRef<THREE.PointLight | null>(null);
   const groundDiscRef = useRef<THREE.Mesh | null>(null);
   const diurnalGroupRef = useRef<THREE.Group | null>(null);
@@ -53,18 +93,25 @@ export function ThreeSkyExplorer({
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [playbackSpeed, setPlaybackSpeed] = useState<number>(10); // minutes per second
   const [groundMode, setGroundMode] = useState<'translucent' | 'solid' | 'wireframe'>('translucent');
+  const [showAllBodies, setShowAllBodies] = useState<boolean>(true);
 
-  // Calculate current coordinates and daily solar events
-  const coords: SolarCoordinates = useMemo(() => {
-    return getClientSolarPosition(location, currentDate);
+  // Current active body details
+  const activeBodyMeta = CELESTIAL_BODIES[selectedBody] || CELESTIAL_BODIES.Sun;
+
+  // Calculate coordinates for all 9 celestial bodies
+  const allPositions: Record<CelestialBodyId, CelestialCoordinates> = useMemo(() => {
+    return getAllCelestialPositions(location, currentDate);
   }, [location, currentDate]);
 
-  const solarEvents: SolarEvents = useMemo(() => {
-    return getClientSolarEvents(location, currentDate);
-  }, [location, currentDate]);
+  const activeCoords: CelestialCoordinates = allPositions[selectedBody] || allPositions.Sun;
 
-  // Current day of year for spline recalculation
-  const dateKey = `${currentDate.getFullYear()}-${currentDate.getMonth()}-${currentDate.getDate()}`;
+  // Calculate rise/set events for the active body
+  const bodyEvents: CelestialEvents = useMemo(() => {
+    return getClientCelestialEvents(selectedBody, location, currentDate);
+  }, [selectedBody, location, currentDate]);
+
+  // Current day key for diurnal path spline recalculation
+  const dateKey = `${selectedBody}-${currentDate.getFullYear()}-${currentDate.getMonth()}-${currentDate.getDate()}`;
 
   // Time in minutes from midnight (0 - 1439)
   const currentMinutes = useMemo(() => {
@@ -91,12 +138,12 @@ export function ThreeSkyExplorer({
     setCurrentDate(new Date(targetIso));
   }, [setCurrentDate, setIsLive]);
 
+  // Playback timer loop
   const currentDateRef = useRef(currentDate);
   useEffect(() => {
     currentDateRef.current = currentDate;
   }, [currentDate]);
 
-  // Playback timer loop
   useEffect(() => {
     if (!isPlaying || !setCurrentDate) return;
     const interval = setInterval(() => {
@@ -148,9 +195,10 @@ export function ThreeSkyExplorer({
     return sprite;
   };
 
-  // Update Sun Label Sprite Text
-  const updateSunLabel = (text: string, color: string = '#FCD34D') => {
-    if (!sunSpriteLabelRef.current) return;
+  // Update Body Label Sprite Text
+  const updateBodyLabel = (bodyId: CelestialBodyId, text: string, color: string = '#FCD34D') => {
+    const sprite = bodyLabelsRef.current[bodyId];
+    if (!sprite) return;
     const canvas = document.createElement('canvas');
     canvas.width = 256;
     canvas.height = 128;
@@ -170,8 +218,8 @@ export function ThreeSkyExplorer({
       ctx.fillText(text, 128, 64);
     }
     const texture = new THREE.CanvasTexture(canvas);
-    sunSpriteLabelRef.current.material.map = texture;
-    sunSpriteLabelRef.current.material.needsUpdate = true;
+    sprite.material.map = texture;
+    sprite.material.needsUpdate = true;
   };
 
   // 1. Initial Scene Setup (Mount Once)
@@ -180,11 +228,11 @@ export function ThreeSkyExplorer({
     if (!mount) return;
 
     const width = mount.clientWidth;
-    const height = mount.clientHeight || 520;
+    const height = mount.clientHeight || 540;
 
     // A. Scene & Camera
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x060913);
+    scene.background = new THREE.Color(0x050811);
     sceneRef.current = scene;
 
     const camera = new THREE.PerspectiveCamera(50, width / height, 0.5, 2000);
@@ -204,19 +252,19 @@ export function ThreeSkyExplorer({
     controls.dampingFactor = 0.06;
     controls.screenSpacePanning = true;
     controls.minDistance = 25;
-    controls.maxDistance = 400;
+    controls.maxDistance = 450;
     controls.target.set(0, 0, 0);
     controlsRef.current = controls;
 
     // D. Lighting
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.75);
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
     scene.add(ambientLight);
 
     const pointLight = new THREE.PointLight(0xfff5d0, 2.5, 500, 0.5);
     scene.add(pointLight);
     pointLightRef.current = pointLight;
 
-    // E. Horizon Ground Disc (Z = 0 in ENU -> Y = 0 in Three.js)
+    // E. Horizon Ground Disc
     const horizonRadius = 80;
     const horizonGeo = new THREE.CircleGeometry(horizonRadius, 64);
     horizonGeo.rotateX(-Math.PI / 2);
@@ -231,7 +279,7 @@ export function ThreeSkyExplorer({
     scene.add(horizonDisc);
     groundDiscRef.current = horizonDisc;
 
-    // Outer Horizon Boundary Circle
+    // Outer Horizon Boundary
     const boundaryPoints: THREE.Vector3[] = [];
     for (let i = 0; i <= 64; i++) {
       const theta = (i / 64) * Math.PI * 2;
@@ -244,7 +292,7 @@ export function ThreeSkyExplorer({
     );
     scene.add(boundaryLine);
 
-    // Concentric Compass / Distance Rings on Ground Disc (20, 40, 60, 80)
+    // Compass Rings
     [25, 50, 75].forEach((rad) => {
       const ringPts: THREE.Vector3[] = [];
       for (let i = 0; i <= 64; i++) {
@@ -259,7 +307,7 @@ export function ThreeSkyExplorer({
       scene.add(ringLine);
     });
 
-    // Crosshair Axis Lines on Ground (North-South & East-West)
+    // Crosshair Lines
     const axisGeo = new THREE.BufferGeometry().setFromPoints([
       new THREE.Vector3(0, 0, -horizonRadius),
       new THREE.Vector3(0, 0, horizonRadius),
@@ -318,45 +366,63 @@ export function ThreeSkyExplorer({
       color: 0x1e293b,
       wireframe: true,
       transparent: true,
-      opacity: 0.22,
+      opacity: 0.2,
     });
     const domeMesh = new THREE.Mesh(domeGeo, domeMat);
     scene.add(domeMesh);
 
-    // I. Virtual 3D Sun Sphere & Corona
-    const sunGeo = new THREE.SphereGeometry(4.8, 32, 32);
-    const sunMat = new THREE.MeshBasicMaterial({ color: 0xfff4cc });
-    const sunMesh = new THREE.Mesh(sunGeo, sunMat);
-    scene.add(sunMesh);
-    sunMeshRef.current = sunMesh;
+    // I. Instantiate All 9 Celestial Bodies
+    CELESTIAL_BODY_LIST.forEach((body) => {
+      const geo = new THREE.SphereGeometry(body.sizeRadius, 32, 32);
+      const mat = new THREE.MeshBasicMaterial({ color: new THREE.Color(body.color) });
+      const mesh = new THREE.Mesh(geo, mat);
+      scene.add(mesh);
+      bodyMeshesRef.current[body.id] = mesh;
 
-    // Corona Sprite Halo
-    const coronaTexture = createCoronaTexture();
-    const coronaMat = new THREE.SpriteMaterial({
-      map: coronaTexture,
-      transparent: true,
-      blending: THREE.AdditiveBlending,
-      depthWrite: false,
+      // Special Saturn 3D Rings
+      if (body.hasRings) {
+        const ringGeo = new THREE.RingGeometry(body.sizeRadius * 1.3, body.sizeRadius * 2.3, 48);
+        ringGeo.rotateX(Math.PI / 2.7);
+        const ringMat = new THREE.MeshBasicMaterial({
+          color: 0xfde68a,
+          side: THREE.DoubleSide,
+          transparent: true,
+          opacity: 0.75,
+        });
+        const ringMesh = new THREE.Mesh(ringGeo, ringMat);
+        mesh.add(ringMesh);
+      }
+
+      // Special Sun Corona Halo
+      if (body.id === 'Sun') {
+        const coronaTexture = createCoronaTexture();
+        const coronaMat = new THREE.SpriteMaterial({
+          map: coronaTexture,
+          transparent: true,
+          blending: THREE.AdditiveBlending,
+          depthWrite: false,
+        });
+        const coronaSprite = new THREE.Sprite(coronaMat);
+        coronaSprite.scale.set(24, 24, 1);
+        mesh.add(coronaSprite);
+        sunCoronaRef.current = coronaSprite;
+      }
+
+      // Floating Label Sprite
+      const label = createTextSprite(`${body.symbol} ${body.name}`, body.color, 32);
+      label.position.set(0, body.sizeRadius + 4, 0);
+      mesh.add(label);
+      bodyLabelsRef.current[body.id] = label;
     });
-    const coronaSprite = new THREE.Sprite(coronaMat);
-    coronaSprite.scale.set(24, 24, 1);
-    sunMesh.add(coronaSprite);
-    sunCoronaRef.current = coronaSprite;
 
-    // Sun Floating Label
-    const sunLabel = createTextSprite('☀️ SUN', '#F59E0B', 32);
-    sunLabel.position.set(0, 9, 0);
-    sunMesh.add(sunLabel);
-    sunSpriteLabelRef.current = sunLabel;
-
-    // J. Sun Direct Vector Ray (Observer -> Sun)
+    // J. Active Target Direct Vector Ray (Observer -> Active Body)
     const rayGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 40, 0)]);
-    const rayMat = new THREE.LineBasicMaterial({ color: 0xf59e0b, transparent: true, opacity: 0.75, linewidth: 2 });
-    const sunRay = new THREE.Line(rayGeo, rayMat);
-    scene.add(sunRay);
-    sunRayRef.current = sunRay;
+    const rayMat = new THREE.LineBasicMaterial({ color: 0xf59e0b, transparent: true, opacity: 0.8, linewidth: 2 });
+    const activeRay = new THREE.Line(rayGeo, rayMat);
+    scene.add(activeRay);
+    activeRayRef.current = activeRay;
 
-    // K. Ground Projection Line (Shadow Azimuth Triangle)
+    // K. Active Target Ground Projection Line (Azimuth Shadow Triangle)
     const projGeo = new THREE.BufferGeometry().setFromPoints([
       new THREE.Vector3(0, 0, 0),
       new THREE.Vector3(0, 0, 0),
@@ -368,20 +434,20 @@ export function ThreeSkyExplorer({
     );
     projMat.computeLineDistances();
     scene.add(projMat);
-    sunProjectionRef.current = projMat;
+    activeProjectionRef.current = projMat;
 
     // Group for Diurnal Path Spline Lines
     const diurnalGroup = new THREE.Group();
     scene.add(diurnalGroup);
     diurnalGroupRef.current = diurnalGroup;
 
-    // L. 60 FPS Render Loop with Smooth Damping
+    // L. 60 FPS Render Loop
     let animId: number;
     const animate = (time: number) => {
       animId = requestAnimationFrame(animate);
       controls.update();
 
-      // Subtle Sun corona pulsation
+      // Pulsing Sun Corona
       if (sunCoronaRef.current) {
         const pulse = 22 + 2.5 * Math.sin(time * 0.003);
         sunCoronaRef.current.scale.set(pulse, pulse, 1);
@@ -395,14 +461,13 @@ export function ThreeSkyExplorer({
     const handleResize = () => {
       if (!mount) return;
       const w = mount.clientWidth;
-      const h = mount.clientHeight || 520;
+      const h = mount.clientHeight || 540;
       camera.aspect = w / h;
       camera.updateProjectionMatrix();
       renderer.setSize(w, h);
     };
     window.addEventListener('resize', handleResize);
 
-    // Cleanup when component unmounts
     return () => {
       cancelAnimationFrame(animId);
       window.removeEventListener('resize', handleResize);
@@ -414,12 +479,11 @@ export function ThreeSkyExplorer({
     };
   }, [location.latitude, location.longitude, location.elevationM]);
 
-  // 2. Diurnal Trajectory Spline Update (Recalculate when Day or Location changes)
+  // 2. Diurnal Trajectory Spline Update for Currently Selected Body
   useEffect(() => {
     const diurnalGroup = diurnalGroupRef.current;
     if (!diurnalGroup) return;
 
-    // Clear previous trajectory lines
     while (diurnalGroup.children.length > 0) {
       const child = diurnalGroup.children[0];
       diurnalGroup.remove(child);
@@ -430,7 +494,7 @@ export function ThreeSkyExplorer({
       }
     }
 
-    const waypoints = getClientDiurnalPath(location, currentDate, 10);
+    const waypoints: DiurnalWaypoint[] = getClientCelestialDiurnalPath(selectedBody, location, currentDate, 10);
     const dayPoints: THREE.Vector3[] = [];
     const nightPoints: THREE.Vector3[] = [];
 
@@ -444,12 +508,14 @@ export function ThreeSkyExplorer({
       }
     });
 
+    const activeColor = new THREE.Color(activeBodyMeta.color);
+
     if (dayPoints.length > 2) {
       const daySpline = new THREE.CatmullRomCurve3(dayPoints);
       const daySplineGeo = new THREE.BufferGeometry().setFromPoints(daySpline.getPoints(120));
       const dayLine = new THREE.Line(
         daySplineGeo,
-        new THREE.LineBasicMaterial({ color: 0xf59e0b, transparent: true, opacity: 0.95 })
+        new THREE.LineBasicMaterial({ color: activeColor, transparent: true, opacity: 0.95 })
       );
       diurnalGroup.add(dayLine);
     }
@@ -459,53 +525,58 @@ export function ThreeSkyExplorer({
       const nightSplineGeo = new THREE.BufferGeometry().setFromPoints(nightSpline.getPoints(120));
       const nightLine = new THREE.Line(
         nightSplineGeo,
-        new THREE.LineDashedMaterial({ color: 0x3b82f6, dashSize: 2.5, gapSize: 1.5, transparent: true, opacity: 0.45 })
+        new THREE.LineDashedMaterial({ color: 0x3b82f6, dashSize: 2.5, gapSize: 1.5, transparent: true, opacity: 0.4 })
       );
       nightLine.computeLineDistances();
       diurnalGroup.add(nightLine);
     }
-  }, [location, dateKey]);
+  }, [selectedBody, location, dateKey, activeBodyMeta.color]);
 
-  // 3. Real-Time Sun Position, Vectors & Material Updates
+  // 3. Real-Time Position & Vector Updates for ALL 9 Bodies
   useEffect(() => {
-    if (!sunMeshRef.current || !sunRayRef.current || !pointLightRef.current) return;
+    CELESTIAL_BODY_LIST.forEach((body) => {
+      const mesh = bodyMeshesRef.current[body.id];
+      if (!mesh) return;
 
-    const currentEnu = azAltToEnuVector(coords.azimuthDeg, coords.altitudeDeg);
-    const sunPos = enuToThreeJsVector(currentEnu, 80);
+      const pos = allPositions[body.id];
+      if (!pos) return;
 
-    // Update 3D Sun position
-    sunMeshRef.current.position.copy(sunPos);
-    pointLightRef.current.position.copy(sunPos);
+      // Visibility toggle: show all bodies or only the selected one
+      mesh.visible = showAllBodies || body.id === selectedBody;
 
-    // Update Ray from Observer Center to Sun
-    sunRayRef.current.geometry.setFromPoints([new THREE.Vector3(0, 0, 0), sunPos]);
+      const enu = azAltToEnuVector(pos.azimuthDeg, pos.altitudeDeg);
+      const v3 = enuToThreeJsVector(enu, 80);
+      mesh.position.copy(v3);
 
-    // Update Ground Projection (Azimuth footprint on horizon plane)
-    if (sunProjectionRef.current) {
-      const groundFootprint = new THREE.Vector3(sunPos.x, 0, sunPos.z);
-      sunProjectionRef.current.geometry.setFromPoints([
-        new THREE.Vector3(0, 0, 0),
-        groundFootprint,
-        sunPos,
-      ]);
-      sunProjectionRef.current.computeLineDistances();
+      // Update Label text with altitude
+      const sign = pos.altitudeDeg >= 0 ? '+' : '';
+      const labelText = `${body.symbol} ${body.name} (${sign}${pos.altitudeDeg.toFixed(1)}°)`;
+      updateBodyLabel(body.id, labelText, pos.isAboveHorizon ? body.color : '#64748B');
+    });
+
+    // Update active body ray and ground projection
+    if (activeRayRef.current && activeProjectionRef.current && pointLightRef.current) {
+      const activePos = allPositions[selectedBody];
+      if (activePos) {
+        const enu = azAltToEnuVector(activePos.azimuthDeg, activePos.altitudeDeg);
+        const v3 = enuToThreeJsVector(enu, 80);
+
+        pointLightRef.current.position.copy(v3);
+        pointLightRef.current.intensity = activePos.isAboveHorizon ? 2.5 : 0.4;
+
+        activeRayRef.current.geometry.setFromPoints([new THREE.Vector3(0, 0, 0), v3]);
+        (activeRayRef.current.material as THREE.LineBasicMaterial).color.set(activeBodyMeta.color);
+
+        const groundFootprint = new THREE.Vector3(v3.x, 0, v3.z);
+        activeProjectionRef.current.geometry.setFromPoints([
+          new THREE.Vector3(0, 0, 0),
+          groundFootprint,
+          v3,
+        ]);
+        activeProjectionRef.current.computeLineDistances();
+      }
     }
-
-    // Color and visual adaptations based on whether the Sun is Above or Below Horizon
-    const isAbove = coords.altitudeDeg >= 0;
-    if (isAbove) {
-      (sunMeshRef.current.material as THREE.MeshBasicMaterial).color.setHex(0xfff5cc);
-      (sunRayRef.current.material as THREE.LineBasicMaterial).color.setHex(0xf59e0b);
-      pointLightRef.current.intensity = 2.5;
-      updateSunLabel(`☀️ +${coords.altitudeDeg.toFixed(1)}°`, '#F59E0B');
-    } else {
-      // Sub-horizon: Dim amber/cyan glow so user can track where the Sun is under the Earth
-      (sunMeshRef.current.material as THREE.MeshBasicMaterial).color.setHex(0x6366f1);
-      (sunRayRef.current.material as THREE.LineBasicMaterial).color.setHex(0x3b82f6);
-      pointLightRef.current.intensity = 0.5;
-      updateSunLabel(`🌙 ${coords.altitudeDeg.toFixed(1)}°`, '#818cf8');
-    }
-  }, [coords]);
+  }, [allPositions, selectedBody, showAllBodies, activeBodyMeta.color]);
 
   // 4. Ground Opacity Mode Switch
   useEffect(() => {
@@ -525,7 +596,7 @@ export function ThreeSkyExplorer({
   }, [groundMode]);
 
   // Camera Presets
-  const setCameraView = (type: 'default' | 'top' | 'focusSun' | 'ground') => {
+  const setCameraView = (type: 'default' | 'top' | 'focusBody' | 'ground') => {
     const camera = cameraRef.current;
     const controls = controlsRef.current;
     if (!camera || !controls) return;
@@ -539,10 +610,13 @@ export function ThreeSkyExplorer({
     } else if (type === 'ground') {
       camera.position.set(0, 3, 10);
       controls.target.set(0, 15, -40);
-    } else if (type === 'focusSun' && sunMeshRef.current) {
-      const sunPos = sunMeshRef.current.position;
-      camera.position.set(sunPos.x * 0.4, sunPos.y * 0.4 + 20, sunPos.z * 0.4 + 40);
-      controls.target.copy(sunPos);
+    } else if (type === 'focusBody') {
+      const mesh = bodyMeshesRef.current[selectedBody];
+      if (mesh) {
+        const p = mesh.position;
+        camera.position.set(p.x * 0.4, p.y * 0.4 + 20, p.z * 0.4 + 40);
+        controls.target.copy(p);
+      }
     }
     controls.update();
   };
@@ -553,12 +627,30 @@ export function ThreeSkyExplorer({
     return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
   };
 
-  const isNight = coords.altitudeDeg < 0;
+  const isBelowHorizon = activeCoords.altitudeDeg < 0;
 
   return (
     <div className="space-y-4 animate-fade-in">
-      {/* Night Time Sub-Horizon Alert & Jump to Noon Button */}
-      {isNight && (
+      {/* Planetary Carousel Selector Bar */}
+      <div className="glass-panel p-3 rounded-2xl border border-slate-800 space-y-2">
+        <div className="flex items-center justify-between text-xs px-1 text-slate-400">
+          <span className="font-semibold text-slate-200 flex items-center gap-1.5">
+            <Sparkles className="w-4 h-4 text-amber-400" />
+            <span>Solar System Bodies (Select Target)</span>
+          </span>
+          <span className="text-[11px] text-slate-400 font-mono">
+            Green dot indicates currently in your sky tonight
+          </span>
+        </div>
+        <CelestialBodySelector
+          selectedBody={selectedBody}
+          onSelectBody={(body) => onSelectBody && onSelectBody(body)}
+          allPositions={allPositions}
+        />
+      </div>
+
+      {/* Below Horizon Alert & Jump to Transit Button */}
+      {isBelowHorizon && (
         <div className="bg-indigo-950/60 border border-indigo-800/80 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-indigo-200">
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-xl bg-indigo-900/60 text-indigo-300">
@@ -566,19 +658,19 @@ export function ThreeSkyExplorer({
             </div>
             <div>
               <p className="font-semibold text-slate-100">
-                Sun is currently below the horizon ({coords.altitudeDeg.toFixed(1)}° altitude)
+                {activeBodyMeta.symbol} {activeBodyMeta.name} is currently below the horizon ({activeCoords.altitudeDeg.toFixed(1)}°)
               </p>
               <p className="text-indigo-300/80 text-[11px]">
-                It is currently nighttime at this observer location. The 3D Sun is glowing purple under the translucent ground disc. Jump to daytime or scrub the slider below!
+                {activeBodyMeta.name} is shining beneath the translucent ground disc. Jump to its peak culmination transit or scrub the slider below!
               </p>
             </div>
           </div>
           <button
-            onClick={() => jumpToTime(solarEvents.solarNoonUtc)}
-            className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-semibold flex items-center gap-2 whitespace-nowrap transition shadow-lg shadow-amber-500/20"
+            onClick={() => jumpToTime(bodyEvents.culminationUtc)}
+            disabled={!bodyEvents.culminationUtc}
+            className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-semibold flex items-center gap-2 whitespace-nowrap transition shadow-lg shadow-amber-500/20 disabled:opacity-50"
           >
-            <SunIcon className="w-4 h-4 fill-slate-950" />
-            <span>☀️ Jump to Solar Noon (+60°)</span>
+            <span>Jump to {activeBodyMeta.name} Peak</span>
           </button>
         </div>
       )}
@@ -589,13 +681,42 @@ export function ThreeSkyExplorer({
         <div className="absolute top-4 left-4 z-10 bg-slate-950/85 backdrop-blur-md px-3.5 py-2.5 rounded-xl border border-slate-800 text-xs space-y-1 shadow-lg">
           <div className="flex items-center gap-2 text-slate-100 font-semibold">
             <Compass className="w-4 h-4 text-amber-400" />
-            <span>3D Celestial Horizon Sphere (Three.js)</span>
+            <span>
+              {activeBodyMeta.symbol} {activeBodyMeta.name} — 3D Celestial Horizon Sphere
+            </span>
           </div>
           <div className="flex items-center gap-3 text-slate-300 font-mono text-[11px]">
-            <span>Azimuth: <strong className="text-amber-400">{coords.azimuthDeg.toFixed(2)}°</strong></span>
-            <span>Altitude: <strong className={isNight ? 'text-indigo-400' : 'text-amber-400'}>{coords.altitudeDeg.toFixed(2)}°</strong></span>
-            <span className={`px-2 py-0.5 rounded text-[10px] uppercase font-bold ${isNight ? 'bg-indigo-950/80 text-indigo-300 border border-indigo-800' : 'bg-amber-950/80 text-amber-300 border border-amber-800'}`}>
-              {isNight ? 'Sub-Horizon' : 'Above Horizon'}
+            <span>
+              Az: <strong className="text-amber-400">{activeCoords.azimuthDeg.toFixed(2)}°</strong>
+            </span>
+            <span>
+              Alt:{' '}
+              <strong className={isBelowHorizon ? 'text-indigo-400' : 'text-emerald-400'}>
+                {activeCoords.altitudeDeg >= 0 ? '+' : ''}
+                {activeCoords.altitudeDeg.toFixed(2)}°
+              </strong>
+            </span>
+            <span>
+              Dist:{' '}
+              <strong className="text-slate-200">
+                {activeCoords.distanceAu < 0.01
+                  ? `${(activeCoords.distanceKm || 0).toLocaleString()} km`
+                  : `${activeCoords.distanceAu.toFixed(3)} AU`}
+              </strong>
+            </span>
+            {activeCoords.phaseFraction !== undefined && (
+              <span>
+                Illum: <strong className="text-amber-300">{Math.round(activeCoords.phaseFraction * 100)}%</strong>
+              </span>
+            )}
+            <span
+              className={`px-2 py-0.5 rounded text-[10px] uppercase font-bold ${
+                isBelowHorizon
+                  ? 'bg-indigo-950/80 text-indigo-300 border border-indigo-800'
+                  : 'bg-emerald-950/80 text-emerald-300 border border-emerald-800'
+              }`}
+            >
+              {isBelowHorizon ? 'Sub-Horizon' : 'Visible in Sky'}
             </span>
           </div>
         </div>
@@ -605,31 +726,30 @@ export function ThreeSkyExplorer({
           <button
             onClick={() => setCameraView('default')}
             className="px-2.5 py-1 rounded-lg text-[11px] font-medium text-slate-300 hover:bg-slate-800 hover:text-white transition"
-            title="Angled Perspective View"
           >
             Cinematic (45°)
           </button>
           <button
             onClick={() => setCameraView('top')}
             className="px-2.5 py-1 rounded-lg text-[11px] font-medium text-slate-300 hover:bg-slate-800 hover:text-white transition"
-            title="Top-down Zenith View"
           >
             Zenith (Top)
           </button>
           <button
-            onClick={() => setCameraView('focusSun')}
+            onClick={() => setCameraView('focusBody')}
             className="px-2.5 py-1 rounded-lg text-[11px] font-medium text-amber-300 hover:bg-amber-950/60 border border-amber-500/30 transition flex items-center gap-1"
-            title="Focus camera directly on the 3D Sun"
           >
-            <SunIcon className="w-3 h-3 text-amber-400" />
-            Focus Sun
+            <span>Focus {activeBodyMeta.name}</span>
           </button>
           <button
-            onClick={() => setCameraView('ground')}
-            className="px-2.5 py-1 rounded-lg text-[11px] font-medium text-slate-300 hover:bg-slate-800 hover:text-white transition"
-            title="Standing at Center Looking Up"
+            onClick={() => setShowAllBodies(!showAllBodies)}
+            className={`px-2.5 py-1 rounded-lg text-[11px] font-medium transition ${
+              showAllBodies
+                ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
           >
-            Observer View
+            {showAllBodies ? 'Showing All Bodies' : 'Solo Target Mode'}
           </button>
         </div>
 
@@ -678,10 +798,9 @@ export function ThreeSkyExplorer({
               }`}
             >
               {isPlaying ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5 fill-current" />}
-              <span>{isPlaying ? 'Pause Orbit' : 'Play Orbit Animation'}</span>
+              <span>{isPlaying ? 'Pause Motion' : 'Play Motion Animation'}</span>
             </button>
 
-            {/* Playback speed selector */}
             {isPlaying && (
               <div className="flex items-center gap-1.5 text-xs text-slate-400">
                 <span>Speed:</span>
@@ -699,7 +818,6 @@ export function ThreeSkyExplorer({
               </div>
             )}
 
-            {/* Real-time Live Sync Toggle */}
             <button
               onClick={() => {
                 if (setIsLive) setIsLive(true);
@@ -717,36 +835,36 @@ export function ThreeSkyExplorer({
             </button>
           </div>
 
-          {/* Quick Sun Event Jump Presets */}
+          {/* Quick Body Event Jump Presets */}
           <div className="flex items-center gap-2">
             <button
-              onClick={() => jumpToTime(solarEvents.sunriseUtc)}
-              disabled={!solarEvents.sunriseUtc}
+              onClick={() => jumpToTime(bodyEvents.riseUtc)}
+              disabled={!bodyEvents.riseUtc}
               className="px-2.5 py-1.5 rounded-lg text-xs bg-slate-900 border border-slate-800 hover:border-amber-500/40 text-slate-300 hover:text-amber-300 flex items-center gap-1.5 transition disabled:opacity-50"
-              title="Jump to Sunrise"
+              title="Jump to Rise"
             >
               <Sunrise className="w-3.5 h-3.5 text-amber-400" />
-              <span>Sunrise</span>
+              <span>{activeBodyMeta.name} Rise</span>
             </button>
 
             <button
-              onClick={() => jumpToTime(solarEvents.solarNoonUtc)}
-              disabled={!solarEvents.solarNoonUtc}
+              onClick={() => jumpToTime(bodyEvents.culminationUtc)}
+              disabled={!bodyEvents.culminationUtc}
               className="px-3 py-1.5 rounded-lg text-xs bg-amber-500/10 border border-amber-500/40 text-amber-300 hover:bg-amber-500/20 flex items-center gap-1.5 transition font-semibold disabled:opacity-50"
-              title="Jump to Solar Noon (Peak Sun Altitude)"
+              title="Jump to Peak Culmination"
             >
-              <SunIcon className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
-              <span>Solar Noon (Peak)</span>
+              <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+              <span>Peak Transit</span>
             </button>
 
             <button
-              onClick={() => jumpToTime(solarEvents.sunsetUtc)}
-              disabled={!solarEvents.sunsetUtc}
+              onClick={() => jumpToTime(bodyEvents.setUtc)}
+              disabled={!bodyEvents.setUtc}
               className="px-2.5 py-1.5 rounded-lg text-xs bg-slate-900 border border-slate-800 hover:border-amber-500/40 text-slate-300 hover:text-amber-300 flex items-center gap-1.5 transition disabled:opacity-50"
-              title="Jump to Sunset"
+              title="Jump to Set"
             >
               <Sunset className="w-3.5 h-3.5 text-orange-400" />
-              <span>Sunset</span>
+              <span>{activeBodyMeta.name} Set</span>
             </button>
           </div>
         </div>
@@ -760,7 +878,7 @@ export function ThreeSkyExplorer({
               <strong className="text-amber-300 text-sm">{formatClock(currentMinutes)}</strong>
             </span>
             <span className="text-slate-500 text-[11px]">
-              Drag slider to glide the 3D Sun across 24h diurnal trajectory
+              Drag slider to glide {activeBodyMeta.name} across its 24h diurnal arc
             </span>
           </div>
 
@@ -776,7 +894,6 @@ export function ThreeSkyExplorer({
             />
           </div>
 
-          {/* Scale Markers */}
           <div className="flex justify-between text-[10px] text-slate-400 font-mono px-1">
             <span>00:00 (Midnight)</span>
             <span>06:00 (Dawn)</span>

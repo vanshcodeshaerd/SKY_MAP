@@ -21,12 +21,14 @@ export async function fetchServerSolarPosition(
   lat: number,
   lon: number,
   elevationM: number = 0,
-  timestamp?: string
+  timestamp?: string,
+  body: string = 'sun'
 ): Promise<SolarCoordinates> {
   const params = new URLSearchParams({
     latitude: lat.toString(),
     longitude: lon.toString(),
     elevation_m: elevationM.toString(),
+    body: body.toLowerCase(),
   });
   if (timestamp) params.append('timestamp', timestamp);
 

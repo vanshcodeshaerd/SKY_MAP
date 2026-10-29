@@ -34,8 +34,12 @@ def get_solar_position(
         None,
         description="ISO-8601 formatted UTC timestamp (defaults to current time)",
     ),
+    body: str = Query(
+        "sun",
+        description="Celestial body name: sun, moon, mercury, venus, mars, jupiter, saturn, uranus, neptune",
+    ),
 ) -> SolarPositionResponse:
-    """Calculate instantaneous topocentric apparent solar coordinates."""
+    """Calculate instantaneous topocentric apparent solar or planetary coordinates."""
     if timestamp:
         try:
             # Handle trailing Z
@@ -58,6 +62,7 @@ def get_solar_position(
         lon=longitude,
         elevation_m=elevation_m,
         dt_utc=dt_utc,
+        body=body,
     )
     return SolarPositionResponse(**result)
 

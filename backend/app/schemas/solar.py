@@ -27,6 +27,7 @@ class SolarPositionResponse(BaseModel):
     is_above_horizon: bool
     atmospheric_refraction_deg: float
     distance_au: float
+    body: Optional[str] = "sun"
 
 
 class Observer(BaseModel):

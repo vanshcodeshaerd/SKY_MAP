@@ -8,13 +8,14 @@ import { ARSkyView } from './features/ar-view/ARSkyView';
 import { CVLab } from './features/cv-lab/CVLab';
 import { useGeolocation } from './hooks/useGeolocation';
 import { useDeviceOrientation } from './hooks/useDeviceOrientation';
-import { ManualCalibration } from './types/astronomy';
+import { ManualCalibration, CelestialBodyId } from './types/astronomy';
 import { fetchServerHealth } from './services/api';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'sky3d' | 'ar' | 'cvlab'>('dashboard');
   const [isCalibrationOpen, setIsCalibrationOpen] = useState(false);
   const [serverOnline, setServerOnline] = useState<boolean>(false);
+  const [selectedBody, setSelectedBody] = useState<CelestialBodyId>('Sun');
 
   // Time & Simulation State
   const [currentDate, setCurrentDate] = useState<Date>(new Date());
@@ -84,6 +85,8 @@ export default function App() {
             setCurrentDate={setCurrentDate}
             isLive={isLive}
             setIsLive={setIsLive}
+            selectedBody={selectedBody}
+            onSelectBody={setSelectedBody}
           />
         )}
 
@@ -94,6 +97,8 @@ export default function App() {
             setCurrentDate={setCurrentDate}
             isLive={isLive}
             setIsLive={setIsLive}
+            selectedBody={selectedBody}
+            onSelectBody={setSelectedBody}
           />
         )}
 
@@ -109,6 +114,8 @@ export default function App() {
             manualYaw={manualYaw}
             manualPitch={manualPitch}
             manualRoll={manualRoll}
+            selectedBody={selectedBody}
+            onSelectBody={setSelectedBody}
           />
         )}
 

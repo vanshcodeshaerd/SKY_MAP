@@ -31,25 +31,44 @@ def enu_unit_vector(azimuth_deg: float, altitude_deg: float) -> List[float]:
     return [sx, sy, sz]
 
 
+DE421_TARGET_MAP = {
+    "sun": "sun",
+    "moon": "moon",
+    "mercury": "mercury",
+    "venus": "venus",
+    "mars": "mars",
+    "jupiter": "jupiter barycenter",
+    "saturn": "saturn barycenter",
+    "uranus": "uranus barycenter",
+    "neptune": "neptune barycenter",
+    "pluto": "pluto barycenter",
+}
+
+
 def calculate_solar_position(
     lat: float,
     lon: float,
     elevation_m: float,
     dt_utc: datetime,
+    body: str = "sun",
     pressure_mbar: float = settings.refraction_pressure_mbar,
     temperature_c: float = settings.refraction_temperature_c,
 ) -> Dict[str, Any]:
-    """Apparent topocentric solar coordinates with Bennett-style refraction."""
+    """Apparent topocentric solar/planetary coordinates with Bennett-style refraction."""
     dt_utc = _ensure_utc(dt_utc)
     ts = get_timescale()
-    sun, earth = get_sun_earth()
+    eph = get_ephemeris()
+    earth = eph["earth"]
+    target_key = DE421_TARGET_MAP.get(body.lower(), "sun")
+    target = eph[target_key]
+
     t = ts.from_datetime(dt_utc)
     observer = earth + wgs84.latlon(
         latitude_degrees=lat,
         longitude_degrees=lon,
         elevation_m=elevation_m,
     )
-    apparent = observer.at(t).observe(sun).apparent()
+    apparent = observer.at(t).observe(target).apparent()
 
     alt_app, az_app, distance = apparent.altaz(
         pressure_mbar=pressure_mbar,
@@ -71,6 +90,7 @@ def calculate_solar_position(
         "is_above_horizon": altitude >= 0.0,
         "atmospheric_refraction_deg": refraction,
         "distance_au": float(distance.au),
+        "body": body.lower(),
     }
 
 
