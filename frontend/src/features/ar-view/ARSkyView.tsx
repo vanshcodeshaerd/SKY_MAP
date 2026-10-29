@@ -9,6 +9,9 @@ import {
   Moon,
   Orbit,
   Compass,
+  Navigation,
+  Target,
+  RotateCcw,
 } from 'lucide-react';
 import {
   GeodeticLocation,
@@ -19,7 +22,7 @@ import {
   CELESTIAL_BODY_LIST,
 } from '../../types/astronomy';
 import { getClientCelestialPosition, getAllCelestialPositions } from '../../services/astronomyEngine';
-import { azAltToEnuVector, orientationToQuaternion, projectVectorToScreen } from '../../services/coordinateTransforms';
+import { azAltToEnuVector, projectEnuToScreen } from '../../services/coordinateTransforms';
 import { useCameraStream } from '../../hooks/useCameraStream';
 import { calculateStarPositions, CONSTELLATION_DEFS } from '../../services/starCatalog';
 import { getPlanetThumbnail } from '../../services/planetTextures';
@@ -74,6 +77,9 @@ export function ARSkyView({
   const [showEcliptic, setShowEcliptic] = useState<boolean>(true);
   const [skyOpacity, setSkyOpacity] = useState<number>(0.6);
 
+  // Quick compass trim for real-life magnetic alignment (+/- degrees on the fly)
+  const [quickAzimuthNudge, setQuickAzimuthNudge] = useState<number>(0);
+
   const [viewport, setViewport] = useState({ width: 800, height: 600 });
 
   const activeMeta = CELESTIAL_BODIES[selectedBody] || CELESTIAL_BODIES.Sun;
@@ -95,22 +101,18 @@ export function ARSkyView({
   // Pre-calculate topocentric Ecliptic Orbit path (golden planetary highway across sky)
   const eclipticEnuPoints = useMemo(() => {
     const points: THREE.Vector3[] = [];
-    // Obliquity of the Ecliptic ~ 23.44 deg
     const eps = (23.43928 * Math.PI) / 180;
     const sinEps = Math.sin(eps);
     const cosEps = Math.cos(eps);
 
-    // Calculate topocentric positions for 36 points along the 360-deg ecliptic
     for (let deg = 0; deg < 360; deg += 10) {
       const lambda = (deg * Math.PI) / 180;
       const sinLambda = Math.sin(lambda);
       const cosLambda = Math.cos(lambda);
 
-      // Equatorial coords
       const ra = Math.atan2(cosEps * sinLambda, cosLambda);
       const dec = Math.asin(sinEps * sinLambda);
 
-      // Approximate topocentric Az/Alt using observer location and current GST
       const d = (currentDate.getTime() / 86400000) - 10957.5;
       const gmstHours = (18.697374558 + 24.06570982441908 * d) % 24;
       const lstRad = ((gmstHours + location.longitude / 15) * 15 * Math.PI) / 180;
@@ -156,7 +158,14 @@ export function ARSkyView({
   const [projectedBodies, setProjectedBodies] = useState<
     Record<
       CelestialBodyId,
-      { u: number; v: number; isInFront: boolean; angularSeparationDeg: number }
+      {
+        u: number;
+        v: number;
+        isInFront: boolean;
+        angularSeparationDeg: number;
+        azimuthOffsetDeg: number;
+        elevationOffsetDeg: number;
+      }
     >
   >({} as any);
 
@@ -206,45 +215,47 @@ export function ARSkyView({
       animId = requestAnimationFrame(renderLoop);
 
       // 1. Determine target attitude angles from device sensor or manual drags
-      const hasSensor = orientation.alpha !== null && orientation.beta !== null && orientation.gamma !== null;
-      const targetAlpha = hasSensor ? orientation.alpha! : manualYaw;
-      const targetBeta = hasSensor ? orientation.beta! : manualPitch;
-      const targetGamma = hasSensor ? orientation.gamma! : manualRoll;
+      // Uses the upgraded true compass heading and elevation pitch from useDeviceOrientation
+      const hasSensor =
+        orientation.compassHeading !== undefined &&
+        orientation.compassHeading !== null &&
+        orientation.cameraPitch !== undefined &&
+        orientation.cameraPitch !== null;
+
+      const targetAlpha = hasSensor ? orientation.compassHeading! : manualYaw;
+      const targetBeta = hasSensor ? orientation.cameraPitch! : manualPitch;
+      const targetGamma = orientation.cameraRoll !== undefined && orientation.cameraRoll !== null ? orientation.cameraRoll! : manualRoll;
 
       // 2. Exponential smoothing (low-pass filter) to eliminate phone sensor jitter
-      const smoothFactor = hasSensor ? 0.22 : 0.45;
+      const smoothFactor = hasSensor ? 0.25 : 0.45;
       smoothedAnglesRef.current.heading += (targetAlpha - smoothedAnglesRef.current.heading) * smoothFactor;
       smoothedAnglesRef.current.pitch += (targetBeta - smoothedAnglesRef.current.pitch) * smoothFactor;
       smoothedAnglesRef.current.roll += (targetGamma - smoothedAnglesRef.current.roll) * smoothFactor;
 
-      const alpha = smoothedAnglesRef.current.heading;
-      const beta = smoothedAnglesRef.current.pitch;
-      const gamma = smoothedAnglesRef.current.roll;
+      const rawAlpha = smoothedAnglesRef.current.heading;
+      const rawBeta = smoothedAnglesRef.current.pitch;
+      const rawGamma = smoothedAnglesRef.current.roll;
 
-      setHudHeading(alpha);
-      setHudPitch(beta);
+      // Apply magnetic declination, calibration nudge, and on-the-fly quick trim
+      const effectiveHeading =
+        (rawAlpha + calibration.declinationDeg + calibration.azimuthNudgeDeg + quickAzimuthNudge + 360) % 360;
+      const effectivePitch = Math.max(-89.9, Math.min(89.9, rawBeta + calibration.altitudeNudgeDeg));
+      const effectiveRoll = rawGamma;
 
-      // 3. Compute camera attitude quaternion
-      const cameraQuat = orientationToQuaternion(
-        alpha,
-        beta,
-        gamma,
-        calibration.azimuthNudgeDeg,
-        calibration.altitudeNudgeDeg,
-        calibration.declinationDeg
-      );
+      setHudHeading(effectiveHeading);
+      setHudPitch(effectivePitch);
 
-      const invQuat = cameraQuat.clone().invert();
-
-      // 4. Project all 9 Solar System bodies
+      // 3. Project all 9 Solar System bodies using mathematically exact ENU-to-Camera Orthonormal Matrix
       const bodyProjs: Record<CelestialBodyId, any> = {} as any;
       CELESTIAL_BODY_LIST.forEach((body) => {
         const pos = allPositions[body.id];
         if (pos) {
           const enu = azAltToEnuVector(pos.azimuthDeg, pos.altitudeDeg);
-          const camVec = enu.clone().applyQuaternion(invQuat);
-          bodyProjs[body.id] = projectVectorToScreen(
-            camVec,
+          bodyProjs[body.id] = projectEnuToScreen(
+            enu,
+            effectiveHeading,
+            effectivePitch,
+            effectiveRoll,
             viewport.width,
             viewport.height,
             calibration.fieldOfViewDeg
@@ -253,35 +264,56 @@ export function ARSkyView({
       });
       setProjectedBodies(bodyProjs);
 
-      // 5. Project Ecliptic golden arc
+      // 4. Project Ecliptic golden arc
       if (showEcliptic) {
         const eclipticCoords = eclipticEnuPoints.map((vec) => {
-          const camVec = vec.clone().applyQuaternion(invQuat);
-          const p = projectVectorToScreen(camVec, viewport.width, viewport.height, calibration.fieldOfViewDeg);
+          const p = projectEnuToScreen(
+            vec,
+            effectiveHeading,
+            effectivePitch,
+            effectiveRoll,
+            viewport.width,
+            viewport.height,
+            calibration.fieldOfViewDeg
+          );
           return { x: p.u, y: p.v, inFront: p.isInFront };
         });
         setProjectedEcliptic(eclipticCoords);
       }
 
-      // 6. Project Horizon Cardinal Points
+      // 5. Project Horizon Cardinal Points (N, E, S, W)
       const cardinalCoords = cardinalEnuPoints.map((c) => {
-        const camVec = c.enu.clone().applyQuaternion(invQuat);
-        const p = projectVectorToScreen(camVec, viewport.width, viewport.height, calibration.fieldOfViewDeg);
+        const p = projectEnuToScreen(
+          c.enu,
+          effectiveHeading,
+          effectivePitch,
+          effectiveRoll,
+          viewport.width,
+          viewport.height,
+          calibration.fieldOfViewDeg
+        );
         return { label: c.label, x: p.u, y: p.v, inFront: p.isInFront };
       });
       setProjectedCardinals(cardinalCoords);
 
-      // 7. Project stars and constellation lines
+      // 6. Project stars and constellation lines
       if (showConstellations) {
         const projectedStarCoords = new Map<string, { u: number; v: number; inFront: boolean }>();
         const starList: any[] = [];
 
         starsMap.forEach((s) => {
-          const camVec = s.enuVector.clone().applyQuaternion(invQuat);
-          const p = projectVectorToScreen(camVec, viewport.width, viewport.height, calibration.fieldOfViewDeg);
+          const p = projectEnuToScreen(
+            s.enuVector,
+            effectiveHeading,
+            effectivePitch,
+            effectiveRoll,
+            viewport.width,
+            viewport.height,
+            calibration.fieldOfViewDeg
+          );
           projectedStarCoords.set(s.star.id, { u: p.u, v: p.v, inFront: p.isInFront });
 
-          if (p.isInFront && p.u >= -20 && p.u <= viewport.width + 20 && p.v >= -20 && p.v <= viewport.height + 20) {
+          if (p.isInFront && p.u >= -30 && p.u <= viewport.width + 30 && p.v >= -30 && p.v <= viewport.height + 30) {
             starList.push({
               u: p.u,
               v: p.v,
@@ -324,6 +356,7 @@ export function ARSkyView({
     manualRoll,
     allPositions,
     calibration,
+    quickAzimuthNudge,
     viewport,
     starsMap,
     eclipticEnuPoints,
@@ -337,6 +370,8 @@ export function ARSkyView({
     v: -1000,
     isInFront: false,
     angularSeparationDeg: 180,
+    azimuthOffsetDeg: 0,
+    elevationOffsetDeg: 0,
   };
 
   // Is active planet within visible screen bounds
@@ -347,10 +382,10 @@ export function ARSkyView({
     activeProj.v >= 35 &&
     activeProj.v <= viewport.height - 35;
 
-  // Is target locked (centered in reticle within 6 degrees)
-  const isTargetLocked = isTargetOnScreen && activeProj.angularSeparationDeg < 6.5;
+  // Is target locked (centered in reticle within 5.5 degrees)
+  const isTargetLocked = isTargetOnScreen && activeProj.angularSeparationDeg < 5.5;
 
-  // Flight-grade Edge Radar Indicator (Calculates screen perimeter beacon when planet is off-screen)
+  // Screen perimeter guidance beacon calculation
   const edgeRadar = useMemo(() => {
     if (isTargetOnScreen) return null;
 
@@ -359,7 +394,6 @@ export function ARSkyView({
     let dx = activeProj.u - cx;
     let dy = activeProj.v - cy;
 
-    // If body is behind camera, reverse direction vector
     if (!activeProj.isInFront) {
       dx = -dx;
       dy = -dy;
@@ -385,6 +419,34 @@ export function ARSkyView({
     };
   }, [activeProj, isTargetOnScreen, viewport]);
 
+  // Compute flight guidance turn instructions
+  const guidanceInstruction = useMemo(() => {
+    if (isTargetLocked) return 'TARGET LOCKED';
+
+    const azDiff = activeProj.azimuthOffsetDeg;
+    const elDiff = activeProj.elevationOffsetDeg;
+
+    const parts: string[] = [];
+
+    if (Math.abs(azDiff) > 2.5) {
+      if (azDiff > 0) parts.push(`Turn Right ${Math.abs(azDiff).toFixed(0)}°`);
+      else parts.push(`Turn Left ${Math.abs(azDiff).toFixed(0)}°`);
+    }
+
+    if (Math.abs(elDiff) > 2.5) {
+      if (elDiff > 0) parts.push(`Tilt Up ${Math.abs(elDiff).toFixed(0)}°`);
+      else parts.push(`Tilt Down ${Math.abs(elDiff).toFixed(0)}°`);
+    }
+
+    if (parts.length === 0) return 'Aligning crosshair...';
+    return parts.join(' & ');
+  }, [activeProj, isTargetLocked]);
+
+  // Guidance Arrow Rotation Angle (points directly along 2D turn direction)
+  const guidanceArrowAngle = useMemo(() => {
+    return (Math.atan2(-activeProj.elevationOffsetDeg, activeProj.azimuthOffsetDeg) * 180) / Math.PI;
+  }, [activeProj]);
+
   // Compass Tape Ticks Generation (around current heading)
   const compassTicks = useMemo(() => {
     const ticks: { deg: number; label: string }[] = [];
@@ -408,6 +470,14 @@ export function ARSkyView({
     return ticks;
   }, []);
 
+  // Quick Align Compass to Currently Selected Body (Sun or Moon in daylight/night)
+  const handleSnapCompassToBody = () => {
+    // Aligns current heading to match the selected celestial body's true azimuth
+    const trueAz = activeCoords.azimuthDeg;
+    const diff = trueAz - hudHeading;
+    setQuickAzimuthNudge((prev) => (prev + diff + 360) % 360);
+  };
+
   return (
     <div className="space-y-4">
       {/* Horizontal Multi-Planet Selector Strip */}
@@ -419,7 +489,7 @@ export function ARSkyView({
 
       {/* iOS / Mobile Gyro Permission Banner */}
       {needsOrientationPermission && (
-        <div className="p-3 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-between text-amber-300 text-xs">
+        <div className="p-3 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-between text-amber-300 text-xs shadow-lg">
           <div className="flex items-center gap-2">
             <Compass className="w-4 h-4 text-amber-400" />
             <span>Enable device motion sensors for real-time sky orientation tracking</span>
@@ -473,7 +543,6 @@ export function ARSkyView({
               {projectedEcliptic.map((pt, i) => {
                 const next = projectedEcliptic[(i + 1) % projectedEcliptic.length];
                 if (!pt.inFront && !next.inFront) return null;
-                // Avoid drawing wrap-around lines that span across the entire screen
                 if (Math.hypot(next.x - pt.x, next.y - pt.y) > viewport.width * 0.4) return null;
 
                 return (
@@ -499,8 +568,7 @@ export function ARSkyView({
                 key={`line-${i}`}
                 x1={line.x1}
                 y1={line.y1}
-                x2={line.x2}
-                y2={line.y2}
+                x2={line.y2}
                 stroke={nightVisionMode ? '#ef4444' : '#38bdf8'}
                 strokeWidth={1.25}
                 strokeDasharray="3 3"
@@ -614,6 +682,32 @@ export function ARSkyView({
                 </div>
               ))}
             </div>
+          </div>
+        </div>
+
+        {/* Flight-Grade Guidance Banner at Top Center */}
+        <div className="absolute top-12 inset-x-4 flex justify-center pointer-events-none z-20">
+          <div
+            className={`px-4 py-1.5 rounded-full backdrop-blur-md border shadow-2xl flex items-center gap-2 text-xs font-mono transition-all ${
+              isTargetLocked
+                ? 'bg-emerald-950/90 border-emerald-500 text-emerald-300 ring-2 ring-emerald-500/40 animate-pulse'
+                : 'bg-slate-950/90 border-amber-500/60 text-amber-300'
+            }`}
+          >
+            {isTargetLocked ? (
+              <Target className="w-4 h-4 text-emerald-400 animate-spin" />
+            ) : (
+              <div
+                className="w-4 h-4 flex items-center justify-center transition-transform"
+                style={{ transform: `rotate(${guidanceArrowAngle}deg)` }}
+              >
+                <Navigation className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
+              </div>
+            )}
+            <span className="font-semibold">{guidanceInstruction}</span>
+            <span className="text-[10px] text-slate-400 font-normal">
+              ({activeMeta.name}: {activeProj.angularSeparationDeg.toFixed(0)}° away)
+            </span>
           </div>
         </div>
 
@@ -752,7 +846,6 @@ export function ARSkyView({
                 className="absolute pointer-events-auto cursor-pointer transform -translate-x-1/2 -translate-y-1/2 z-15 flex flex-col items-center hover:scale-125 transition-transform group"
                 style={{ left: `${proj.u}px`, top: `${proj.v}px` }}
               >
-                {/* 3D Photorealistic Planet Thumbnail with Dynamic Atmosphere Glow */}
                 <div className="relative flex items-center justify-center">
                   <div
                     className="absolute -inset-1 rounded-full blur-sm opacity-60 group-hover:opacity-100 transition-opacity"
@@ -766,7 +859,6 @@ export function ARSkyView({
                   />
                 </div>
 
-                {/* Planet Label Capsule */}
                 <div className="mt-1 flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-slate-950/90 border border-slate-800 text-[10px] font-mono shadow-md backdrop-blur-sm">
                   <span
                     className={`w-1.5 h-1.5 rounded-full ${
@@ -785,9 +877,7 @@ export function ARSkyView({
             className="absolute pointer-events-none transform -translate-x-1/2 -translate-y-1/2 transition-transform duration-75 ease-out z-25 flex flex-col items-center"
             style={{ left: `${activeProj.u}px`, top: `${activeProj.v}px` }}
           >
-            {/* Outer Rotating Reticle with Photorealistic 3D Planet */}
             <div className="relative flex items-center justify-center">
-              {/* Outer Dashed Rotating Ring */}
               <div
                 className={`w-28 h-28 rounded-full border-2 border-dashed ${
                   isTargetLocked
@@ -797,13 +887,11 @@ export function ARSkyView({
                 style={{ borderColor: activeMeta.color }}
               />
 
-              {/* Inner Targeting Ring */}
               <div
                 className="absolute w-20 h-20 rounded-full border border-current opacity-85"
                 style={{ color: activeMeta.color }}
               />
 
-              {/* Corner Bracket Crosshairs */}
               <div
                 className="absolute w-24 h-24 border-t-2 border-l-2 border-current opacity-75 -top-1 -left-1"
                 style={{ color: activeMeta.color }}
@@ -813,7 +901,6 @@ export function ARSkyView({
                 style={{ color: activeMeta.color }}
               />
 
-              {/* High-Resolution Photorealistic 3D Planet Centerpiece */}
               <div className="relative flex items-center justify-center">
                 <div
                   className="absolute -inset-2 rounded-full blur-md opacity-70 animate-pulse"
@@ -827,7 +914,6 @@ export function ARSkyView({
               </div>
             </div>
 
-            {/* Reticle Real-Time Telemetry Badge */}
             <div className="mt-3 bg-slate-950/95 backdrop-blur-md px-3.5 py-1.5 rounded-xl border border-slate-800 text-center font-mono text-[11px] space-y-0.5 shadow-2xl">
               <div className="flex items-center justify-center gap-1.5">
                 <span className="font-bold text-white text-xs">
@@ -922,17 +1008,53 @@ export function ARSkyView({
           </div>
         )}
 
-        {/* Bottom AR HUD Control Strip */}
-        <div className="absolute bottom-3 inset-x-4 flex items-center justify-between pointer-events-auto z-20">
-          <div className="flex items-center gap-2 bg-slate-950/80 backdrop-blur-md px-3 py-1.5 rounded-xl border border-slate-800 text-xs text-slate-300">
+        {/* Bottom AR HUD Control Strip & Real-World Compass Alignment Controls */}
+        <div className="absolute bottom-3 inset-x-4 flex flex-wrap items-center justify-between pointer-events-auto z-20 gap-2">
+          {/* Compass Heading & Field of View Badge */}
+          <div className="flex items-center gap-2 bg-slate-950/90 backdrop-blur-md px-3 py-1.5 rounded-xl border border-slate-800 text-xs text-slate-300 shadow-lg">
             <Eye className="w-3.5 h-3.5 text-amber-400" />
             <span className="font-mono text-[10px]">
-              FOV: {calibration.fieldOfViewDeg}° | Heading: {hudHeading.toFixed(0)}° | Pitch: {hudPitch.toFixed(0)}°
+              Heading: {hudHeading.toFixed(0)}° | Pitch: {hudPitch.toFixed(0)}° | FOV: {calibration.fieldOfViewDeg}°
             </span>
           </div>
 
+          {/* Quick Real-Life Compass Alignment Controls */}
+          <div className="flex items-center gap-1.5 bg-slate-950/90 backdrop-blur-md px-2.5 py-1 rounded-xl border border-slate-800 text-xs shadow-lg">
+            <span className="text-[10px] text-slate-400 font-mono">Compass Trim:</span>
+            <button
+              onClick={() => setQuickAzimuthNudge((prev) => prev - 5)}
+              className="px-2 py-0.5 rounded bg-slate-900 hover:bg-slate-800 text-amber-400 font-mono text-[10px] border border-slate-800"
+              title="Nudge Compass 5 degrees left"
+            >
+              -5°
+            </button>
+            <button
+              onClick={() => setQuickAzimuthNudge((prev) => prev + 5)}
+              className="px-2 py-0.5 rounded bg-slate-900 hover:bg-slate-800 text-amber-400 font-mono text-[10px] border border-slate-800"
+              title="Nudge Compass 5 degrees right"
+            >
+              +5°
+            </button>
+            {quickAzimuthNudge !== 0 && (
+              <button
+                onClick={() => setQuickAzimuthNudge(0)}
+                className="p-1 rounded bg-slate-900 hover:bg-slate-800 text-slate-400 text-[10px]"
+                title="Reset compass trim"
+              >
+                <RotateCcw className="w-3 h-3" />
+              </button>
+            )}
+            <button
+              onClick={handleSnapCompassToBody}
+              className="px-2 py-0.5 rounded bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 font-semibold text-[10px] border border-amber-500/40 ml-1 transition"
+              title={`Snap compass heading directly to ${activeMeta.name} in the sky`}
+            >
+              Snap to {activeMeta.name}
+            </button>
+          </div>
+
           {/* Sky Opacity Slider */}
-          <div className="hidden sm:flex items-center gap-2 bg-slate-950/80 backdrop-blur-md px-3 py-1.5 rounded-xl border border-slate-800 text-xs text-slate-300">
+          <div className="hidden sm:flex items-center gap-2 bg-slate-950/90 backdrop-blur-md px-3 py-1.5 rounded-xl border border-slate-800 text-xs text-slate-300 shadow-lg">
             <Sparkles className="w-3.5 h-3.5 text-sky-400" />
             <span className="text-[10px]">Sky Blend:</span>
             <input

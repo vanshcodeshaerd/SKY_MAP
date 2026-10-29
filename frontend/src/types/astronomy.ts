@@ -183,6 +183,9 @@ export interface DeviceOrientationState {
   alpha: number | null; // Compass heading (yaw, 0 to 360)
   beta: number | null;  // Front-back pitch (-180 to 180)
   gamma: number | null; // Left-right roll (-90 to 90)
+  compassHeading?: number | null; // True compass heading clockwise from North (0 to 360)
+  cameraPitch?: number | null;    // Elevation above horizon (-90 to +90)
+  cameraRoll?: number | null;     // Sideways roll (-180 to +180)
   absolute: boolean;
   compassAccuracy?: number;
   isSupported: boolean;

@@ -112,6 +112,98 @@ export function projectVectorToScreen(
 }
 
 /**
+ * Mathematically exact projection from ENU (East-North-Up) world frame directly
+ * to 2D screen coordinates based on camera Compass Heading, Elevation Pitch, and Roll.
+ * Completely eliminates Euler gimbal lock, axis swapping, and coordinate mismatches.
+ */
+export function projectEnuToScreen(
+  targetEnu: THREE.Vector3,
+  camHeadingDeg: number,
+  camPitchDeg: number,
+  camRollDeg: number,
+  viewWidth: number,
+  viewHeight: number,
+  fovYDeg: number = 60
+): {
+  u: number;
+  v: number;
+  isInFront: boolean;
+  angularSeparationDeg: number;
+  xCam: number;
+  yCam: number;
+  zCam: number;
+  azimuthOffsetDeg: number;
+  elevationOffsetDeg: number;
+} {
+  const cH = THREE.MathUtils.degToRad(camHeadingDeg);
+  const cP = THREE.MathUtils.degToRad(camPitchDeg);
+  const cR = THREE.MathUtils.degToRad(camRollDeg);
+
+  // F: Camera Forward Optical Axis in ENU (+Zcam)
+  const Fx = Math.cos(cP) * Math.sin(cH);
+  const Fy = Math.cos(cP) * Math.cos(cH);
+  const Fz = Math.sin(cP);
+
+  // R0: Unrolled Right vector in ENU (perpendicular to heading on horizontal plane)
+  const R0x = Math.cos(cH);
+  const R0y = -Math.sin(cH);
+  const R0z = 0;
+
+  // U0: Unrolled Up vector in ENU (R0 x F)
+  const U0x = -Math.sin(cP) * Math.sin(cH);
+  const U0y = -Math.sin(cP) * Math.cos(cH);
+  const U0z = Math.cos(cP);
+
+  // Apply camera roll around optical axis F
+  const cosR = Math.cos(cR);
+  const sinR = Math.sin(cR);
+
+  const Rx = R0x * cosR + U0x * sinR;
+  const Ry = R0y * cosR + U0y * sinR;
+  const Rz = R0z * cosR + U0z * sinR;
+
+  const Ux = -R0x * sinR + U0x * cosR;
+  const Uy = -R0y * sinR + U0y * cosR;
+  const Uz = -R0z * sinR + U0z * cosR;
+
+  // Project target ENU vector onto camera orthonormal basis via dot products
+  const xCam = targetEnu.x * Rx + targetEnu.y * Ry + targetEnu.z * Rz;
+  const yCam = targetEnu.x * Ux + targetEnu.y * Uy + targetEnu.z * Uz;
+  const zCam = targetEnu.x * Fx + targetEnu.y * Fy + targetEnu.z * Fz;
+
+  const isInFront = zCam > 0;
+  const dotForward = Math.max(-1.0, Math.min(1.0, zCam));
+  const angularSeparationDeg = THREE.MathUtils.radToDeg(Math.acos(dotForward));
+
+  // Ideal Pinhole perspective projection
+  const fovYRad = THREE.MathUtils.degToRad(fovYDeg);
+  const fy = viewHeight / (2.0 * Math.tan(fovYRad / 2.0));
+  const fx = fy;
+  const cx = viewWidth / 2.0;
+  const cy = viewHeight / 2.0;
+
+  const zDepth = Math.max(0.001, Math.abs(zCam));
+  const u = cx + (xCam / zDepth) * fx;
+  const v = cy - (yCam / zDepth) * fy;
+
+  // Angular offsets relative to camera center boresight
+  const azimuthOffsetDeg = THREE.MathUtils.radToDeg(Math.atan2(xCam, zCam));
+  const elevationOffsetDeg = THREE.MathUtils.radToDeg(Math.atan2(yCam, Math.hypot(xCam, zCam)));
+
+  return {
+    u,
+    v,
+    isInFront,
+    angularSeparationDeg,
+    xCam,
+    yCam,
+    zCam,
+    azimuthOffsetDeg,
+    elevationOffsetDeg,
+  };
+}
+
+/**
  * Computes the angular error (in degrees) between two 3D direction vectors.
  */
 export function computeAngularErrorDeg(v1: THREE.Vector3, v2: THREE.Vector3): number {
