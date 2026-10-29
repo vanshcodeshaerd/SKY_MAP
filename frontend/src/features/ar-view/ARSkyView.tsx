@@ -4,10 +4,11 @@ import {
   RefreshCw,
   Sparkles,
   SlidersHorizontal,
-  ArrowUpRight,
   Eye,
   Glasses,
   Moon,
+  Orbit,
+  Compass,
 } from 'lucide-react';
 import {
   GeodeticLocation,
@@ -20,8 +21,10 @@ import {
 import { getClientCelestialPosition, getAllCelestialPositions } from '../../services/astronomyEngine';
 import { azAltToEnuVector, orientationToQuaternion, projectVectorToScreen } from '../../services/coordinateTransforms';
 import { useCameraStream } from '../../hooks/useCameraStream';
-import { calculateStarPositions, CONSTELLATION_DEFS, CalculatedStar } from '../../services/starCatalog';
+import { calculateStarPositions, CONSTELLATION_DEFS } from '../../services/starCatalog';
+import { getPlanetThumbnail } from '../../services/planetTextures';
 import { CelestialBodySelector } from '../../components/CelestialBodySelector';
+import * as THREE from 'three';
 
 interface ARSkyViewProps {
   location: GeodeticLocation;
@@ -53,20 +56,29 @@ export function ARSkyView({
   onSelectBody,
 }: ARSkyViewProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const { videoRef, isActive: isCameraActive, error: cameraError, startCamera, stopCamera, toggleFacingMode, facingMode } = useCameraStream();
+  const {
+    videoRef,
+    isActive: isCameraActive,
+    error: cameraError,
+    startCamera,
+    stopCamera,
+    toggleFacingMode,
+    facingMode,
+  } = useCameraStream();
 
   // Mode: AR (Camera Passthrough) vs VR (Gyro Cosmic Planetarium)
   const [viewMode, setViewMode] = useState<'ar' | 'vr'>('ar');
   const [nightVisionMode, setNightVisionMode] = useState<boolean>(false);
   const [showConstellations, setShowConstellations] = useState<boolean>(true);
   const [showAllPlanetsInAR, setShowAllPlanetsInAR] = useState<boolean>(true);
-  const [skyOpacity, setSkyOpacity] = useState<number>(0.65); // 0 = camera only, 1 = full star map
+  const [showEcliptic, setShowEcliptic] = useState<boolean>(true);
+  const [skyOpacity, setSkyOpacity] = useState<number>(0.6);
 
   const [viewport, setViewport] = useState({ width: 800, height: 600 });
 
   const activeMeta = CELESTIAL_BODIES[selectedBody] || CELESTIAL_BODIES.Sun;
 
-  // Real-time planetary positions
+  // Real-time planetary positions (VSOP87)
   const activeCoords = useMemo(() => {
     return getClientCelestialPosition(selectedBody, location, currentDate);
   }, [selectedBody, location, currentDate]);
@@ -74,6 +86,71 @@ export function ARSkyView({
   const allPositions = useMemo(() => {
     return getAllCelestialPositions(location, currentDate);
   }, [location, currentDate]);
+
+  // Pre-calculate topocentric Star Catalog positions only when location/time changes
+  const starsMap = useMemo(() => {
+    return calculateStarPositions(location, currentDate, 80);
+  }, [location, currentDate]);
+
+  // Pre-calculate topocentric Ecliptic Orbit path (golden planetary highway across sky)
+  const eclipticEnuPoints = useMemo(() => {
+    const points: THREE.Vector3[] = [];
+    // Obliquity of the Ecliptic ~ 23.44 deg
+    const eps = (23.43928 * Math.PI) / 180;
+    const sinEps = Math.sin(eps);
+    const cosEps = Math.cos(eps);
+
+    // Calculate topocentric positions for 36 points along the 360-deg ecliptic
+    for (let deg = 0; deg < 360; deg += 10) {
+      const lambda = (deg * Math.PI) / 180;
+      const sinLambda = Math.sin(lambda);
+      const cosLambda = Math.cos(lambda);
+
+      // Equatorial coords
+      const ra = Math.atan2(cosEps * sinLambda, cosLambda);
+      const dec = Math.asin(sinEps * sinLambda);
+
+      // Approximate topocentric Az/Alt using observer location and current GST
+      const d = (currentDate.getTime() / 86400000) - 10957.5;
+      const gmstHours = (18.697374558 + 24.06570982441908 * d) % 24;
+      const lstRad = ((gmstHours + location.longitude / 15) * 15 * Math.PI) / 180;
+      const ha = lstRad - ra;
+
+      const latRad = (location.latitude * Math.PI) / 180;
+      const sinAlt = Math.sin(latRad) * Math.sin(dec) + Math.cos(latRad) * Math.cos(dec) * Math.cos(ha);
+      const altRad = Math.asin(Math.max(-1, Math.min(1, sinAlt)));
+
+      const cosAlt = Math.cos(altRad);
+      const cosAz = (Math.sin(dec) - Math.sin(latRad) * sinAlt) / (cosAlt * Math.cos(latRad) || 1e-5);
+      let azRad = Math.acos(Math.max(-1, Math.min(1, cosAz)));
+      if (Math.sin(ha) > 0) azRad = 2 * Math.PI - azRad;
+
+      const azDeg = (azRad * 180) / Math.PI;
+      const altDeg = (altRad * 180) / Math.PI;
+
+      points.push(azAltToEnuVector(azDeg, altDeg));
+    }
+    return points;
+  }, [location, currentDate]);
+
+  // Cardinal Horizon Directions (N, NE, E, SE, S, SW, W, NW) at Alt = 0
+  const cardinalEnuPoints = useMemo(() => {
+    const cardinals = [
+      { label: 'N', az: 0 },
+      { label: 'NE', az: 45 },
+      { label: 'E', az: 90 },
+      { label: 'SE', az: 135 },
+      { label: 'S', az: 180 },
+      { label: 'SW', az: 225 },
+      { label: 'W', az: 270 },
+      { label: 'NW', az: 315 },
+    ];
+    return cardinals.map((c) => ({
+      label: c.label,
+      az: c.az,
+      enu: azAltToEnuVector(c.az, 0),
+    }));
+  }, []);
 
   // Projected screen coordinates map for all 9 bodies
   const [projectedBodies, setProjectedBodies] = useState<
@@ -93,9 +170,18 @@ export function ARSkyView({
     { u: number; v: number; name: string; mag: number; color: string; visible: boolean }[]
   >([]);
 
-  // Current effective heading & pitch for HUD
-  const [currentHeading, setCurrentHeading] = useState<number>(180);
-  const [currentPitch, setCurrentPitch] = useState<number>(30);
+  // Projected Ecliptic Path lines
+  const [projectedEcliptic, setProjectedEcliptic] = useState<{ x: number; y: number; inFront: boolean }[]>([]);
+
+  // Projected Horizon Cardinal Points
+  const [projectedCardinals, setProjectedCardinals] = useState<
+    { label: string; x: number; y: number; inFront: boolean }[]
+  >([]);
+
+  // Gyro Smoothing State for jitter-free 60 FPS motion
+  const smoothedAnglesRef = useRef({ heading: 180, pitch: 30, roll: 0 });
+  const [hudHeading, setHudHeading] = useState<number>(180);
+  const [hudPitch, setHudPitch] = useState<number>(30);
 
   // Handle container resize
   useEffect(() => {
@@ -119,16 +205,26 @@ export function ARSkyView({
     const renderLoop = () => {
       animId = requestAnimationFrame(renderLoop);
 
-      // 1. Determine effective attitude angles
+      // 1. Determine target attitude angles from device sensor or manual drags
       const hasSensor = orientation.alpha !== null && orientation.beta !== null && orientation.gamma !== null;
-      const alpha = hasSensor ? orientation.alpha! : manualYaw;
-      const beta = hasSensor ? orientation.beta! : manualPitch;
-      const gamma = hasSensor ? orientation.gamma! : manualRoll;
+      const targetAlpha = hasSensor ? orientation.alpha! : manualYaw;
+      const targetBeta = hasSensor ? orientation.beta! : manualPitch;
+      const targetGamma = hasSensor ? orientation.gamma! : manualRoll;
 
-      setCurrentHeading(alpha);
-      setCurrentPitch(beta);
+      // 2. Exponential smoothing (low-pass filter) to eliminate phone sensor jitter
+      const smoothFactor = hasSensor ? 0.22 : 0.45;
+      smoothedAnglesRef.current.heading += (targetAlpha - smoothedAnglesRef.current.heading) * smoothFactor;
+      smoothedAnglesRef.current.pitch += (targetBeta - smoothedAnglesRef.current.pitch) * smoothFactor;
+      smoothedAnglesRef.current.roll += (targetGamma - smoothedAnglesRef.current.roll) * smoothFactor;
 
-      // 2. Compute camera attitude quaternion
+      const alpha = smoothedAnglesRef.current.heading;
+      const beta = smoothedAnglesRef.current.pitch;
+      const gamma = smoothedAnglesRef.current.roll;
+
+      setHudHeading(alpha);
+      setHudPitch(beta);
+
+      // 3. Compute camera attitude quaternion
       const cameraQuat = orientationToQuaternion(
         alpha,
         beta,
@@ -140,7 +236,7 @@ export function ARSkyView({
 
       const invQuat = cameraQuat.clone().invert();
 
-      // 3. Project all 9 Solar System bodies
+      // 4. Project all 9 Solar System bodies
       const bodyProjs: Record<CelestialBodyId, any> = {} as any;
       CELESTIAL_BODY_LIST.forEach((body) => {
         const pos = allPositions[body.id];
@@ -157,18 +253,35 @@ export function ARSkyView({
       });
       setProjectedBodies(bodyProjs);
 
-      // 4. Project stars and constellation lines if enabled
-      if (showConstellations) {
-        const starsMap: Map<string, CalculatedStar> = calculateStarPositions(location, currentDate, 80);
-        const projectedStarCoords = new Map<string, { u: number; v: number; inFront: boolean }>();
+      // 5. Project Ecliptic golden arc
+      if (showEcliptic) {
+        const eclipticCoords = eclipticEnuPoints.map((vec) => {
+          const camVec = vec.clone().applyQuaternion(invQuat);
+          const p = projectVectorToScreen(camVec, viewport.width, viewport.height, calibration.fieldOfViewDeg);
+          return { x: p.u, y: p.v, inFront: p.isInFront };
+        });
+        setProjectedEcliptic(eclipticCoords);
+      }
 
+      // 6. Project Horizon Cardinal Points
+      const cardinalCoords = cardinalEnuPoints.map((c) => {
+        const camVec = c.enu.clone().applyQuaternion(invQuat);
+        const p = projectVectorToScreen(camVec, viewport.width, viewport.height, calibration.fieldOfViewDeg);
+        return { label: c.label, x: p.u, y: p.v, inFront: p.isInFront };
+      });
+      setProjectedCardinals(cardinalCoords);
+
+      // 7. Project stars and constellation lines
+      if (showConstellations) {
+        const projectedStarCoords = new Map<string, { u: number; v: number; inFront: boolean }>();
         const starList: any[] = [];
+
         starsMap.forEach((s) => {
           const camVec = s.enuVector.clone().applyQuaternion(invQuat);
           const p = projectVectorToScreen(camVec, viewport.width, viewport.height, calibration.fieldOfViewDeg);
           projectedStarCoords.set(s.star.id, { u: p.u, v: p.v, inFront: p.isInFront });
 
-          if (p.isInFront && p.u >= 0 && p.u <= viewport.width && p.v >= 0 && p.v <= viewport.height) {
+          if (p.isInFront && p.u >= -20 && p.u <= viewport.width + 20 && p.v >= -20 && p.v <= viewport.height + 20) {
             starList.push({
               u: p.u,
               v: p.v,
@@ -212,9 +325,11 @@ export function ARSkyView({
     allPositions,
     calibration,
     viewport,
-    location,
-    currentDate,
+    starsMap,
+    eclipticEnuPoints,
+    cardinalEnuPoints,
     showConstellations,
+    showEcliptic,
   ]);
 
   const activeProj = projectedBodies[selectedBody] || {
@@ -227,20 +342,48 @@ export function ARSkyView({
   // Is active planet within visible screen bounds
   const isTargetOnScreen =
     activeProj.isInFront &&
-    activeProj.u >= 30 &&
-    activeProj.u <= viewport.width - 30 &&
-    activeProj.v >= 30 &&
-    activeProj.v <= viewport.height - 30;
+    activeProj.u >= 35 &&
+    activeProj.u <= viewport.width - 35 &&
+    activeProj.v >= 35 &&
+    activeProj.v <= viewport.height - 35;
 
-  // Is target locked (centered in reticle)
-  const isTargetLocked = isTargetOnScreen && activeProj.angularSeparationDeg < 8.0;
+  // Is target locked (centered in reticle within 6 degrees)
+  const isTargetLocked = isTargetOnScreen && activeProj.angularSeparationDeg < 6.5;
 
-  // Offscreen target angle for guide arrow
-  const offscreenAngleDeg = useMemo(() => {
-    const dx = activeProj.u - viewport.width / 2;
-    const dy = activeProj.v - viewport.height / 2;
-    return (Math.atan2(dy, dx) * 180) / Math.PI;
-  }, [activeProj, viewport]);
+  // Flight-grade Edge Radar Indicator (Calculates screen perimeter beacon when planet is off-screen)
+  const edgeRadar = useMemo(() => {
+    if (isTargetOnScreen) return null;
+
+    const cx = viewport.width / 2;
+    const cy = viewport.height / 2;
+    let dx = activeProj.u - cx;
+    let dy = activeProj.v - cy;
+
+    // If body is behind camera, reverse direction vector
+    if (!activeProj.isInFront) {
+      dx = -dx;
+      dy = -dy;
+    }
+
+    const margin = 48;
+    const maxDx = cx - margin;
+    const maxDy = cy - margin;
+
+    const scaleX = maxDx / (Math.abs(dx) || 1e-6);
+    const scaleY = maxDy / (Math.abs(dy) || 1e-6);
+    const scale = Math.min(scaleX, scaleY);
+
+    const edgeX = cx + dx * scale;
+    const edgeY = cy + dy * scale;
+    const angleDeg = (Math.atan2(dy, dx) * 180) / Math.PI;
+
+    return {
+      x: edgeX,
+      y: edgeY,
+      angleDeg,
+      separation: activeProj.angularSeparationDeg || 90,
+    };
+  }, [activeProj, isTargetOnScreen, viewport]);
 
   // Compass Tape Ticks Generation (around current heading)
   const compassTicks = useMemo(() => {
@@ -255,6 +398,7 @@ export function ARSkyView({
       270: 'W',
       315: 'NW',
     };
+
     for (let i = 0; i < 360; i += 15) {
       ticks.push({
         deg: i,
@@ -265,86 +409,111 @@ export function ARSkyView({
   }, []);
 
   return (
-    <div
-      className={`space-y-4 animate-fade-in ${
-        nightVisionMode ? 'text-red-400 font-mono select-none' : ''
-      }`}
-    >
-      {/* Target Body Selector Bar */}
-      <div
-        className={`glass-panel p-3 rounded-2xl border ${
-          nightVisionMode ? 'border-red-900 bg-red-950/40 text-red-300' : 'border-slate-800'
-        } space-y-2`}
-      >
-        <div className="flex items-center justify-between text-xs px-1">
-          <span className="font-semibold flex items-center gap-1.5">
-            <Sparkles className="w-4 h-4 text-amber-400" />
-            <span>AR Star Gazer Target:</span>
-            <strong className="text-amber-300 font-bold">{activeMeta.name}</strong>
-          </span>
-          <span className="text-[11px] opacity-75 font-mono">
-            {isTargetLocked ? '🎯 TARGET LOCKED' : `Angular distance: ${activeProj.angularSeparationDeg.toFixed(1)}°`}
-          </span>
-        </div>
-        <CelestialBodySelector
-          selectedBody={selectedBody}
-          onSelectBody={(body) => onSelectBody && onSelectBody(body)}
-          allPositions={allPositions}
-        />
-      </div>
+    <div className="space-y-4">
+      {/* Horizontal Multi-Planet Selector Strip */}
+      <CelestialBodySelector
+        selectedBody={selectedBody}
+        onSelectBody={(id) => onSelectBody && onSelectBody(id)}
+        allPositions={allPositions}
+      />
 
-      {/* AR Viewport Container (Star Walk / SkyView HUD Interface) */}
+      {/* iOS / Mobile Gyro Permission Banner */}
+      {needsOrientationPermission && (
+        <div className="p-3 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-between text-amber-300 text-xs">
+          <div className="flex items-center gap-2">
+            <Compass className="w-4 h-4 text-amber-400" />
+            <span>Enable device motion sensors for real-time sky orientation tracking</span>
+          </div>
+          <button
+            onClick={onRequestOrientationPermission}
+            className="px-3 py-1 rounded-xl bg-amber-500 text-slate-950 font-bold text-xs hover:bg-amber-400 transition"
+          >
+            Enable Gyro
+          </button>
+        </div>
+      )}
+
+      {/* Main AR / VR Viewport Container */}
       <div
         ref={containerRef}
-        className={`glass-panel rounded-2xl overflow-hidden relative border ${
-          nightVisionMode ? 'border-red-900 bg-black' : 'border-slate-800 bg-slate-950'
-        } w-full h-[580px] flex items-center justify-center shadow-2xl`}
+        className={`relative w-full h-[580px] rounded-3xl overflow-hidden shadow-2xl border transition-colors select-none ${
+          nightVisionMode
+            ? 'bg-red-950/90 border-red-800 ring-2 ring-red-600/30'
+            : 'bg-slate-950 border-slate-800'
+        }`}
       >
-        {/* AR Mode: Real Camera Stream */}
+        {/* Layer 1: Real-World Video Feed (AR Mode) */}
         {viewMode === 'ar' && (
           <video
             ref={videoRef}
-            autoPlay
             playsInline
             muted
-            className={`w-full h-full object-cover transition duration-300 ${
+            className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-500 ${
               isCameraActive ? 'opacity-100' : 'opacity-0'
-            } ${nightVisionMode ? 'filter grayscale contrast-125 sepia hue-rotate-[320deg]' : ''}`}
+            }`}
           />
         )}
 
-        {/* VR Planetarium Mode: Deep Space Gradient Background */}
-        {viewMode === 'vr' && (
-          <div className="absolute inset-0 bg-gradient-to-b from-[#02040b] via-[#050b18] to-[#010206] pointer-events-none" />
-        )}
+        {/* Layer 2: Cosmic Planetarium Starfield (VR Mode or AR Sky Blend) */}
+        <div
+          className="absolute inset-0 pointer-events-none transition-opacity duration-300"
+          style={{
+            opacity: viewMode === 'vr' ? 1 : skyOpacity,
+            background: nightVisionMode
+              ? 'radial-gradient(ellipse at 50% 60%, #450a0a 0%, #1a0505 70%, #000000 100%)'
+              : 'radial-gradient(ellipse at 50% 60%, #0f172a 0%, #020617 75%, #000000 100%)',
+          }}
+        />
 
-        {/* Virtual Starfield & Constellations Overlay Canvas (Inspired by Star Walk & SkyView) */}
-        <svg
-          className="absolute inset-0 w-full h-full pointer-events-none transition-opacity duration-300"
-          style={{ opacity: viewMode === 'ar' ? skyOpacity : 1.0 }}
-        >
-          {/* Constellation Connection Lines */}
+        {/* Layer 3: SVG Celestial Vector Canvas (Constellations, Ecliptic, Stars, Horizon) */}
+        <svg className="absolute inset-0 w-full h-full pointer-events-none z-5">
+          {/* Glowing Golden Ecliptic Line (Planetary Highway) */}
+          {showEcliptic && projectedEcliptic.length > 2 && (
+            <g opacity={nightVisionMode ? 0.35 : 0.65}>
+              {projectedEcliptic.map((pt, i) => {
+                const next = projectedEcliptic[(i + 1) % projectedEcliptic.length];
+                if (!pt.inFront && !next.inFront) return null;
+                // Avoid drawing wrap-around lines that span across the entire screen
+                if (Math.hypot(next.x - pt.x, next.y - pt.y) > viewport.width * 0.4) return null;
+
+                return (
+                  <line
+                    key={`ecliptic-${i}`}
+                    x1={pt.x}
+                    y1={pt.y}
+                    x2={next.x}
+                    y2={next.y}
+                    stroke={nightVisionMode ? '#ef4444' : '#F59E0B'}
+                    strokeWidth={1.75}
+                    strokeDasharray="4 4"
+                  />
+                );
+              })}
+            </g>
+          )}
+
+          {/* Glowing Constellation Lines */}
           {showConstellations &&
-            projectedConstellations.map((line, idx) => (
+            projectedConstellations.map((line, i) => (
               <line
-                key={idx}
+                key={`line-${i}`}
                 x1={line.x1}
                 y1={line.y1}
                 x2={line.x2}
                 y2={line.y2}
                 stroke={nightVisionMode ? '#ef4444' : '#38bdf8'}
-                strokeWidth={1.5}
-                strokeDasharray="4 2"
-                opacity={0.55}
+                strokeWidth={1.25}
+                strokeDasharray="3 3"
+                opacity={nightVisionMode ? 0.4 : 0.55}
               />
             ))}
 
-          {/* Real Bright Navigational Stars */}
+          {/* Star Field Points & Labels */}
           {showConstellations &&
-            projectedStars.map((star, idx) => (
-              <g key={idx} transform={`translate(${star.u}, ${star.v})`}>
+            projectedStars.map((star, i) => (
+              <g key={`star-${i}`} transform={`translate(${star.u}, ${star.v})`}>
                 <circle
-                  r={Math.max(1.8, 4.5 - star.mag * 0.8)}
+                  r={Math.max(1.5, 4.2 - star.mag * 0.75)}
                   fill={nightVisionMode ? '#f87171' : star.color}
                   opacity={0.9}
                 />
@@ -353,18 +522,42 @@ export function ARSkyView({
                   fill={nightVisionMode ? '#ef4444' : star.color}
                   opacity={0.25}
                 />
-                <text
-                  x={8}
-                  y={4}
-                  fill={nightVisionMode ? '#fca5a5' : '#94a3b8'}
-                  fontSize={10}
-                  fontFamily="monospace"
-                  opacity={0.7}
-                >
-                  {star.name}
-                </text>
+                {star.mag < 1.8 && (
+                  <text
+                    x={8}
+                    y={3}
+                    fill={nightVisionMode ? '#fca5a5' : '#94a3b8'}
+                    fontSize={9}
+                    fontFamily="monospace"
+                    opacity={0.7}
+                  >
+                    {star.name}
+                  </text>
+                )}
               </g>
             ))}
+
+          {/* Projected Cardinal Horizon Markers (N, E, S, W) */}
+          {projectedCardinals.map((c, i) => {
+            if (!c.inFront || c.x < -30 || c.x > viewport.width + 30 || c.y < -30 || c.y > viewport.height + 30)
+              return null;
+
+            return (
+              <g key={`cardinal-${i}`} transform={`translate(${c.x}, ${c.y})`}>
+                <circle r={12} fill="rgba(15, 23, 42, 0.7)" stroke="#10b981" strokeWidth={1} opacity={0.8} />
+                <text
+                  textAnchor="middle"
+                  dominantBaseline="central"
+                  fill="#34d399"
+                  fontSize={10}
+                  fontWeight="bold"
+                  fontFamily="monospace"
+                >
+                  {c.label}
+                </text>
+              </g>
+            );
+          })}
         </svg>
 
         {/* Camera Inactive Fallback Prompt in AR Mode */}
@@ -375,7 +568,8 @@ export function ARSkyView({
             </div>
             <h3 className="text-base font-semibold text-slate-100">Live Camera Stream Inactive</h3>
             <p className="text-xs text-slate-400 max-w-sm">
-              Enable your camera to blend the virtual star map and planets over the real sky, or switch to <strong>VR Gyro Planetarium</strong> mode!
+              Enable your camera to blend the virtual star map and planets over the real sky, or switch to{' '}
+              <strong>VR Gyro Planetarium</strong> mode!
             </p>
             {cameraError && (
               <p className="text-xs text-red-400 font-mono bg-red-950/40 px-3 py-1.5 rounded-lg border border-red-900/60 max-w-md">
@@ -408,7 +602,7 @@ export function ARSkyView({
             <div
               className="flex items-center gap-6 transition-transform duration-75"
               style={{
-                transform: `translateX(${-((currentHeading % 360) * 4)}px)`,
+                transform: `translateX(${-((hudHeading % 360) * 4)}px)`,
               }}
             >
               {[...compassTicks, ...compassTicks, ...compassTicks].map((tick, i) => (
@@ -429,7 +623,7 @@ export function ARSkyView({
           <span>+60°</span>
           <span>+30°</span>
           <span className="text-amber-400 font-bold bg-slate-950/80 px-1 py-0.5 rounded border border-amber-500/40">
-            {currentPitch >= 0 ? '+' : ''}{currentPitch.toFixed(0)}°
+            {hudPitch >= 0 ? '+' : ''}{hudPitch.toFixed(0)}°
           </span>
           <span>-30°</span>
           <span>-60°</span>
@@ -466,6 +660,20 @@ export function ARSkyView({
             <span>Red Mode</span>
           </button>
 
+          {/* Ecliptic Orbit Highway Toggle */}
+          <button
+            onClick={() => setShowEcliptic(!showEcliptic)}
+            className={`px-3 py-1.5 rounded-xl text-xs font-semibold border backdrop-blur-md transition shadow-lg ${
+              showEcliptic
+                ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                : 'bg-slate-900/80 text-slate-400 border-slate-800'
+            }`}
+            title="Toggle the Golden Ecliptic Zodiac Path"
+          >
+            <Orbit className="w-3.5 h-3.5 inline mr-1" />
+            <span>Ecliptic</span>
+          </button>
+
           {/* Constellations Overlay Toggle */}
           <button
             onClick={() => setShowConstellations(!showConstellations)}
@@ -483,7 +691,7 @@ export function ARSkyView({
             onClick={() => setShowAllPlanetsInAR(!showAllPlanetsInAR)}
             className={`px-3 py-1.5 rounded-xl text-xs font-semibold border backdrop-blur-md transition shadow-lg ${
               showAllPlanetsInAR
-                ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
                 : 'bg-slate-900/80 text-slate-400 border-slate-800'
             }`}
           >
@@ -526,64 +734,96 @@ export function ARSkyView({
           </div>
         </div>
 
-        {/* Render ALL Visible Planets in AR View */}
+        {/* Render ALL Visible Solar System Planets with Photorealistic 3D Appearance */}
         {showAllPlanetsInAR &&
           CELESTIAL_BODY_LIST.map((b) => {
-            if (b.id === selectedBody) return null; // handled by primary reticle below
+            if (b.id === selectedBody) return null; // handled by primary target lock reticle below
             const proj = projectedBodies[b.id];
             if (!proj || !proj.isInFront) return null;
-            if (proj.u < 10 || proj.u > viewport.width - 10 || proj.v < 10 || proj.v > viewport.height - 10) return null;
+            if (proj.u < 15 || proj.u > viewport.width - 15 || proj.v < 15 || proj.v > viewport.height - 15) return null;
+
+            const isPlanetAboveHorizon = (allPositions[b.id]?.altitudeDeg || 0) > 0;
+            const thumbUrl = getPlanetThumbnail(b.id, 96);
 
             return (
               <div
                 key={b.id}
                 onClick={() => onSelectBody && onSelectBody(b.id)}
-                className="absolute pointer-events-auto cursor-pointer transform -translate-x-1/2 -translate-y-1/2 z-15 flex flex-col items-center hover:scale-125 transition-transform"
+                className="absolute pointer-events-auto cursor-pointer transform -translate-x-1/2 -translate-y-1/2 z-15 flex flex-col items-center hover:scale-125 transition-transform group"
                 style={{ left: `${proj.u}px`, top: `${proj.v}px` }}
               >
-                <div
-                  className="w-7 h-7 rounded-full flex items-center justify-center text-xs shadow-md border"
-                  style={{
-                    backgroundColor: 'rgba(15, 23, 42, 0.85)',
-                    borderColor: b.color,
-                  }}
-                >
-                  <span className="select-none">{b.symbol}</span>
+                {/* 3D Photorealistic Planet Thumbnail with Dynamic Atmosphere Glow */}
+                <div className="relative flex items-center justify-center">
+                  <div
+                    className="absolute -inset-1 rounded-full blur-sm opacity-60 group-hover:opacity-100 transition-opacity"
+                    style={{ backgroundColor: b.color }}
+                  />
+                  <img
+                    src={thumbUrl}
+                    alt={b.name}
+                    className="relative w-9 h-9 object-contain drop-shadow-[0_0_8px_rgba(0,0,0,0.8)]"
+                    loading="lazy"
+                  />
                 </div>
-                <span className="text-[9px] font-mono font-semibold px-1 rounded bg-slate-950/80 text-slate-300 mt-0.5">
-                  {b.name}
-                </span>
+
+                {/* Planet Label Capsule */}
+                <div className="mt-1 flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-slate-950/90 border border-slate-800 text-[10px] font-mono shadow-md backdrop-blur-sm">
+                  <span
+                    className={`w-1.5 h-1.5 rounded-full ${
+                      isPlanetAboveHorizon ? 'bg-emerald-400 animate-pulse' : 'bg-slate-600'
+                    }`}
+                  />
+                  <span className="text-slate-200 font-semibold">{b.name}</span>
+                </div>
               </div>
             );
           })}
 
-        {/* Primary Selected Target AR Reticle (Star Walk / Sci-Fi HUD Lock) */}
+        {/* Primary Selected Target AR Reticle (Star Walk / Flight HUD Lock) */}
         {isTargetOnScreen && (
           <div
             className="absolute pointer-events-none transform -translate-x-1/2 -translate-y-1/2 transition-transform duration-75 ease-out z-25 flex flex-col items-center"
             style={{ left: `${activeProj.u}px`, top: `${activeProj.v}px` }}
           >
-            {/* Outer Rotating Reticle */}
+            {/* Outer Rotating Reticle with Photorealistic 3D Planet */}
             <div className="relative flex items-center justify-center">
+              {/* Outer Dashed Rotating Ring */}
               <div
-                className={`w-24 h-24 rounded-full border-2 border-dashed ${
-                  isTargetLocked ? 'animate-[spin_4s_linear_infinite] border-amber-400 ring-4 ring-amber-400/20' : 'animate-[spin_12s_linear_infinite]'
+                className={`w-28 h-28 rounded-full border-2 border-dashed ${
+                  isTargetLocked
+                    ? 'animate-[spin_4s_linear_infinite] border-amber-400 ring-4 ring-amber-400/25'
+                    : 'animate-[spin_12s_linear_infinite]'
                 }`}
                 style={{ borderColor: activeMeta.color }}
               />
+
+              {/* Inner Targeting Ring */}
               <div
-                className="absolute w-16 h-16 rounded-full border border-current opacity-90"
+                className="absolute w-20 h-20 rounded-full border border-current opacity-85"
                 style={{ color: activeMeta.color }}
               />
-              {/* Corner Bracket Crosshairs */}
-              <div className="absolute w-20 h-20 border-t-2 border-l-2 border-current opacity-60 -top-1 -left-1" style={{ color: activeMeta.color }} />
-              <div className="absolute w-20 h-20 border-b-2 border-r-2 border-current opacity-60 -bottom-1 -right-1" style={{ color: activeMeta.color }} />
 
+              {/* Corner Bracket Crosshairs */}
               <div
-                className="absolute w-8 h-8 rounded-full flex items-center justify-center text-lg shadow-xl"
-                style={{ backgroundColor: activeMeta.color }}
-              >
-                <span className="select-none text-slate-950 leading-none">{activeMeta.symbol}</span>
+                className="absolute w-24 h-24 border-t-2 border-l-2 border-current opacity-75 -top-1 -left-1"
+                style={{ color: activeMeta.color }}
+              />
+              <div
+                className="absolute w-24 h-24 border-b-2 border-r-2 border-current opacity-75 -bottom-1 -right-1"
+                style={{ color: activeMeta.color }}
+              />
+
+              {/* High-Resolution Photorealistic 3D Planet Centerpiece */}
+              <div className="relative flex items-center justify-center">
+                <div
+                  className="absolute -inset-2 rounded-full blur-md opacity-70 animate-pulse"
+                  style={{ backgroundColor: activeMeta.color }}
+                />
+                <img
+                  src={getPlanetThumbnail(activeMeta.id, 128)}
+                  alt={activeMeta.name}
+                  className="relative w-14 h-14 object-contain drop-shadow-[0_0_16px_rgba(0,0,0,0.9)]"
+                />
               </div>
             </div>
 
@@ -593,9 +833,13 @@ export function ARSkyView({
                 <span className="font-bold text-white text-xs">
                   {activeMeta.symbol} {activeMeta.name}
                 </span>
-                {isTargetLocked && (
-                  <span className="px-1.5 py-0.2 rounded text-[9px] bg-amber-500 text-slate-950 font-bold uppercase">
-                    LOCKED
+                {isTargetLocked ? (
+                  <span className="px-1.5 py-0.2 rounded text-[9px] bg-emerald-500 text-slate-950 font-bold uppercase animate-pulse">
+                    TARGET ACQUIRED
+                  </span>
+                ) : (
+                  <span className="px-1.5 py-0.2 rounded text-[9px] bg-amber-500/20 text-amber-300 font-semibold">
+                    {activeProj.angularSeparationDeg.toFixed(1)}° OFF
                   </span>
                 )}
               </div>
@@ -613,104 +857,95 @@ export function ARSkyView({
           </div>
         )}
 
-        {/* Off-Screen Directional Guidance Pointer */}
-        {!isTargetOnScreen && (
-          <div className="absolute inset-0 pointer-events-none z-20 flex items-center justify-center">
-            <div
-              className="absolute w-28 h-28 flex items-center justify-center transition-transform duration-100 ease-out"
-              style={{
-                transform: `rotate(${offscreenAngleDeg}deg) translateX(120px)`,
-              }}
-            >
-              <div className="bg-amber-500 text-slate-950 px-3.5 py-1.5 rounded-full font-bold text-xs flex items-center gap-1.5 shadow-xl shadow-amber-500/40 transform -rotate-90">
-                <ArrowUpRight className="w-4 h-4" />
-                <span>Pan to {activeMeta.name}</span>
+        {/* Flight-Grade Screen-Edge Radar Pointer (Guides user directly to off-screen planet) */}
+        {edgeRadar && (
+          <div
+            className="absolute pointer-events-auto cursor-pointer transform -translate-x-1/2 -translate-y-1/2 z-30 transition-all duration-75 ease-out animate-pulse"
+            style={{ left: `${edgeRadar.x}px`, top: `${edgeRadar.y}px` }}
+            onClick={() => onSelectBody && onSelectBody(activeMeta.id)}
+            title={`Pan towards ${activeMeta.name} (${edgeRadar.separation.toFixed(0)}° away)`}
+          >
+            <div className="flex items-center gap-1.5 bg-slate-950/95 border-2 border-amber-400 px-2.5 py-1.5 rounded-full shadow-2xl backdrop-blur-md text-slate-100">
+              <div
+                className="text-amber-400 text-sm font-bold flex items-center justify-center"
+                style={{ transform: `rotate(${edgeRadar.angleDeg}deg)` }}
+              >
+                ➔
               </div>
+              <img
+                src={getPlanetThumbnail(activeMeta.id, 64)}
+                alt={activeMeta.name}
+                className="w-5 h-5 rounded-full object-contain"
+              />
+              <span className="font-bold text-[11px] text-white">{activeMeta.name}</span>
+              <span className="text-[10px] font-mono text-amber-300 bg-amber-500/20 px-1 rounded">
+                {edgeRadar.separation.toFixed(0)}°
+              </span>
             </div>
           </div>
         )}
 
         {/* Target Acquisition Observatory Dossier Card (Star Walk style when target locked) */}
         {isTargetLocked && (
-          <div className="absolute bottom-16 left-6 right-6 md:left-auto md:right-6 md:w-80 bg-slate-950/90 backdrop-blur-md p-4 rounded-2xl border border-amber-500/60 shadow-2xl z-30 space-y-2 pointer-events-auto animate-fade-in">
+          <div className="absolute bottom-16 left-6 right-6 md:left-auto md:right-6 md:w-84 bg-slate-950/95 backdrop-blur-md p-4 rounded-2xl border border-emerald-500/60 shadow-2xl z-30 space-y-2.5 pointer-events-auto animate-fade-in">
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-lg bg-amber-500/20 flex items-center justify-center text-lg">
-                  {activeMeta.symbol}
-                </div>
+              <div className="flex items-center gap-2.5">
+                <img
+                  src={getPlanetThumbnail(activeMeta.id, 96)}
+                  alt={activeMeta.name}
+                  className="w-10 h-10 object-contain drop-shadow-[0_0_8px_rgba(16,185,129,0.5)]"
+                />
                 <div>
-                  <h4 className="font-bold text-white text-xs">{activeMeta.name}</h4>
-                  <span className="text-[10px] text-amber-400 font-mono uppercase">
+                  <h4 className="font-bold text-white text-sm">{activeMeta.name}</h4>
+                  <span className="text-[10px] text-emerald-400 font-mono uppercase font-semibold">
                     {activeMeta.category.replace('_', ' ')}
                   </span>
                 </div>
               </div>
-              <span className="text-xs font-mono text-emerald-400 font-bold">100% In View</span>
+              <span className="text-xs font-mono text-emerald-400 font-bold bg-emerald-950/60 border border-emerald-500/40 px-2 py-0.5 rounded-lg animate-pulse">
+                100% IN VIEW
+              </span>
             </div>
             <p className="text-[11px] text-slate-300 leading-relaxed">{activeMeta.description}</p>
-            <div className="grid grid-cols-2 gap-2 text-[10px] font-mono pt-1 border-t border-slate-800">
-              <div>
-                <span className="text-slate-400 block">Distance</span>
-                <span className="text-white font-semibold">
-                  {activeCoords.distanceAu < 0.01
-                    ? `${(activeCoords.distanceKm || 0).toLocaleString()} km`
-                    : `${activeCoords.distanceAu.toFixed(3)} AU`}
-                </span>
+            <div className="grid grid-cols-2 gap-2 pt-1 border-t border-slate-800 text-[10px] font-mono">
+              <div className="bg-slate-900/60 p-1.5 rounded-lg">
+                <span className="text-slate-400 block">Atmosphere</span>
+                <span className="text-slate-200 font-semibold">{activeMeta.color}</span>
               </div>
-              <div>
-                <span className="text-slate-400 block">Illumination</span>
-                <span className="text-amber-300 font-semibold">
-                  {activeCoords.phaseFraction !== undefined ? `${Math.round(activeCoords.phaseFraction * 100)}%` : '100%'}
+              <div className="bg-slate-900/60 p-1.5 rounded-lg">
+                <span className="text-slate-400 block">Separation</span>
+                <span className="text-emerald-400 font-semibold">
+                  {activeProj.angularSeparationDeg.toFixed(2)}° (Locked)
                 </span>
               </div>
             </div>
           </div>
         )}
 
-        {/* Bottom AR Sky Opacity Slider (Blends Camera with Planetarium) */}
-        {viewMode === 'ar' && (
-          <div className="absolute bottom-3 inset-x-6 z-20 flex items-center justify-between gap-3 bg-slate-950/80 backdrop-blur-md px-3.5 py-1.5 rounded-xl border border-slate-800 text-[11px] pointer-events-auto">
-            <span className="text-slate-400 font-mono flex items-center gap-1.5 whitespace-nowrap">
-              <Eye className="w-3.5 h-3.5 text-amber-400" />
-              <span>Sky Overlay Blend:</span>
+        {/* Bottom AR HUD Control Strip */}
+        <div className="absolute bottom-3 inset-x-4 flex items-center justify-between pointer-events-auto z-20">
+          <div className="flex items-center gap-2 bg-slate-950/80 backdrop-blur-md px-3 py-1.5 rounded-xl border border-slate-800 text-xs text-slate-300">
+            <Eye className="w-3.5 h-3.5 text-amber-400" />
+            <span className="font-mono text-[10px]">
+              FOV: {calibration.fieldOfViewDeg}° | Heading: {hudHeading.toFixed(0)}° | Pitch: {hudPitch.toFixed(0)}°
             </span>
+          </div>
+
+          {/* Sky Opacity Slider */}
+          <div className="hidden sm:flex items-center gap-2 bg-slate-950/80 backdrop-blur-md px-3 py-1.5 rounded-xl border border-slate-800 text-xs text-slate-300">
+            <Sparkles className="w-3.5 h-3.5 text-sky-400" />
+            <span className="text-[10px]">Sky Blend:</span>
             <input
               type="range"
-              min={0}
-              max={1}
-              step={0.05}
+              min="0.1"
+              max="1"
+              step="0.05"
               value={skyOpacity}
-              onChange={(e) => setSkyOpacity(Number(e.target.value))}
-              className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-amber-500"
+              onChange={(e) => setSkyOpacity(parseFloat(e.target.value))}
+              className="w-20 accent-amber-500 cursor-pointer"
             />
-            <span className="font-mono text-amber-300 text-[10px] w-8 text-right">
-              {Math.round(skyOpacity * 100)}%
-            </span>
           </div>
-        )}
-
-        {/* iOS / Safari Permission Modal Prompt */}
-        {needsOrientationPermission && (
-          <div className="absolute inset-0 bg-slate-950/90 backdrop-blur-sm z-40 flex items-center justify-center p-4">
-            <div className="glass-panel p-6 rounded-2xl max-w-sm text-center space-y-4 border border-amber-500/40">
-              <div className="w-12 h-12 rounded-2xl bg-amber-500/20 text-amber-400 flex items-center justify-center mx-auto">
-                <Sparkles className="w-6 h-6" />
-              </div>
-              <div>
-                <h4 className="font-semibold text-slate-100 text-base">Motion Sensors Permission</h4>
-                <p className="text-xs text-slate-400 mt-1">
-                  Apple Safari requires explicit permission to access the gyroscope and digital compass for AR celestial tracking.
-                </p>
-              </div>
-              <button
-                onClick={onRequestOrientationPermission}
-                className="w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-semibold text-xs transition shadow-lg shadow-amber-500/20"
-              >
-                Enable Orientation Sensors
-              </button>
-            </div>
-          </div>
-        )}
+        </div>
       </div>
     </div>
   );

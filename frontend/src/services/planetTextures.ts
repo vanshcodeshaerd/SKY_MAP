@@ -474,3 +474,245 @@ export function getPlanetTexture(bodyId: string): THREE.CanvasTexture {
       return getMoonTexture();
   }
 }
+
+// In-memory cache for high-resolution 3D planet appearance thumbnails
+const thumbnailCache: Map<string, string> = new Map();
+
+/**
+ * Generates an authentic, photorealistic 2D miniature representation of the celestial body
+ * for Star Walk / SkyView HUD targeting and AR/VR display with 3D spherical shading and ring systems.
+ */
+export function getPlanetThumbnail(bodyId: string, size: number = 96): string {
+  const cacheKey = `${bodyId}_${size}`;
+  if (thumbnailCache.has(cacheKey)) {
+    return thumbnailCache.get(cacheKey)!;
+  }
+
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return '';
+
+  const cx = size / 2;
+  const cy = size / 2;
+  const radius = size * 0.36;
+
+  ctx.clearRect(0, 0, size, size);
+
+  if (bodyId === 'Sun') {
+    // Solar Corona & Flare Rays
+    const corona = ctx.createRadialGradient(cx, cy, radius * 0.4, cx, cy, size * 0.49);
+    corona.addColorStop(0, 'rgba(255, 230, 100, 0.95)');
+    corona.addColorStop(0.5, 'rgba(245, 158, 11, 0.5)');
+    corona.addColorStop(0.8, 'rgba(239, 68, 68, 0.2)');
+    corona.addColorStop(1, 'rgba(239, 68, 68, 0)');
+    ctx.fillStyle = corona;
+    ctx.beginPath();
+    ctx.arc(cx, cy, size * 0.49, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Solar Disc with Limb Darkening
+    const disc = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius);
+    disc.addColorStop(0, '#FFFFFF');
+    disc.addColorStop(0.3, '#FEF08A');
+    disc.addColorStop(0.7, '#F59E0B');
+    disc.addColorStop(1, '#B45309');
+    ctx.fillStyle = disc;
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+    ctx.fill();
+  } else if (bodyId === 'Saturn') {
+    // Back half of Saturn's Rings (drawn behind planet)
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(-0.35); // Realistic orbital tilt
+    const ringMajor = radius * 2.3;
+    const ringMinor = radius * 0.65;
+
+    // Draw back arc of ring
+    ctx.beginPath();
+    ctx.ellipse(0, 0, ringMajor, ringMinor, 0, Math.PI, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(217, 180, 130, 0.85)';
+    ctx.lineWidth = radius * 0.45;
+    ctx.stroke();
+
+    // Cassini Division in back
+    ctx.beginPath();
+    ctx.ellipse(0, 0, ringMajor * 0.82, ringMinor * 0.82, 0, Math.PI, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(10, 15, 25, 0.9)';
+    ctx.lineWidth = 2.5;
+    ctx.stroke();
+    ctx.restore();
+
+    // Saturn's Shaded Globe
+    const globe = ctx.createRadialGradient(cx - radius * 0.35, cy - radius * 0.35, radius * 0.1, cx, cy, radius);
+    globe.addColorStop(0, '#FEF3C7');
+    globe.addColorStop(0.5, '#FCD34D');
+    globe.addColorStop(0.8, '#D97706');
+    globe.addColorStop(1, '#451A03');
+    ctx.fillStyle = globe;
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius * 0.85, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Saturn's Cloud Belts
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius * 0.85, 0, Math.PI * 2);
+    ctx.clip();
+    for (let i = -3; i <= 3; i++) {
+      ctx.fillStyle = i % 2 === 0 ? 'rgba(180, 83, 9, 0.25)' : 'rgba(254, 243, 199, 0.2)';
+      ctx.fillRect(cx - radius, cy + i * 5 - 2, radius * 2, 4);
+    }
+    ctx.restore();
+
+    // Front half of Saturn's Rings (drawn over planet)
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(-0.35);
+    ctx.beginPath();
+    ctx.ellipse(0, 0, ringMajor, ringMinor, 0, 0, Math.PI);
+    ctx.strokeStyle = 'rgba(235, 205, 155, 0.95)';
+    ctx.lineWidth = radius * 0.45;
+    ctx.stroke();
+
+    // Cassini Division in front
+    ctx.beginPath();
+    ctx.ellipse(0, 0, ringMajor * 0.82, ringMinor * 0.82, 0, 0, Math.PI);
+    ctx.strokeStyle = 'rgba(10, 15, 25, 0.95)';
+    ctx.lineWidth = 2.5;
+    ctx.stroke();
+    ctx.restore();
+  } else {
+    // Generic Spherical Shaded Planet
+    const lightX = cx - radius * 0.35;
+    const lightY = cy - radius * 0.35;
+
+    // Atmospheric Aura Glow
+    const aura = ctx.createRadialGradient(cx, cy, radius * 0.8, cx, cy, radius * 1.35);
+    let auraColor = 'rgba(148, 163, 184, 0.25)';
+    if (bodyId === 'Mars') auraColor = 'rgba(239, 68, 68, 0.3)';
+    else if (bodyId === 'Venus') auraColor = 'rgba(254, 240, 138, 0.4)';
+    else if (bodyId === 'Jupiter') auraColor = 'rgba(245, 158, 11, 0.25)';
+    else if (bodyId === 'Uranus') auraColor = 'rgba(56, 189, 248, 0.35)';
+    else if (bodyId === 'Neptune') auraColor = 'rgba(59, 130, 246, 0.4)';
+
+    aura.addColorStop(0, auraColor);
+    aura.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = aura;
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius * 1.35, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Base Sphere with 3D Lighting
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+    ctx.clip();
+
+    const sphereGrad = ctx.createRadialGradient(lightX, lightY, radius * 0.05, cx, cy, radius * 1.05);
+
+    if (bodyId === 'Moon') {
+      sphereGrad.addColorStop(0, '#F1F5F9');
+      sphereGrad.addColorStop(0.5, '#CBD5E1');
+      sphereGrad.addColorStop(0.8, '#475569');
+      sphereGrad.addColorStop(1, '#0F172A');
+      ctx.fillStyle = sphereGrad;
+      ctx.fillRect(cx - radius, cy - radius, radius * 2, radius * 2);
+
+      // Dark Basaltic Maria Patches
+      ctx.fillStyle = 'rgba(30, 41, 59, 0.55)';
+      ctx.beginPath();
+      ctx.ellipse(cx - 3, cy - 4, 7, 5, 0.2, 0, Math.PI * 2);
+      ctx.ellipse(cx + 4, cy - 2, 6, 8, -0.4, 0, Math.PI * 2);
+      ctx.ellipse(cx - 2, cy + 6, 8, 5, 0.3, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Tycho Ray Crater
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+      ctx.beginPath();
+      ctx.arc(cx - 3, cy + 9, 2, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (bodyId === 'Mars') {
+      sphereGrad.addColorStop(0, '#FCA5A5');
+      sphereGrad.addColorStop(0.5, '#EF4444');
+      sphereGrad.addColorStop(0.8, '#991B1B');
+      sphereGrad.addColorStop(1, '#450A0A');
+      ctx.fillStyle = sphereGrad;
+      ctx.fillRect(cx - radius, cy - radius, radius * 2, radius * 2);
+
+      // Dark Canyons / Syrtis Major
+      ctx.fillStyle = 'rgba(69, 10, 10, 0.45)';
+      ctx.beginPath();
+      ctx.ellipse(cx + 1, cy + 2, 8, 4, -0.2, 0, Math.PI * 2);
+      ctx.fill();
+
+      // White North Polar Ice Cap
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+      ctx.beginPath();
+      ctx.ellipse(cx, cy - radius + 3, 5, 2.5, 0, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (bodyId === 'Jupiter') {
+      sphereGrad.addColorStop(0, '#FEF3C7');
+      sphereGrad.addColorStop(0.4, '#FDE68A');
+      sphereGrad.addColorStop(0.7, '#D97706');
+      sphereGrad.addColorStop(1, '#451A03');
+      ctx.fillStyle = sphereGrad;
+      ctx.fillRect(cx - radius, cy - radius, radius * 2, radius * 2);
+
+      // Cloud Belts
+      for (let i = -3; i <= 3; i++) {
+        ctx.fillStyle = i % 2 === 0 ? 'rgba(146, 64, 14, 0.4)' : 'rgba(254, 243, 199, 0.3)';
+        ctx.fillRect(cx - radius, cy + i * 4.5 - 1.5, radius * 2, 3);
+      }
+
+      // Great Red Spot
+      ctx.fillStyle = '#B91C1C';
+      ctx.beginPath();
+      ctx.ellipse(cx + 4, cy + 5, 4.5, 3, 0.1, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (bodyId === 'Venus') {
+      sphereGrad.addColorStop(0, '#FFFFFF');
+      sphereGrad.addColorStop(0.3, '#FEF08A');
+      sphereGrad.addColorStop(0.7, '#EAB308');
+      sphereGrad.addColorStop(1, '#713F12');
+      ctx.fillStyle = sphereGrad;
+      ctx.fillRect(cx - radius, cy - radius, radius * 2, radius * 2);
+    } else if (bodyId === 'Mercury') {
+      sphereGrad.addColorStop(0, '#E2E8F0');
+      sphereGrad.addColorStop(0.4, '#94A3B8');
+      sphereGrad.addColorStop(0.8, '#475569');
+      sphereGrad.addColorStop(1, '#1E293B');
+      ctx.fillStyle = sphereGrad;
+      ctx.fillRect(cx - radius, cy - radius, radius * 2, radius * 2);
+    } else if (bodyId === 'Uranus') {
+      sphereGrad.addColorStop(0, '#E0F2FE');
+      sphereGrad.addColorStop(0.4, '#38BDF8');
+      sphereGrad.addColorStop(0.8, '#0284C7');
+      sphereGrad.addColorStop(1, '#0C4A6E');
+      ctx.fillStyle = sphereGrad;
+      ctx.fillRect(cx - radius, cy - radius, radius * 2, radius * 2);
+    } else if (bodyId === 'Neptune') {
+      sphereGrad.addColorStop(0, '#93C5FD');
+      sphereGrad.addColorStop(0.4, '#3B82F6');
+      sphereGrad.addColorStop(0.8, '#1D4ED8');
+      sphereGrad.addColorStop(1, '#172554');
+      ctx.fillStyle = sphereGrad;
+      ctx.fillRect(cx - radius, cy - radius, radius * 2, radius * 2);
+
+      // Great Dark Spot
+      ctx.fillStyle = '#0F172A';
+      ctx.beginPath();
+      ctx.ellipse(cx + 3, cy - 2, 4, 2.5, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    ctx.restore();
+  }
+
+  const dataUrl = canvas.toDataURL('image/png');
+  thumbnailCache.set(cacheKey, dataUrl);
+  return dataUrl;
+}
+
