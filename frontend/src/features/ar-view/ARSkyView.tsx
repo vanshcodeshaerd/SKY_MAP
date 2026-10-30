@@ -12,6 +12,7 @@ import {
   Layers,
   X,
   Sliders,
+  MapPin,
 } from 'lucide-react';
 import {
   GeodeticLocation,
@@ -42,6 +43,8 @@ interface ARSkyViewProps {
   manualRoll: number;
   selectedBody?: CelestialBodyId;
   onSelectBody?: (body: CelestialBodyId) => void;
+  onRequestGps?: () => void;
+  gpsLoading?: boolean;
 }
 
 export function ARSkyView({
@@ -57,6 +60,8 @@ export function ARSkyView({
   manualRoll,
   selectedBody = 'Sun',
   onSelectBody,
+  onRequestGps,
+  gpsLoading,
 }: ARSkyViewProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const {
@@ -840,6 +845,20 @@ export function ARSkyView({
               <SlidersHorizontal className="w-3.5 h-3.5" />
               <span>Sensor Calibration</span>
             </button>
+
+            {/* GPS Location Refresh Button */}
+            {onRequestGps && (
+              <button
+                onClick={() => {
+                  onRequestGps();
+                }}
+                disabled={gpsLoading}
+                className="w-full py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-emerald-300 border border-emerald-500/30 flex items-center justify-center gap-1.5 text-[11px] transition disabled:opacity-50"
+              >
+                <MapPin className="w-3.5 h-3.5 text-emerald-400" />
+                <span>{gpsLoading ? 'Acquiring GPS...' : 'Acquire High-Accuracy GPS'}</span>
+              </button>
+            )}
           </div>
         )}
 

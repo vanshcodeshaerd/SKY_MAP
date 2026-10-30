@@ -22,7 +22,7 @@ export default function App() {
   const [isLive, setIsLive] = useState<boolean>(true);
 
   // Geolocation Hook
-  const { location, loading: gpsLoading, requestGpsLocation, setManualLocation } = useGeolocation();
+  const { location, loading: gpsLoading, isLiveGps, requestGpsLocation, setManualLocation } = useGeolocation();
 
   // Device Orientation Hook
   const { orientation, needsPermission, requestPermission } = useDeviceOrientation();
@@ -74,6 +74,9 @@ export default function App() {
         location={location}
         onOpenCalibration={() => setIsCalibrationOpen(true)}
         serverOnline={serverOnline}
+        onRequestGps={requestGpsLocation}
+        gpsLoading={gpsLoading}
+        isLiveGps={isLiveGps}
       />
 
       {/* Primary Application Content */}
@@ -116,6 +119,8 @@ export default function App() {
             manualRoll={manualRoll}
             selectedBody={selectedBody}
             onSelectBody={setSelectedBody}
+            onRequestGps={requestGpsLocation}
+            gpsLoading={gpsLoading}
           />
         )}
 

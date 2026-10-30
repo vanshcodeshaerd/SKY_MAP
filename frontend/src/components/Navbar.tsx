@@ -1,4 +1,4 @@
-import { Sun, Compass, Camera, Sparkles, Sliders, MapPin, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Sun, Compass, Camera, Sparkles, Sliders, MapPin, CheckCircle2, AlertCircle, RefreshCw } from 'lucide-react';
 import { GeodeticLocation } from '../types/astronomy';
 
 interface NavbarProps {
@@ -7,6 +7,9 @@ interface NavbarProps {
   location: GeodeticLocation;
   onOpenCalibration: () => void;
   serverOnline: boolean;
+  onRequestGps?: () => void;
+  gpsLoading?: boolean;
+  isLiveGps?: boolean;
 }
 
 export function Navbar({
@@ -15,6 +18,9 @@ export function Navbar({
   location,
   onOpenCalibration,
   serverOnline,
+  onRequestGps,
+  gpsLoading,
+  isLiveGps,
 }: NavbarProps) {
   const tabs = [
     { id: 'dashboard', label: 'Dashboard', icon: Sun },
@@ -66,13 +72,24 @@ export function Navbar({
 
         {/* Status badges & controls */}
         <div className="flex items-center gap-2 sm:gap-3">
-          {/* Location badge */}
-          <div className="hidden md:flex items-center gap-1.5 text-xs text-slate-300 bg-slate-900/60 px-2.5 py-1.5 rounded-lg border border-slate-800">
-            <MapPin className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-            <span className="font-mono">
+          {/* Location badge with 1-click GPS sync */}
+          <button
+            onClick={onRequestGps}
+            title={isLiveGps ? 'Live GPS Active (Click to refresh)' : 'Click to acquire precise GPS coordinates'}
+            className="flex items-center gap-1.5 text-xs text-slate-300 bg-slate-900/80 hover:bg-slate-800 px-2.5 py-1.5 rounded-lg border border-slate-800 transition shadow-sm"
+          >
+            <MapPin className={`w-3.5 h-3.5 shrink-0 ${isLiveGps ? 'text-emerald-400 animate-pulse' : 'text-amber-400'}`} />
+            <span className="font-mono hidden sm:inline">
               {location.latitude.toFixed(2)}°, {location.longitude.toFixed(2)}°
             </span>
-          </div>
+            {gpsLoading ? (
+              <RefreshCw className="w-3 h-3 text-amber-400 animate-spin" />
+            ) : (
+              <span className={`text-[9px] px-1 rounded uppercase font-bold ${isLiveGps ? 'bg-emerald-500/20 text-emerald-300' : 'bg-slate-800 text-slate-400'}`}>
+                {isLiveGps ? 'GPS' : 'Fix'}
+              </span>
+            )}
+          </button>
 
           {/* Backend server indicator */}
           <div

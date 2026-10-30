@@ -15,6 +15,7 @@ export function useGeolocation() {
   });
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  const [isLiveGps, setIsLiveGps] = useState<boolean>(false);
 
   const requestGpsLocation = useCallback(() => {
     if (!navigator.geolocation) {
@@ -33,6 +34,7 @@ export function useGeolocation() {
           elevationM: Number((position.coords.altitude || 0).toFixed(1)),
         };
         setLocation(newLoc);
+        setIsLiveGps(true);
         localStorage.setItem('skygazer_location', JSON.stringify(newLoc));
         setLoading(false);
       },
@@ -43,20 +45,21 @@ export function useGeolocation() {
       {
         enableHighAccuracy: true,
         timeout: 10000,
-        maximumAge: 60000,
+        maximumAge: 30000,
       }
     );
   }, []);
 
   useEffect(() => {
-    // Only auto-request on initial mount if not explicitly saved
-    if (!localStorage.getItem('skygazer_location')) {
+    // Automatically query GPS with high accuracy whenever geolocation is available
+    if (navigator.geolocation) {
       requestGpsLocation();
     }
   }, [requestGpsLocation]);
 
   const setManualLocation = useCallback((newLoc: GeodeticLocation) => {
     setLocation(newLoc);
+    setIsLiveGps(false);
     localStorage.setItem('skygazer_location', JSON.stringify(newLoc));
   }, []);
 
@@ -64,6 +67,7 @@ export function useGeolocation() {
     location,
     loading,
     error,
+    isLiveGps,
     requestGpsLocation,
     setManualLocation,
   };
