@@ -8,6 +8,59 @@ import * as THREE from 'three';
 // Cache generated textures and bump maps to avoid re-rendering canvases
 const textureCache: Map<string, THREE.CanvasTexture> = new Map();
 const bumpMapCache: Map<string, THREE.CanvasTexture> = new Map();
+const realTextureCache: Map<string, THREE.Texture> = new Map();
+const textureLoader = new THREE.TextureLoader();
+
+/**
+ * Authentic 2K equirectangular textures from Solar System Scope (CC BY 4.0).
+ * Source: https://www.solarsystemscope.com/textures/
+ */
+export const SOLAR_SYSTEM_SCOPE_URLS: Record<string, string> = {
+  Sun: 'https://www.solarsystemscope.com/textures/download/2k_sun.jpg',
+  Mercury: 'https://www.solarsystemscope.com/textures/download/2k_mercury.jpg',
+  Venus: 'https://www.solarsystemscope.com/textures/download/2k_venus_atmosphere.jpg',
+  Earth: 'https://www.solarsystemscope.com/textures/download/2k_earth_daymap.jpg',
+  Moon: 'https://www.solarsystemscope.com/textures/download/2k_moon.jpg',
+  Mars: 'https://www.solarsystemscope.com/textures/download/2k_mars.jpg',
+  Jupiter: 'https://www.solarsystemscope.com/textures/download/2k_jupiter.jpg',
+  Saturn: 'https://www.solarsystemscope.com/textures/download/2k_saturn.jpg',
+  SaturnRing: 'https://www.solarsystemscope.com/textures/download/2k_saturn_ring_alpha.png',
+  Uranus: 'https://www.solarsystemscope.com/textures/download/2k_uranus.jpg',
+  Neptune: 'https://www.solarsystemscope.com/textures/download/2k_neptune.jpg',
+  MilkyWay: 'https://www.solarsystemscope.com/textures/download/2k_stars_milky_way.jpg',
+};
+
+/**
+ * Loads authentic Solar System Scope 2K textures asynchronously.
+ * Falls back to procedural textures gracefully if offline or CORS-blocked.
+ */
+export function loadSolarSystemScopeTexture(
+  bodyId: string,
+  onLoaded: (tex: THREE.Texture) => void
+): void {
+  if (realTextureCache.has(bodyId)) {
+    onLoaded(realTextureCache.get(bodyId)!);
+    return;
+  }
+
+  const url = SOLAR_SYSTEM_SCOPE_URLS[bodyId];
+  if (!url) return;
+
+  textureLoader.load(
+    url,
+    (texture) => {
+      texture.colorSpace = THREE.SRGBColorSpace;
+      texture.wrapS = THREE.RepeatWrapping;
+      texture.wrapT = THREE.ClampToEdgeWrapping;
+      realTextureCache.set(bodyId, texture);
+      onLoaded(texture);
+    },
+    undefined,
+    () => {
+      // Graceful fallback to procedural canvas texture
+    }
+  );
+}
 
 /**
  * Generates high-detail height/bump maps to give craters, mountains, and ridges physical 3D relief.

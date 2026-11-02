@@ -18,6 +18,7 @@ import {
   Info,
   User,
   Crosshair,
+  BookOpen,
 } from 'lucide-react';
 import {
   GeodeticLocation,
@@ -34,7 +35,12 @@ import {
   getClientCelestialEvents,
 } from '../../services/astronomyEngine';
 import { azAltToEnuVector, enuToThreeJsVector } from '../../services/coordinateTransforms';
-import { getPlanetTexture, getPlanetBumpMap, getSaturnRingTexture } from '../../services/planetTextures';
+import {
+  getPlanetTexture,
+  getPlanetBumpMap,
+  getSaturnRingTexture,
+  loadSolarSystemScopeTexture,
+} from '../../services/planetTextures';
 import { calculateStarPositions, CONSTELLATION_DEFS, CalculatedStar } from '../../services/starCatalog';
 import { CelestialBodySelector } from '../../components/CelestialBodySelector';
 
@@ -130,6 +136,7 @@ export function ThreeSkyExplorer({
   const [isCloseUp, setIsCloseUp] = useState<boolean>(false);
   const [scaleMode, setScaleMode] = useState<'dome' | 'depth'>('dome');
   const [showSpatialGuide, setShowSpatialGuide] = useState<boolean>(false);
+  const [showDossier, setShowDossier] = useState<boolean>(false);
 
   const activeBodyMeta = CELESTIAL_BODIES[selectedBody] || CELESTIAL_BODIES.Sun;
 
@@ -398,7 +405,7 @@ export function ThreeSkyExplorer({
     scene.background = new THREE.Color(0x02040a);
     sceneRef.current = scene;
 
-    const camera = new THREE.PerspectiveCamera(50, width / height, 0.5, 2500);
+    const camera = new THREE.PerspectiveCamera(50, width / height, 0.5, 3500);
     camera.position.set(0, 55, 140);
     cameraRef.current = camera;
 
@@ -427,7 +434,23 @@ export function ThreeSkyExplorer({
     scene.add(pointLight);
     pointLightRef.current = pointLight;
 
-    // E. 2,500 Starfield Particles (Deep Space)
+    // E1. Milky Way Deep Space Panoramic Skybox (Solar System Scope 2K equirectangular)
+    const milkyGeo = new THREE.SphereGeometry(1800, 48, 32);
+    const milkyMat = new THREE.MeshBasicMaterial({
+      color: 0xffffff,
+      side: THREE.BackSide,
+      transparent: true,
+      opacity: 0.65,
+      depthWrite: false,
+    });
+    const milkyMesh = new THREE.Mesh(milkyGeo, milkyMat);
+    scene.add(milkyMesh);
+    loadSolarSystemScopeTexture('MilkyWay', (tex) => {
+      milkyMat.map = tex;
+      milkyMat.needsUpdate = true;
+    });
+
+    // E2. 2,500 Starfield Particles (Deep Space)
     const starCount = 2500;
     const starGeo = new THREE.BufferGeometry();
     const starPositions = new Float32Array(starCount * 3);
@@ -666,7 +689,7 @@ export function ThreeSkyExplorer({
     coordsSprite.scale.set(14, 7, 1);
     centerGroup.add(coordsSprite);
 
-    // I. Instantiate All 9 Celestial Bodies with Authentic Procedural Textures & 3D Bump Displacement
+    // I. Instantiate All 9 Celestial Bodies with Authentic Procedural Textures, 2K Solar System Scope Upgrade & Axial Tilt
     CELESTIAL_BODY_LIST.forEach((body) => {
       const geo = new THREE.SphereGeometry(body.sizeRadius, 64, 64);
       const texture = getPlanetTexture(body.id);
@@ -683,7 +706,19 @@ export function ThreeSkyExplorer({
         emissiveIntensity: isSun ? 0.8 : 0,
       });
 
+      // Seamlessly upgrade to authentic 2K Solar System Scope texture when available
+      loadSolarSystemScopeTexture(body.id, (realTex) => {
+        mat.map = realTex;
+        mat.needsUpdate = true;
+      });
+
       const mesh = new THREE.Mesh(geo, mat);
+
+      // Scientifically accurate axial tilt
+      if (body.axialTiltDeg !== undefined) {
+        mesh.rotation.z = THREE.MathUtils.degToRad(body.axialTiltDeg);
+      }
+
       scene.add(mesh);
       bodyMeshesRef.current[body.id] = mesh;
 
@@ -711,6 +746,10 @@ export function ThreeSkyExplorer({
           side: THREE.DoubleSide,
           transparent: true,
           opacity: 0.9,
+        });
+        loadSolarSystemScopeTexture('SaturnRing', (ringTex) => {
+          ringMat.map = ringTex;
+          ringMat.needsUpdate = true;
         });
         const ringMesh = new THREE.Mesh(ringGeo, ringMat);
         mesh.add(ringMesh);
@@ -782,10 +821,10 @@ export function ThreeSkyExplorer({
         camera.lookAt(new THREE.Vector3(lookX, 1.85 + lookY, lookZ));
       }
 
-      // Slow axial rotation for planets to reveal photorealistic surface details
+      // Slow axial rotation for planets along their tilted polar axis to reveal authentic surface details
       CELESTIAL_BODY_LIST.forEach((body) => {
         const m = bodyMeshesRef.current[body.id];
-        if (m) m.rotation.y += 0.003;
+        if (m) m.rotateY(0.003);
       });
 
       // Stargazer Avatar subtle breathing & dynamic celestial aiming
@@ -1256,43 +1295,113 @@ export function ThreeSkyExplorer({
 
       {/* 3D Viewport Card - Responsive Height & Edge-to-Edge Canvas */}
       <div className="glass-panel rounded-2xl sm:rounded-3xl overflow-hidden relative border border-slate-800 bg-slate-950 shadow-2xl h-[65vh] min-h-[440px] max-h-[720px]">
-        {/* Top Info Bar - Responsive Layout */}
-        <div className="absolute top-3 left-3 z-10 bg-slate-950/90 backdrop-blur-md px-3 py-1.5 sm:px-3.5 sm:py-2.5 rounded-xl border border-slate-800 text-xs shadow-lg max-w-[60vw] sm:max-w-none">
-          <div className="flex items-center gap-1.5 text-slate-100 font-semibold truncate">
-            <Compass className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-            <span className="truncate">
-              {activeBodyMeta.symbol} {activeBodyMeta.name}
-            </span>
-            <span
-              className={`px-1.5 py-0.2 rounded text-[9px] uppercase font-bold hidden sm:inline-block ${
-                isBelowHorizon
-                  ? 'bg-indigo-950/80 text-indigo-300 border border-indigo-800'
-                  : 'bg-emerald-950/80 text-emerald-300 border border-emerald-800'
-              }`}
-            >
-              {isBelowHorizon ? 'Sub-Horizon' : 'Visible'}
-            </span>
+        {/* Top Info Bar - Coordinates & Planet Scientific Dossier Toggle */}
+        <div className="absolute top-3 left-3 z-20 flex flex-col items-start gap-1.5 max-w-[70vw] sm:max-w-md">
+          <div className="bg-slate-950/90 backdrop-blur-md px-3 py-1.5 sm:px-3.5 sm:py-2.5 rounded-xl border border-slate-800 text-xs shadow-lg w-full">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-1.5 text-slate-100 font-semibold truncate">
+                <Compass className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                <span className="truncate">
+                  {activeBodyMeta.symbol} {activeBodyMeta.name}
+                </span>
+                <span
+                  className={`px-1.5 py-0.2 rounded text-[9px] uppercase font-bold hidden sm:inline-block ${
+                    isBelowHorizon
+                      ? 'bg-indigo-950/80 text-indigo-300 border border-indigo-800'
+                      : 'bg-emerald-950/80 text-emerald-300 border border-emerald-800'
+                  }`}
+                >
+                  {isBelowHorizon ? 'Sub-Horizon' : 'Visible'}
+                </span>
+              </div>
+              <button
+                onClick={() => setShowDossier(!showDossier)}
+                className={`px-2 py-0.5 rounded-lg text-[10px] font-semibold flex items-center gap-1 transition ${
+                  showDossier
+                    ? 'bg-amber-500 text-slate-950 shadow-sm'
+                    : 'bg-slate-900 text-amber-400 border border-amber-500/30 hover:bg-slate-800'
+                }`}
+                title="Scientific Planet Dossier & Facts"
+              >
+                <BookOpen className="w-3 h-3" />
+                <span>{showDossier ? 'Hide Facts' : 'Planet Facts'}</span>
+              </button>
+            </div>
+            <div className="flex flex-wrap items-center gap-x-2.5 gap-y-0.5 text-slate-300 font-mono text-[10px] sm:text-[11px] pt-1">
+              <span>
+                Az: <strong className="text-amber-400">{activeCoords.azimuthDeg.toFixed(1)}°</strong>
+              </span>
+              <span>
+                Alt:{' '}
+                <strong className={isBelowHorizon ? 'text-indigo-400' : 'text-emerald-400'}>
+                  {activeCoords.altitudeDeg >= 0 ? '+' : ''}
+                  {activeCoords.altitudeDeg.toFixed(1)}°
+                </strong>
+              </span>
+              <span className="hidden md:inline">
+                Dist:{' '}
+                <strong className="text-slate-200">
+                  {activeCoords.distanceAu < 0.01
+                    ? `${(activeCoords.distanceKm || 0).toLocaleString()} km`
+                    : `${activeCoords.distanceAu.toFixed(3)} AU`}
+                </strong>
+              </span>
+            </div>
           </div>
-          <div className="flex flex-wrap items-center gap-x-2.5 gap-y-0.5 text-slate-300 font-mono text-[10px] sm:text-[11px] pt-0.5">
-            <span>
-              Az: <strong className="text-amber-400">{activeCoords.azimuthDeg.toFixed(1)}°</strong>
-            </span>
-            <span>
-              Alt:{' '}
-              <strong className={isBelowHorizon ? 'text-indigo-400' : 'text-emerald-400'}>
-                {activeCoords.altitudeDeg >= 0 ? '+' : ''}
-                {activeCoords.altitudeDeg.toFixed(1)}°
-              </strong>
-            </span>
-            <span className="hidden md:inline">
-              Dist:{' '}
-              <strong className="text-slate-200">
-                {activeCoords.distanceAu < 0.01
-                  ? `${(activeCoords.distanceKm || 0).toLocaleString()} km`
-                  : `${activeCoords.distanceAu.toFixed(3)} AU`}
-              </strong>
-            </span>
-          </div>
+
+          {/* Planet Dossier / Scientific Fact Card */}
+          {showDossier && activeBodyMeta.scientificInfo && (
+            <div className="bg-slate-950/95 backdrop-blur-xl p-3.5 rounded-2xl border border-amber-500/40 text-xs shadow-2xl w-full max-w-sm space-y-2.5 animate-fade-in text-slate-200">
+              <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-lg leading-none">{activeBodyMeta.symbol}</span>
+                  <div>
+                    <h4 className="font-bold text-white text-xs">{activeBodyMeta.name} Dossier</h4>
+                    <span className="text-[10px] text-amber-400 font-medium">{activeBodyMeta.scientificInfo.type}</span>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowDossier(false)}
+                  className="text-slate-400 hover:text-white p-0.5 rounded-md hover:bg-slate-800"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 text-[11px]">
+                <div className="bg-slate-900/80 p-2 rounded-xl border border-slate-800/80">
+                  <span className="text-[9px] uppercase tracking-wider text-slate-400 block font-semibold">Diameter</span>
+                  <span className="text-white font-mono font-medium">{activeBodyMeta.scientificInfo.diameterKm.toLocaleString()} km</span>
+                </div>
+                <div className="bg-slate-900/80 p-2 rounded-xl border border-slate-800/80">
+                  <span className="text-[9px] uppercase tracking-wider text-slate-400 block font-semibold">Distance from Sun</span>
+                  <span className="text-white font-mono font-medium">{activeBodyMeta.scientificInfo.distanceFromSunKm}</span>
+                </div>
+                <div className="bg-slate-900/80 p-2 rounded-xl border border-slate-800/80">
+                  <span className="text-[9px] uppercase tracking-wider text-slate-400 block font-semibold">Rotation (Day)</span>
+                  <span className="text-white font-mono font-medium">{activeBodyMeta.scientificInfo.dayLength}</span>
+                </div>
+                <div className="bg-slate-900/80 p-2 rounded-xl border border-slate-800/80">
+                  <span className="text-[9px] uppercase tracking-wider text-slate-400 block font-semibold">Orbital Period (Year)</span>
+                  <span className="text-white font-mono font-medium">{activeBodyMeta.scientificInfo.yearLength}</span>
+                </div>
+                <div className="bg-slate-900/80 p-2 rounded-xl border border-slate-800/80">
+                  <span className="text-[9px] uppercase tracking-wider text-slate-400 block font-semibold">Temperature</span>
+                  <span className="text-amber-300 font-mono font-medium">{activeBodyMeta.scientificInfo.temperature}</span>
+                </div>
+                <div className="bg-slate-900/80 p-2 rounded-xl border border-slate-800/80">
+                  <span className="text-[9px] uppercase tracking-wider text-slate-400 block font-semibold">Moons & Axial Tilt</span>
+                  <span className="text-sky-300 font-mono font-medium">
+                    {activeBodyMeta.scientificInfo.moons} moons · {activeBodyMeta.axialTiltDeg}° tilt
+                  </span>
+                </div>
+              </div>
+
+              <div className="bg-amber-500/10 border border-amber-500/20 p-2 rounded-xl text-[10px] text-amber-200/90 leading-relaxed">
+                💡 <strong className="text-amber-300">NASA Science Fact:</strong> {activeBodyMeta.scientificInfo.specialFact}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Primary Perspective Mode Tabs: Whole 3D Map vs Human POV Stargazer */}
