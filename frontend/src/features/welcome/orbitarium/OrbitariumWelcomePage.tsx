@@ -9,6 +9,7 @@ import { DailyQuestsCard } from '../../../components/DailyQuestsCard';
 import { MissionControlPanel } from '../../../components/MissionControlPanel';
 import { CollectionBook } from '../../../components/CollectionBook';
 import { OrbitariumSolarViewport } from './OrbitariumSolarViewport';
+import { useWelcomeViewportLayout } from './useWelcomeViewportLayout';
 import type { OrbitariumInfo } from './planets';
 
 type AppTab = 'dashboard' | 'sky3d' | 'ar' | 'cvlab';
@@ -32,7 +33,6 @@ interface OrbitariumWelcomePageProps {
   onStartQuestAr: (bodyId: CelestialBodyId) => void;
 }
 
-/** One canvas + starfield behind the whole page; copy floats left, solar system on the right. */
 export function OrbitariumWelcomePage({
   onNavigate,
   onOpenBodyInAr,
@@ -42,55 +42,87 @@ export function OrbitariumWelcomePage({
   const [missionHubOpen, setMissionHubOpen] = useState(false);
   const [selected, setSelected] = useState<OrbitariumInfo | null>(null);
   const [speed, setSpeed] = useState(1);
+  const layout = useWelcomeViewportLayout();
+  const isPhone = layout.tier === 'phone';
 
   return (
     <>
-      <div className="orbitarium-root relative h-[100dvh] w-full overflow-hidden bg-orbit-background text-orbit-foreground font-welcome-body">
-        <div className="welcome-earth-glow" aria-hidden />
+      <div className="orbitarium-root relative h-[100dvh] min-h-[100dvh] w-full overflow-hidden bg-orbit-background text-orbit-foreground font-welcome-body">
+        <div className="welcome-earth-glow hidden sm:block" aria-hidden />
 
         <OrbitariumSolarViewport
           selected={selected}
           onSelect={setSelected}
           speed={speed}
           onSpeedChange={setSpeed}
-          compact
+          layout={layout}
           fullBleed
-          sceneShiftX={26}
-          controlsAnchor="right"
         />
 
+        {/* Text: top band on phones; left column on lg+ — transparent, no partition */}
         <div
-          className="absolute inset-x-0 top-0 z-10 max-h-[58dvh] overflow-y-auto overscroll-y-contain touch-pan-y pointer-events-auto lg:inset-y-0 lg:max-h-none lg:flex lg:w-[48%] lg:max-w-2xl lg:items-center lg:overflow-y-auto"
+          className={[
+            'absolute z-10 overflow-y-auto overscroll-y-contain touch-pan-y pointer-events-auto',
+            'left-0 right-0 top-0',
+            isPhone
+              ? 'max-h-[min(42dvh,340px)] pb-2'
+              : 'max-h-[min(48dvh,420px)] sm:max-h-[min(52dvh,480px)]',
+            'md:max-h-[55dvh]',
+            'lg:inset-y-0 lg:max-h-none lg:flex lg:w-[min(100%,46%)] lg:max-w-xl xl:max-w-2xl lg:items-center',
+          ].join(' ')}
           style={{ background: 'transparent' }}
         >
-          <div className="welcome-copy-slot space-y-7 px-6 py-10 sm:px-10 lg:py-10 lg:pl-12 xl:pl-[clamp(2.5rem,7vw,6rem)]">
-            <header className="space-y-5">
+          <div
+            className={[
+              'welcome-copy-slot w-full',
+              isPhone ? 'space-y-4 px-4 py-5' : 'space-y-6 px-5 py-8 sm:px-8 sm:py-10',
+              'lg:py-10 lg:pl-10 xl:pl-[clamp(2rem,6vw,5rem)]',
+            ].join(' ')}
+          >
+            <header className={isPhone ? 'space-y-3' : 'space-y-5'}>
               <div className="flex items-center gap-3">
-                <p className="text-[11px] uppercase tracking-[0.45em] text-orbit-primary shrink-0">
+                <p className="text-[10px] sm:text-[11px] uppercase tracking-[0.4em] sm:tracking-[0.45em] text-orbit-primary shrink-0">
                   SkyMap AR
                 </p>
-                <span className="welcome-brand-rule" aria-hidden />
+                <span className="welcome-brand-rule hidden sm:block" aria-hidden />
               </div>
 
-              <h1 className="font-welcome-serif text-[clamp(2rem,4.5vw,3.25rem)] leading-[1.12] text-orbit-foreground">
-                Explore the
-                <br />
-                <span className="welcome-hero-accent">Solar System</span>
-                <br />
-                in Augmented Reality
+              <h1
+                className={[
+                  'font-welcome-serif leading-[1.12] text-orbit-foreground',
+                  isPhone
+                    ? 'text-[clamp(1.5rem,6.5vw,2rem)]'
+                    : 'text-[clamp(1.75rem,4vw,3.25rem)]',
+                ].join(' ')}
+              >
+                Explore the{' '}
+                {isPhone ? (
+                  <>
+                    <span className="welcome-hero-accent">Solar System</span> in AR
+                  </>
+                ) : (
+                  <>
+                    <br />
+                    <span className="welcome-hero-accent">Solar System</span>
+                    <br />
+                    in Augmented Reality
+                  </>
+                )}
               </h1>
 
-              <p className="max-w-md text-[15px] leading-[1.65] text-orbit-muted-foreground font-light sm:text-base">
-                A next-gen AR observatory that brings the universe to you. Explore planets, their
-                orbits, distances, and fascinating facts—right from your surroundings.
-              </p>
+              {!isPhone && (
+                <p className="max-w-md text-[15px] leading-[1.65] text-orbit-muted-foreground font-light sm:text-base">
+                  A next-gen AR observatory that brings the universe to you. Explore planets, their
+                  orbits, distances, and fascinating facts—right from your surroundings.
+                </p>
+              )}
             </header>
 
-            <div className="flex flex-wrap items-center gap-3">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
               <button
                 type="button"
                 onClick={() => onNavigate('dashboard')}
-                className="welcome-cta-primary inline-flex items-center gap-2 rounded-full px-6 py-3 text-sm font-semibold min-h-[48px] transition"
+                className="welcome-cta-primary inline-flex items-center gap-2 rounded-full px-4 py-2.5 sm:px-6 sm:py-3 text-xs sm:text-sm font-semibold min-h-[44px] transition"
               >
                 <Telescope className="w-4 h-4 shrink-0" strokeWidth={2.25} />
                 Enter Observatory
@@ -98,7 +130,7 @@ export function OrbitariumWelcomePage({
               <button
                 type="button"
                 onClick={() => setMissionHubOpen(true)}
-                className="inline-flex items-center gap-2 rounded-full border border-white/25 bg-white/5 px-6 py-3 text-sm font-medium text-orbit-foreground min-h-[48px] backdrop-blur-sm transition hover:border-white/40"
+                className="inline-flex items-center gap-2 rounded-full border border-white/25 bg-white/5 px-4 py-2.5 sm:px-6 sm:py-3 text-xs sm:text-sm font-medium text-orbit-foreground min-h-[44px] backdrop-blur-sm"
               >
                 <Rocket className="w-4 h-4 shrink-0 text-orbit-primary" strokeWidth={2} />
                 Missions
@@ -106,18 +138,20 @@ export function OrbitariumWelcomePage({
             </div>
 
             {selected ? (
-              <section className="space-y-3 animate-fade-in pt-2">
-                <p className="text-[10px] uppercase tracking-[0.28em] text-orbit-primary">
+              <section className="space-y-2 sm:space-y-3 animate-fade-in pt-1">
+                <p className="text-[9px] sm:text-[10px] uppercase tracking-[0.28em] text-orbit-primary">
                   {selected.type}
                 </p>
-                <h2 className="font-welcome-serif text-2xl sm:text-3xl">{selected.name}</h2>
-                <p className="text-sm leading-relaxed text-orbit-muted-foreground font-light">
+                <h2 className="font-welcome-serif text-xl sm:text-2xl lg:text-3xl">{selected.name}</h2>
+                <p className="text-xs sm:text-sm leading-relaxed text-orbit-muted-foreground font-light line-clamp-4 sm:line-clamp-none">
                   {selected.description}
                 </p>
-                <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+                <dl className="grid grid-cols-2 gap-x-3 gap-y-2 sm:gap-y-3 text-xs sm:text-sm">
                   {selected.facts.map((f) => (
                     <div key={f.label}>
-                      <dt className="text-orbit-muted-foreground text-xs font-normal">{f.label}</dt>
+                      <dt className="text-orbit-muted-foreground text-[10px] sm:text-xs font-normal">
+                        {f.label}
+                      </dt>
                       <dd className="mt-0.5 font-medium tabular-nums">{f.value}</dd>
                     </div>
                   ))}
@@ -126,7 +160,7 @@ export function OrbitariumWelcomePage({
                   <button
                     type="button"
                     onClick={() => onOpenBodyInAr(selected.name as CelestialBodyId)}
-                    className="inline-flex items-center justify-center gap-2 rounded-full border border-white/25 bg-white/5 px-5 py-2.5 text-sm font-medium min-h-[44px] hover:border-white/40"
+                    className="inline-flex items-center justify-center gap-2 rounded-full border border-white/25 bg-white/5 px-4 py-2 text-xs sm:text-sm font-medium min-h-[44px]"
                   >
                     <Camera className="w-4 h-4" />
                     Track in AR
@@ -134,12 +168,20 @@ export function OrbitariumWelcomePage({
                 )}
               </section>
             ) : (
-              <p className="text-xs text-orbit-muted-foreground/80 font-light max-w-sm">
-                Tap a planet on the right to see facts here.
+              <p className="text-[11px] sm:text-xs text-orbit-muted-foreground/80 font-light max-w-sm hidden sm:block">
+                {layout.tier === 'phone'
+                  ? 'Use the solar system below — tap a planet for facts.'
+                  : 'Tap a planet on the right to see facts here.'}
               </p>
             )}
           </div>
         </div>
+
+        {isPhone && !selected && (
+          <p className="pointer-events-none absolute left-4 right-4 top-[min(42dvh,340px)] z-[5] text-[11px] text-orbit-muted-foreground/70">
+            Full solar system — pinch or use +/− to zoom
+          </p>
+        )}
       </div>
 
       {missionHubOpen && (

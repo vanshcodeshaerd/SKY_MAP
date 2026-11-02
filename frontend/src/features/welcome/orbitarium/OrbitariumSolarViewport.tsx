@@ -9,6 +9,8 @@ import {
   type OrbitariumInfo,
   type OrbitariumPlanet,
 } from './planets';
+import type { WelcomeViewportLayout } from './useWelcomeViewportLayout';
+import { WelcomeResponsiveCamera } from './WelcomeResponsiveCamera';
 
 function useCoarsePointer() {
   const [coarse, setCoarse] = useState(false);
@@ -187,18 +189,18 @@ function Stars() {
   );
 }
 
+const NAV_ITEMS: OrbitariumInfo[] = [
+  ORBITARIUM_SUN,
+  ...ORBITARIUM_PLANETS.map(planetToInfo),
+];
+
 export interface OrbitariumSolarViewportProps {
   selected: OrbitariumInfo | null;
   onSelect: (info: OrbitariumInfo | null) => void;
   speed: number;
   onSpeedChange: (speed: number) => void;
-  /** Tighter camera for welcome hero. */
-  compact?: boolean;
-  /** Edge-to-edge canvas so stars continue under left copy (no color seam). */
+  layout: WelcomeViewportLayout;
   fullBleed?: boolean;
-  sceneShiftX?: number;
-  /** Planet picker anchored to right side only. */
-  controlsAnchor?: 'full' | 'right';
 }
 
 function SolarSystemScene({
@@ -222,32 +224,29 @@ function SolarSystemScene({
 }
 
 export function OrbitariumSolarViewport({
-  selected: _selected,
+  selected,
   onSelect,
   speed,
-  onSpeedChange: _onSpeedChange,
-  compact = false,
-  fullBleed = false,
-  sceneShiftX = 0,
-  controlsAnchor: _controlsAnchor = 'full',
+  onSpeedChange,
+  layout,
+  fullBleed = true,
 }: OrbitariumSolarViewportProps) {
   const controlsRef = useRef<OrbitControlsImpl>(null);
   const coarse = useCoarsePointer();
+  const { shiftX, camY, camZ, fov, minDist, maxDist, navLeftPercent } = layout;
 
-  const camY = compact ? 24 : 28;
-  const camZ = compact ? 38 : 52;
-  const minDist = compact ? 6 : 8;
-  const maxDist = compact ? 72 : 120;
-  const shift = fullBleed ? sceneShiftX : 0;
+  const navStyle = {
+    left: navLeftPercent > 0 ? `${navLeftPercent}%` : 0,
+  } as const;
 
   return (
     <div
-      className={`touch-none select-none ${fullBleed ? 'absolute inset-0' : 'absolute inset-0'}`}
+      className={fullBleed ? 'absolute inset-0 touch-none select-none' : 'relative h-full w-full touch-none select-none'}
       style={{ background: 'transparent' }}
     >
       <Canvas
         gl={{ alpha: true, antialias: true }}
-        camera={{ position: [shift, camY, camZ], fov: compact ? 42 : 50 }}
+        camera={{ position: [shiftX, camY, camZ], fov }}
         onCreated={({ gl }) => gl.setClearColor(0x000000, 0)}
         onPointerMissed={() => onSelect(null)}
         style={{
@@ -259,12 +258,13 @@ export function OrbitariumSolarViewport({
         }}
       >
         <ambientLight intensity={0.08} />
+        <WelcomeResponsiveCamera layout={layout} controlsRef={controlsRef} />
         <Suspense fallback={null}>
-          <SolarSystemScene shiftX={shift} speed={speed} onSelect={onSelect} />
+          <SolarSystemScene shiftX={shiftX} speed={speed} onSelect={onSelect} />
         </Suspense>
         <OrbitControls
           ref={controlsRef}
-          target={[shift, 0, 0]}
+          target={[shiftX, 0, 0]}
           enablePan={false}
           enableZoom={!coarse}
           minDistance={minDist}
@@ -274,7 +274,7 @@ export function OrbitariumSolarViewport({
       </Canvas>
 
       {coarse && (
-        <div className="absolute top-2 right-2 z-20 flex flex-col gap-1 pointer-events-auto">
+        <div className="absolute top-2 right-2 z-20 flex flex-col gap-1 pointer-events-auto safe-top">
           <button
             type="button"
             aria-label="Zoom in"
@@ -299,6 +299,40 @@ export function OrbitariumSolarViewport({
           </button>
         </div>
       )}
+
+      <nav
+        className="absolute bottom-0 right-0 z-10 pointer-events-auto pb-[max(0.5rem,env(safe-area-inset-bottom))]"
+        style={navStyle}
+      >
+        <div className="flex overflow-x-auto gap-1 px-2 py-1.5 scrollbar-none">
+          {NAV_ITEMS.map((p) => (
+            <button
+              key={p.name}
+              type="button"
+              onClick={() => onSelect(p)}
+              className={`shrink-0 rounded-full border px-2.5 py-1 text-[10px] sm:text-[11px] backdrop-blur min-h-[36px] sm:min-h-[32px] ${
+                selected?.name === p.name
+                  ? 'border-orbit-primary bg-orbit-primary text-orbit-primary-foreground'
+                  : 'border-orbit-border/80 bg-orbit-card-60 text-orbit-foreground'
+              }`}
+            >
+              {p.name}
+            </button>
+          ))}
+        </div>
+        <label className="flex items-center justify-center gap-2 pb-1 text-[10px] text-orbit-muted-foreground">
+          Orbit speed
+          <input
+            type="range"
+            min={0}
+            max={5}
+            step={0.1}
+            value={speed}
+            onChange={(e) => onSpeedChange(+e.target.value)}
+            className="accent-orbit-primary w-16 sm:w-24"
+          />
+        </label>
+      </nav>
     </div>
   );
 }
