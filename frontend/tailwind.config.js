@@ -8,6 +8,24 @@ export default {
   theme: {
     extend: {
       colors: {
+        border: 'var(--orbit-border)',
+        background: 'var(--orbit-background)',
+        foreground: 'var(--orbit-foreground)',
+        card: {
+          DEFAULT: 'var(--orbit-card)',
+          foreground: 'var(--orbit-card-foreground)',
+        },
+        primary: {
+          DEFAULT: 'var(--orbit-primary)',
+          foreground: 'var(--orbit-primary-foreground)',
+        },
+        muted: {
+          DEFAULT: 'color-mix(in oklch, var(--orbit-card) 75%, var(--orbit-background))',
+          foreground: 'var(--orbit-muted-foreground)',
+        },
+        sidebar: {
+          border: 'var(--orbit-border)',
+        },
         orbit: {
           background: 'var(--orbit-background)',
           foreground: 'var(--orbit-foreground)',
