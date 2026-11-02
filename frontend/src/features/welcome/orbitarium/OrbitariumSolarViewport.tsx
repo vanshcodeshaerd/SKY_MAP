@@ -187,11 +187,6 @@ function Stars() {
   );
 }
 
-const NAV_ITEMS: OrbitariumInfo[] = [
-  ORBITARIUM_SUN,
-  ...ORBITARIUM_PLANETS.map(planetToInfo),
-];
-
 export interface OrbitariumSolarViewportProps {
   selected: OrbitariumInfo | null;
   onSelect: (info: OrbitariumInfo | null) => void;
@@ -227,14 +222,14 @@ function SolarSystemScene({
 }
 
 export function OrbitariumSolarViewport({
-  selected,
+  selected: _selected,
   onSelect,
   speed,
-  onSpeedChange,
+  onSpeedChange: _onSpeedChange,
   compact = false,
   fullBleed = false,
   sceneShiftX = 0,
-  controlsAnchor = 'full',
+  controlsAnchor: _controlsAnchor = 'full',
 }: OrbitariumSolarViewportProps) {
   const controlsRef = useRef<OrbitControlsImpl>(null);
   const coarse = useCoarsePointer();
@@ -244,11 +239,6 @@ export function OrbitariumSolarViewport({
   const minDist = compact ? 6 : 8;
   const maxDist = compact ? 72 : 120;
   const shift = fullBleed ? sceneShiftX : 0;
-
-  const navClass =
-    controlsAnchor === 'right'
-      ? 'absolute bottom-0 left-[38%] right-0 z-10 pointer-events-auto sm:left-[40%] lg:left-[42%]'
-      : 'absolute bottom-0 left-0 right-0 z-10 pointer-events-auto';
 
   return (
     <div
@@ -309,37 +299,6 @@ export function OrbitariumSolarViewport({
           </button>
         </div>
       )}
-
-      <nav className={navClass}>
-        <div className="flex overflow-x-auto gap-1 px-2 py-2 scrollbar-none">
-          {NAV_ITEMS.map((p) => (
-            <button
-              key={p.name}
-              type="button"
-              onClick={() => onSelect(p)}
-              className={`shrink-0 rounded-full border px-2 py-1 text-[10px] backdrop-blur ${
-                selected?.name === p.name
-                  ? 'border-orbit-primary bg-orbit-primary text-orbit-primary-foreground'
-                  : 'border-orbit-border/80 bg-orbit-card-60 text-orbit-foreground'
-              }`}
-            >
-              {p.name}
-            </button>
-          ))}
-        </div>
-        <label className="flex items-center justify-center gap-2 pb-2 text-[10px] text-orbit-muted-foreground">
-          Orbit speed
-          <input
-            type="range"
-            min={0}
-            max={5}
-            step={0.1}
-            value={speed}
-            onChange={(e) => onSpeedChange(+e.target.value)}
-            className="accent-orbit-primary w-20"
-          />
-        </label>
-      </nav>
     </div>
   );
 }
