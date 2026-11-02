@@ -4,6 +4,7 @@ import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 import type { WelcomeViewportLayout } from './useWelcomeViewportLayout';
 import * as THREE from 'three';
 
+/** Same left-copy / right-solar framing on phone, tablet, and desktop. */
 export function WelcomeResponsiveCamera({
   layout,
   controlsRef,
@@ -19,17 +20,10 @@ export function WelcomeResponsiveCamera({
     if (camera instanceof THREE.PerspectiveCamera) {
       camera.fov = layout.fov;
 
-      if (layout.tier === 'desktop') {
-        // Shift camera view offset so solar system is placed gracefully on the right
-        const xOffset = -Math.round(size.width * 0.22);
-        camera.setViewOffset(size.width, size.height, xOffset, 0, size.width, size.height);
-      } else if (layout.tier === 'tablet') {
-        const xOffset = -Math.round(size.width * 0.15);
-        camera.setViewOffset(size.width, size.height, xOffset, 0, size.width, size.height);
-      } else {
-        camera.clearViewOffset();
-      }
-
+      const shift =
+        layout.tier === 'desktop' ? 0.22 : layout.tier === 'tablet' ? 0.17 : 0.14;
+      const xOffset = -Math.round(size.width * shift);
+      camera.setViewOffset(size.width, size.height, xOffset, 0, size.width, size.height);
       camera.updateProjectionMatrix();
     }
 

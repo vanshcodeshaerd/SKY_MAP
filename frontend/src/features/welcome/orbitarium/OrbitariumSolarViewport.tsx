@@ -68,6 +68,16 @@ function Ring({ inner, outer }: { inner: number; outer: number }) {
   );
 }
 
+const NAV_ITEMS: OrbitariumInfo[] = [
+  ORBITARIUM_SUN,
+  ...ORBITARIUM_PLANETS.map((p) => ({
+    name: p.name,
+    type: p.type,
+    description: p.description,
+    facts: p.facts,
+  })),
+];
+
 function planetToInfo(p: OrbitariumPlanet): OrbitariumInfo {
   return {
     name: p.name,
@@ -196,8 +206,6 @@ export interface OrbitariumSolarViewportProps {
   onSpeedChange: (speed: number) => void;
   layout: WelcomeViewportLayout;
   fullBleed?: boolean;
-  /** Fills a flex middle band on phone/tablet (rounded frame). */
-  embedded?: boolean;
 }
 
 function SolarSystemScene({
@@ -219,28 +227,25 @@ function SolarSystemScene({
 }
 
 export function OrbitariumSolarViewport({
-  selected: _selected,
+  selected,
   onSelect,
   speed,
-  onSpeedChange: _onSpeedChange,
+  onSpeedChange,
   layout,
   fullBleed = true,
-  embedded = false,
 }: OrbitariumSolarViewportProps) {
   const controlsRef = useRef<OrbitControlsImpl>(null);
   const coarse = useCoarsePointer();
-  const { camY, camZ, fov, minDist, maxDist } = layout;
+  const { camY, camZ, fov, minDist, maxDist, navLeftPercent } = layout;
+
+  const navStyle = {
+    left: navLeftPercent > 0 ? `${navLeftPercent}%` : '46%',
+  } as const;
 
   return (
     <div
-      className={
-        embedded
-          ? 'absolute inset-2 sm:inset-3 touch-none select-none rounded-2xl overflow-hidden border border-orbit-border/40'
-          : fullBleed
-            ? 'absolute inset-0 touch-none select-none'
-            : 'relative h-full w-full touch-none select-none'
-      }
-      style={{ background: embedded ? 'var(--orbit-card)' : 'transparent' }}
+      className={fullBleed ? 'absolute inset-0 touch-none select-none' : 'relative h-full w-full touch-none select-none'}
+      style={{ background: 'transparent' }}
     >
       <Canvas
         gl={{ alpha: true, antialias: true }}
@@ -272,11 +277,7 @@ export function OrbitariumSolarViewport({
       </Canvas>
 
       {coarse && (
-        <div
-          className={`absolute z-20 flex flex-col gap-1.5 pointer-events-auto ${
-            embedded ? 'bottom-3 right-3' : 'top-2 right-2 safe-top'
-          }`}
-        >
+        <div className="absolute top-[max(0.5rem,env(safe-area-inset-top))] right-2 z-20 flex flex-col gap-1.5 pointer-events-auto">
           <button
             type="button"
             aria-label="Zoom in"
@@ -301,6 +302,42 @@ export function OrbitariumSolarViewport({
           </button>
         </div>
       )}
+
+      <nav
+        className="absolute bottom-0 right-0 z-10 pointer-events-auto pb-[max(0.35rem,env(safe-area-inset-bottom))]"
+        style={navStyle}
+        aria-label="Planet shortcuts"
+      >
+        <div className="flex overflow-x-auto gap-1 px-2 py-1.5 scrollbar-none">
+          {NAV_ITEMS.map((p) => (
+            <button
+              key={p.name}
+              type="button"
+              onClick={() => onSelect(p)}
+              className={`shrink-0 rounded-full border px-2.5 py-1.5 text-[10px] sm:text-[11px] backdrop-blur min-h-[40px] sm:min-h-[36px] ${
+                selected?.name === p.name
+                  ? 'border-orbit-primary bg-orbit-primary text-orbit-primary-foreground'
+                  : 'border-orbit-border/80 bg-orbit-card-60 text-orbit-foreground'
+              }`}
+            >
+              {p.name}
+            </button>
+          ))}
+        </div>
+        <label className="flex items-center justify-center gap-2 pb-1 text-[10px] text-orbit-muted-foreground">
+          Orbit speed
+          <input
+            type="range"
+            min={0}
+            max={5}
+            step={0.1}
+            value={speed}
+            onChange={(e) => onSpeedChange(+e.target.value)}
+            className="accent-orbit-primary w-20 min-h-[44px] sm:min-h-0 sm:w-24"
+            aria-label="Orbit animation speed"
+          />
+        </label>
+      </nav>
     </div>
   );
 }

@@ -7,9 +7,7 @@ export type WelcomeViewportLayout = {
   fov: number;
   minDist: number;
   maxDist: number;
-  /** Where planet picker starts (CSS left %). */
   navLeftPercent: number;
-  /** Rough breakpoint label for layout tweaks. */
   tier: 'phone' | 'tablet' | 'desktop';
 };
 
@@ -21,12 +19,12 @@ function compute(width: number, height: number): WelcomeViewportLayout {
   if (narrow) {
     return {
       shiftX: 0,
-      camY: short ? 68 : 74,
-      camZ: short ? 108 : 118,
-      fov: width / Math.max(height, 1) < 0.55 ? 56 : 52,
+      camY: short ? 70 : 76,
+      camZ: short ? 112 : 120,
+      fov: 54,
       minDist: 10,
       maxDist: 200,
-      navLeftPercent: 0,
+      navLeftPercent: 46,
       tier: 'phone',
     };
   }
@@ -34,23 +32,23 @@ function compute(width: number, height: number): WelcomeViewportLayout {
   if (tablet) {
     return {
       shiftX: 0,
-      camY: 70,
-      camZ: 112,
+      camY: 68,
+      camZ: 110,
       fov: 50,
       minDist: 8,
       maxDist: 200,
-      navLeftPercent: 0,
+      navLeftPercent: 42,
       tier: 'tablet',
     };
   }
 
   return {
-    shiftX: 14,
+    shiftX: 0,
     camY: 62,
     camZ: 104,
-    fov: 50,
-    minDist: 6,
-    maxDist: 220,
+    fov: 48,
+    minDist: 7,
+    maxDist: 180,
     navLeftPercent: 40,
     tier: 'desktop',
   };
@@ -58,9 +56,7 @@ function compute(width: number, height: number): WelcomeViewportLayout {
 
 export function useWelcomeViewportLayout(): WelcomeViewportLayout {
   const [layout, setLayout] = useState<WelcomeViewportLayout>(() =>
-    typeof window !== 'undefined'
-      ? compute(window.innerWidth, window.innerHeight)
-      : compute(1280, 800)
+    typeof window !== 'undefined' ? compute(window.innerWidth, window.innerHeight) : compute(1280, 800)
   );
 
   useEffect(() => {
