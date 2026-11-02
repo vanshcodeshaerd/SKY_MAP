@@ -398,7 +398,8 @@ export function SolarDashboard({
           </span>
         </div>
 
-        <div className="overflow-x-auto">
+        {/* Desktop View: Full Scannable Matrix Table */}
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-left text-xs border-collapse">
             <thead className="bg-[#0c1018] text-slate-400 uppercase text-[10px] tracking-wider font-mono border-b border-[#1e283c]">
               <tr>
@@ -482,6 +483,95 @@ export function SolarDashboard({
               })}
             </tbody>
           </table>
+        </div>
+
+        {/* Mobile View: Touch-Friendly Scannable Cards */}
+        <div className="md:hidden space-y-2">
+          {CELESTIAL_BODY_LIST.map((body) => {
+            const bPos = allPositions[body.id];
+            if (!bPos) return null;
+            const isTarget = selectedBody === body.id;
+            const bodyThumb = getPlanetThumbnail(body.id, 48);
+
+            return (
+              <div
+                key={body.id}
+                onClick={() => onSelectBody && onSelectBody(body.id)}
+                className={`p-3 rounded-lg border transition cursor-pointer ${
+                  isTarget
+                    ? 'bg-[#162033] border-amber-500/60 shadow-md ring-1 ring-amber-500/20'
+                    : 'bg-[#0d121c] border-[#1e283c] hover:bg-[#131926]'
+                }`}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-7 h-7 rounded-full overflow-hidden shrink-0 bg-black/40 border border-white/10 flex items-center justify-center">
+                      {bodyThumb ? (
+                        <img src={bodyThumb} alt={body.name} className="w-full h-full object-cover" />
+                      ) : (
+                        <span className="text-xs select-none">{body.symbol}</span>
+                      )}
+                    </div>
+                    <div>
+                      <h4 className="font-semibold text-xs text-white flex items-center gap-1.5">
+                        <span>{body.name}</span>
+                        <span className="text-[10px] text-slate-400 font-normal capitalize">
+                          ({body.category.replace('_', ' ')})
+                        </span>
+                      </h4>
+                      <span className="text-[10px] text-slate-400 font-mono">
+                        Az: {bPos.azimuthDeg.toFixed(1)}° ({getCardinal(bPos.azimuthDeg)})
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="text-right">
+                    <div className="font-mono font-bold text-xs">
+                      <span className={bPos.isAboveHorizon ? 'text-sky-300' : 'text-slate-500'}>
+                        {bPos.altitudeDeg >= 0 ? '+' : ''}{bPos.altitudeDeg.toFixed(1)}°
+                      </span>
+                    </div>
+                    <div className="mt-0.5">
+                      {bPos.isAboveHorizon ? (
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[9px] bg-emerald-950/50 text-emerald-300 border border-emerald-800/60 font-medium">
+                          <Eye className="w-2.5 h-2.5" /> Visible
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[9px] bg-[#161d2c] text-slate-500 border border-[#253147]">
+                          <EyeOff className="w-2.5 h-2.5" /> Below
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-2 pt-2 border-t border-[#1e283c]/60 flex items-center justify-between text-[10px] font-mono text-slate-400">
+                  <span>
+                    Dist:{' '}
+                    <strong className="text-slate-300">
+                      {bPos.distanceAu < 0.01
+                        ? `${Math.round(bPos.distanceKm || 0).toLocaleString()} km`
+                        : `${bPos.distanceAu.toFixed(3)} AU`}
+                    </strong>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onSelectBody && onSelectBody(body.id);
+                    }}
+                    className={`min-h-[30px] px-3 py-1 rounded text-[10px] font-sans font-medium transition ${
+                      isTarget
+                        ? 'bg-amber-500 text-slate-950 font-bold'
+                        : 'bg-[#161d2c] hover:bg-[#1d273b] text-slate-300 border border-[#253147]'
+                    }`}
+                  >
+                    {isTarget ? 'Active' : 'Select'}
+                  </button>
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
 

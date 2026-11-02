@@ -13,6 +13,13 @@
 }
 
 @layer base {
+  html, body {
+    overflow-x: hidden;
+    width: 100%;
+    min-height: 100%;
+    -webkit-tap-highlight-color: transparent;
+  }
+
   body {
     background-color: var(--color-obsidian-bg);
     color: #f1f5f9;
@@ -29,6 +36,16 @@
   code, pre, .font-mono {
     font-family: 'JetBrains Mono', monospace;
     font-variant-numeric: tabular-nums;
+  }
+
+  /* Smooth mobile touch scrolling */
+  .touch-pan-y {
+    touch-action: pan-y;
+    -webkit-overflow-scrolling: touch;
+  }
+  .touch-pan-x {
+    touch-action: pan-x;
+    -webkit-overflow-scrolling: touch;
   }
 
   .font-orbitarium-display {

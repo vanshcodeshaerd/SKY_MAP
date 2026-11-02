@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Navbar } from './components/Navbar';
+import { MobileBottomNav } from './components/MobileBottomNav';
 import { SafetyBanner } from './components/SafetyBanner';
 import { CalibrationDrawer } from './components/CalibrationDrawer';
 import { MissionCompleteToast } from './components/MissionCompleteToast';
@@ -145,7 +146,7 @@ function AppMain({
       )}
 
       {activeTab === 'welcome' ? (
-        <main className="flex-1 w-full min-h-0 bg-orbit-background">
+        <main className="flex-1 w-full min-h-0 bg-orbit-background pb-20 md:pb-0">
           <WelcomeView
             onNavigate={setActiveTab}
             onStartDailyChallenge={(bodyId) => {
@@ -163,7 +164,7 @@ function AppMain({
           />
         </main>
       ) : (
-        <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <main className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 py-3 sm:py-6 pb-24 md:pb-6">
           {activeTab === 'dashboard' && (
             <SolarDashboard
               location={location}
@@ -230,7 +231,7 @@ function AppMain({
       />
 
       {activeTab !== 'welcome' && (
-      <footer className="border-t border-slate-800/80 bg-slate-950/80 py-4 px-4 text-center text-xs text-slate-400">
+      <footer className="border-t border-slate-800/80 bg-slate-950/80 py-4 px-4 text-center text-xs text-slate-400 hidden md:block">
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2">
           <span>SkyMap AR — Interactive Astronomy for Young Explorers</span>
           <div className="flex items-center gap-3 text-[11px] font-mono text-slate-400">
@@ -247,6 +248,9 @@ function AppMain({
         </div>
       </footer>
       )}
+
+      {/* Persistent Mobile Bottom Navigation Dock */}
+      <MobileBottomNav activeTab={activeTab} setActiveTab={setActiveTab} />
     </div>
   );
 }

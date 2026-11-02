@@ -55,8 +55,8 @@ export function Navbar({
           </div>
         </div>
 
-        {/* Primary Destination Navigation */}
-        <nav className="flex items-center bg-[#111622] p-1 rounded-md border border-[#1e283c]" aria-label="Main Navigation">
+        {/* Primary Destination Navigation (Desktop/Tablet) */}
+        <nav className="hidden md:flex items-center bg-[#111622] p-1 rounded-md border border-[#1e283c]" aria-label="Main Navigation">
           {tabs.map((tab) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
@@ -72,7 +72,7 @@ export function Navbar({
                 aria-current={isActive ? 'page' : undefined}
               >
                 <Icon className={`w-3.5 h-3.5 ${isActive ? 'text-amber-400 stroke-[2.2]' : 'text-slate-400'}`} />
-                <span className="hidden md:inline">{tab.label}</span>
+                <span className="inline">{tab.label}</span>
               </button>
             );
           })}

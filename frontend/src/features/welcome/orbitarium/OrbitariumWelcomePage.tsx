@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Camera, Rocket, Telescope, X } from 'lucide-react';
+import { Camera, Compass, Rocket, Telescope, X } from 'lucide-react';
 import type { CelestialBodyId } from '../../../types/astronomy';
 import { MissionProgressStrip } from '../../../components/MissionProgressStrip';
 import { StargazerXpStrip } from '../../../components/StargazerXpStrip';
@@ -122,17 +122,35 @@ export function OrbitariumWelcomePage({
               <button
                 type="button"
                 onClick={() => onNavigate('dashboard')}
-                className="welcome-cta-primary inline-flex items-center gap-2 rounded-full px-4 py-2.5 sm:px-6 sm:py-3 text-xs sm:text-sm font-semibold min-h-[44px] transition"
+                className="welcome-cta-primary inline-flex items-center gap-2 rounded-full px-4 py-2 sm:px-6 sm:py-3 text-xs sm:text-sm font-semibold min-h-[44px] transition shadow-lg shadow-amber-500/20"
               >
                 <Telescope className="w-4 h-4 shrink-0" strokeWidth={2.25} />
                 Enter Observatory
               </button>
               <button
                 type="button"
-                onClick={() => setMissionHubOpen(true)}
-                className="inline-flex items-center gap-2 rounded-full border border-white/25 bg-white/5 px-4 py-2.5 sm:px-6 sm:py-3 text-xs sm:text-sm font-medium text-orbit-foreground min-h-[44px] backdrop-blur-sm"
+                onClick={() => onNavigate('sky3d')}
+                className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/30 bg-amber-500/10 px-3.5 py-2 text-xs font-medium text-amber-300 min-h-[44px] backdrop-blur-sm transition hover:bg-amber-500/20"
+                title="Launch 3D Celestial Map"
               >
-                <Rocket className="w-4 h-4 shrink-0 text-orbit-primary" strokeWidth={2} />
+                <Compass className="w-3.5 h-3.5 shrink-0" />
+                3D Map
+              </button>
+              <button
+                type="button"
+                onClick={() => onNavigate('ar')}
+                className="inline-flex items-center gap-1.5 rounded-full border border-sky-500/30 bg-sky-500/10 px-3.5 py-2 text-xs font-medium text-sky-300 min-h-[44px] backdrop-blur-sm transition hover:bg-sky-500/20"
+                title="Open Augmented Reality Sky Camera"
+              >
+                <Camera className="w-3.5 h-3.5 shrink-0" />
+                AR View
+              </button>
+              <button
+                type="button"
+                onClick={() => setMissionHubOpen(true)}
+                className="inline-flex items-center gap-1.5 rounded-full border border-white/25 bg-white/5 px-3.5 py-2 text-xs sm:text-sm font-medium text-orbit-foreground min-h-[44px] backdrop-blur-sm transition hover:border-white/40"
+              >
+                <Rocket className="w-3.5 h-3.5 shrink-0 text-orbit-primary" strokeWidth={2} />
                 Missions
               </button>
             </div>
