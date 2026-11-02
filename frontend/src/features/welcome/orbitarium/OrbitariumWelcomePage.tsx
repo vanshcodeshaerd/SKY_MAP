@@ -79,9 +79,9 @@ export function OrbitariumWelcomePage({
               'lg:py-10 lg:pl-10 xl:pl-[clamp(2rem,6vw,5rem)]',
             ].join(' ')}
           >
-            <header className={isPhone ? 'space-y-3' : 'space-y-5'}>
+            <header className={isPhone ? 'space-y-3' : 'space-y-4'}>
               <div className="flex items-center gap-3">
-                <p className="text-[10px] sm:text-[11px] uppercase tracking-[0.4em] sm:tracking-[0.45em] text-orbit-primary shrink-0">
+                <p className="text-[11px] font-mono uppercase tracking-[0.35em] text-amber-400 font-semibold shrink-0">
                   SkyMap AR
                 </p>
                 <span className="welcome-brand-rule hidden sm:block" aria-hidden />
@@ -89,10 +89,10 @@ export function OrbitariumWelcomePage({
 
               <h1
                 className={[
-                  'font-welcome-serif leading-[1.12] text-orbit-foreground',
+                  'font-bold tracking-tight text-white leading-[1.06]',
                   isPhone
-                    ? 'text-[clamp(1.5rem,6.5vw,2rem)]'
-                    : 'text-[clamp(1.75rem,4vw,3.25rem)]',
+                    ? 'text-[clamp(1.75rem,7vw,2.35rem)]'
+                    : 'text-[clamp(2.25rem,4.5vw,3.75rem)]',
                 ].join(' ')}
               >
                 Explore the{' '}
@@ -111,9 +111,9 @@ export function OrbitariumWelcomePage({
               </h1>
 
               {!isPhone && (
-                <p className="max-w-md text-[15px] leading-[1.65] text-orbit-muted-foreground font-light sm:text-base">
-                  A next-gen AR observatory that brings the universe to you. Explore planets, their
-                  orbits, distances, and fascinating facts—right from your surroundings.
+                <p className="max-w-md text-[15px] leading-relaxed text-slate-300 font-normal sm:text-base">
+                  Interactive celestial observatory and 3D astronomical map. Explore accurate planetary orbits, 
+                  ephemerides, topocentric sky coordinates, and real-time celestial tracking.
                 </p>
               )}
             </header>
@@ -160,7 +160,7 @@ export function OrbitariumWelcomePage({
                 <p className="text-[9px] sm:text-[10px] uppercase tracking-[0.28em] text-orbit-primary">
                   {selected.type}
                 </p>
-                <h2 className="font-welcome-serif text-xl sm:text-2xl lg:text-3xl">{selected.name}</h2>
+                <h2 className="font-bold tracking-tight text-white text-xl sm:text-2xl lg:text-3xl">{selected.name}</h2>
                 <p className="text-xs sm:text-sm leading-relaxed text-orbit-muted-foreground font-light line-clamp-4 sm:line-clamp-none">
                   {selected.description}
                 </p>

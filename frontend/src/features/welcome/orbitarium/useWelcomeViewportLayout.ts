@@ -21,11 +21,11 @@ function compute(width: number, height: number): WelcomeViewportLayout {
   if (narrow) {
     return {
       shiftX: 0,
-      camY: short ? 36 : 32,
-      camZ: short ? 68 : 62,
-      fov: width / Math.max(height, 1) < 0.55 ? 54 : 50,
-      minDist: 10,
-      maxDist: 100,
+      camY: short ? 72 : 78,
+      camZ: short ? 116 : 124,
+      fov: width / Math.max(height, 1) < 0.55 ? 58 : 54,
+      minDist: 8,
+      maxDist: 260,
       navLeftPercent: 0,
       tier: 'phone',
     };
@@ -33,24 +33,24 @@ function compute(width: number, height: number): WelcomeViewportLayout {
 
   if (tablet) {
     return {
-      shiftX: 10,
-      camY: 28,
-      camZ: 54,
-      fov: 46,
-      minDist: 8,
-      maxDist: 88,
+      shiftX: 8,
+      camY: 64,
+      camZ: 112,
+      fov: 52,
+      minDist: 6,
+      maxDist: 240,
       navLeftPercent: 38,
       tier: 'tablet',
     };
   }
 
   return {
-    shiftX: 22,
-    camY: 26,
-    camZ: 48,
-    fov: 42,
-    minDist: 7,
-    maxDist: 82,
+    shiftX: 14,
+    camY: 62,
+    camZ: 104,
+    fov: 50,
+    minDist: 6,
+    maxDist: 220,
     navLeftPercent: 40,
     tier: 'desktop',
   };

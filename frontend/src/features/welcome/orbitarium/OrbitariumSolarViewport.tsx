@@ -266,7 +266,7 @@ export function OrbitariumSolarViewport({
           ref={controlsRef}
           target={[shiftX, 0, 0]}
           enablePan={false}
-          enableZoom={!coarse}
+          enableZoom={true}
           minDistance={minDist}
           maxDistance={maxDist}
           rotateSpeed={coarse ? 0.45 : 0.65}
