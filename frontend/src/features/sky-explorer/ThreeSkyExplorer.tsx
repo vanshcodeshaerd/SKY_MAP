@@ -402,15 +402,16 @@ export function ThreeSkyExplorer({
 
     // A. Scene & Camera
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x02040a);
+    scene.background = new THREE.Color(0x030712);
     sceneRef.current = scene;
 
     const camera = new THREE.PerspectiveCamera(50, width / height, 0.5, 3500);
     camera.position.set(0, 55, 140);
     cameraRef.current = camera;
 
-    // B. WebGL Renderer
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' });
+    // B. WebGL Renderer - Solid deep space background (alpha: false ensures true pitch black)
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: 'high-performance' });
+    renderer.setClearColor(0x030712, 1.0);
     renderer.setSize(width, height);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     rendererRef.current = renderer;
@@ -433,26 +434,6 @@ export function ThreeSkyExplorer({
     const pointLight = new THREE.PointLight(0xfff5d0, 2.5, 600, 0.5);
     scene.add(pointLight);
     pointLightRef.current = pointLight;
-
-    // E1. Milky Way Deep Space Panoramic Skybox (Solar System Scope 2K equirectangular)
-    const milkyGeo = new THREE.SphereGeometry(1800, 48, 32);
-    const milkyMat = new THREE.MeshBasicMaterial({
-      color: 0xffffff,
-      side: THREE.BackSide,
-      transparent: true,
-      opacity: 0.65,
-      depthWrite: false,
-    });
-    const milkyMesh = new THREE.Mesh(milkyGeo, milkyMat);
-    milkyMesh.visible = false;
-    scene.add(milkyMesh);
-    loadSolarSystemScopeTexture('MilkyWay', (tex) => {
-      if (tex) {
-        milkyMat.map = tex;
-        milkyMat.needsUpdate = true;
-        milkyMesh.visible = true;
-      }
-    });
 
     // E2. 2,500 Starfield Particles (Deep Space)
     const starCount = 2500;
@@ -1298,7 +1279,7 @@ export function ThreeSkyExplorer({
       )}
 
       {/* 3D Viewport Card - Responsive Height & Edge-to-Edge Canvas */}
-      <div className="glass-panel rounded-2xl sm:rounded-3xl overflow-hidden relative border border-slate-800 bg-slate-950 shadow-2xl h-[65vh] min-h-[440px] max-h-[720px]">
+      <div className="rounded-2xl sm:rounded-3xl overflow-hidden relative border border-slate-800 bg-[#030712] shadow-2xl h-[65vh] min-h-[440px] max-h-[720px]">
         {/* Top Info Bar - Coordinates & Planet Scientific Dossier Toggle */}
         <div className="absolute top-3 left-3 z-20 flex flex-col items-start gap-1.5 max-w-[280px] sm:max-w-xs">
           <div className="bg-slate-950/90 backdrop-blur-md px-3 py-1.5 sm:px-3.5 sm:py-2.5 rounded-xl border border-slate-800 text-xs shadow-lg w-full">
