@@ -95,6 +95,14 @@
   accent-color: var(--orbit-primary);
 }
 
+.scrollbar-none {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
 .observatory-panel {
   background-color: #111622;
   border: 1px solid #1e283c;

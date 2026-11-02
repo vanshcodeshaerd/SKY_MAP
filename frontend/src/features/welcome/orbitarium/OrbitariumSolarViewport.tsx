@@ -1,10 +1,7 @@
-/**
- * Right-panel 3D solar system only (canvas + planet picker + speed).
- */
-
+import { useEffect, useRef, useState, useMemo, Suspense } from 'react';
 import { Canvas, useFrame, useLoader } from '@react-three/fiber';
 import { Line, OrbitControls } from '@react-three/drei';
-import { Suspense, useMemo, useRef, useState } from 'react';
+import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 import * as THREE from 'three';
 import {
   ORBITARIUM_PLANETS,
@@ -12,6 +9,18 @@ import {
   type OrbitariumInfo,
   type OrbitariumPlanet,
 } from './planets';
+
+function useCoarsePointer() {
+  const [coarse, setCoarse] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia('(pointer: coarse)');
+    const update = () => setCoarse(mq.matches);
+    update();
+    mq.addEventListener('change', update);
+    return () => mq.removeEventListener('change', update);
+  }, []);
+  return coarse;
+}
 
 function useTex(url: string) {
   const t = useLoader(THREE.TextureLoader, url);
@@ -190,14 +199,18 @@ export interface OrbitariumSolarViewportProps {
   onSpeedChange: (speed: number) => void;
 }
 
+/** Fixed right-half 3D scene; touch-friendly on phones. */
 export function OrbitariumSolarViewport({
   selected,
   onSelect,
   speed,
   onSpeedChange,
 }: OrbitariumSolarViewportProps) {
+  const controlsRef = useRef<OrbitControlsImpl>(null);
+  const coarse = useCoarsePointer();
+
   return (
-    <div className="relative w-full h-full min-h-[320px] bg-orbit-background">
+    <div className="absolute inset-0 touch-none select-none">
       <Canvas
         camera={{ position: [0, 28, 52], fov: 50 }}
         onPointerMissed={() => onSelect(null)}
@@ -211,26 +224,62 @@ export function OrbitariumSolarViewport({
             <PlanetMesh key={p.name} p={p} speed={speed} onSelect={onSelect} />
           ))}
         </Suspense>
-        <OrbitControls enablePan={false} minDistance={8} maxDistance={120} />
+        <OrbitControls
+          ref={controlsRef}
+          enablePan={false}
+          enableZoom={!coarse}
+          minDistance={8}
+          maxDistance={120}
+          rotateSpeed={coarse ? 0.45 : 0.65}
+        />
       </Canvas>
 
-      <nav className="absolute bottom-0 left-0 right-0 z-10 flex flex-wrap items-center justify-center gap-1.5 p-3 pointer-events-auto bg-gradient-to-t from-orbit-background via-orbit-background/80 to-transparent">
-        {NAV_ITEMS.map((p) => (
+      {coarse && (
+        <div className="absolute top-2 right-2 z-20 flex flex-col gap-1 pointer-events-auto">
           <button
-            key={p.name}
             type="button"
-            onClick={() => onSelect(p)}
-            className={`rounded-full border px-2.5 py-0.5 text-[11px] backdrop-blur transition ${
-              selected?.name === p.name
-                ? 'border-orbit-primary bg-orbit-primary text-orbit-primary-foreground'
-                : 'border-orbit-border bg-orbit-card-60 text-orbit-foreground hover:border-orbit-primary'
-            }`}
+            aria-label="Zoom in"
+            onClick={() => {
+              controlsRef.current?.dollyIn(1.12);
+              controlsRef.current?.update();
+            }}
+            className="min-h-[44px] min-w-[44px] rounded-lg border border-orbit-border bg-orbit-card-80 text-orbit-foreground text-lg"
           >
-            {p.name}
+            +
           </button>
-        ))}
-        <label className="ml-1 flex items-center gap-1.5 text-[11px] text-orbit-muted-foreground">
-          Speed
+          <button
+            type="button"
+            aria-label="Zoom out"
+            onClick={() => {
+              controlsRef.current?.dollyOut(1.12);
+              controlsRef.current?.update();
+            }}
+            className="min-h-[44px] min-w-[44px] rounded-lg border border-orbit-border bg-orbit-card-80 text-orbit-foreground text-lg"
+          >
+            −
+          </button>
+        </div>
+      )}
+
+      <nav className="absolute bottom-0 left-0 right-0 z-10 pointer-events-auto">
+        <div className="flex overflow-x-auto gap-1 px-2 py-2 scrollbar-none bg-gradient-to-t from-orbit-background to-transparent">
+          {NAV_ITEMS.map((p) => (
+            <button
+              key={p.name}
+              type="button"
+              onClick={() => onSelect(p)}
+              className={`shrink-0 rounded-full border px-2 py-1 text-[10px] backdrop-blur ${
+                selected?.name === p.name
+                  ? 'border-orbit-primary bg-orbit-primary text-orbit-primary-foreground'
+                  : 'border-orbit-border/80 bg-orbit-card-60 text-orbit-foreground'
+              }`}
+            >
+              {p.name}
+            </button>
+          ))}
+        </div>
+        <label className="flex items-center justify-center gap-2 pb-2 text-[10px] text-orbit-muted-foreground">
+          Orbit speed
           <input
             type="range"
             min={0}
@@ -238,7 +287,7 @@ export function OrbitariumSolarViewport({
             step={0.1}
             value={speed}
             onChange={(e) => onSpeedChange(+e.target.value)}
-            className="accent-orbit-primary w-16 sm:w-24"
+            className="accent-orbit-primary w-20"
           />
         </label>
       </nav>
