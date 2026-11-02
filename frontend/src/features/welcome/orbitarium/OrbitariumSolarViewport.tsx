@@ -199,16 +199,14 @@ export interface OrbitariumSolarViewportProps {
 }
 
 function SolarSystemScene({
-  shiftX,
   speed,
   onSelect,
 }: {
-  shiftX: number;
   speed: number;
   onSelect: (info: OrbitariumInfo | null) => void;
 }) {
   return (
-    <group position={[shiftX, 0, 0]}>
+    <group position={[0, 0, 0]}>
       <Stars />
       <SunMesh onSelect={() => onSelect(ORBITARIUM_SUN)} />
       {ORBITARIUM_PLANETS.map((p) => (
@@ -228,7 +226,7 @@ export function OrbitariumSolarViewport({
 }: OrbitariumSolarViewportProps) {
   const controlsRef = useRef<OrbitControlsImpl>(null);
   const coarse = useCoarsePointer();
-  const { shiftX, camY, camZ, fov, minDist, maxDist } = layout;
+  const { camY, camZ, fov, minDist, maxDist } = layout;
 
   return (
     <div
@@ -237,7 +235,7 @@ export function OrbitariumSolarViewport({
     >
       <Canvas
         gl={{ alpha: true, antialias: true }}
-        camera={{ position: [shiftX, camY, camZ], fov }}
+        camera={{ position: [0, camY, camZ], fov }}
         onCreated={({ gl }) => gl.setClearColor(0x000000, 0)}
         onPointerMissed={() => onSelect(null)}
         style={{
@@ -251,11 +249,11 @@ export function OrbitariumSolarViewport({
         <ambientLight intensity={0.08} />
         <WelcomeResponsiveCamera layout={layout} controlsRef={controlsRef} />
         <Suspense fallback={null}>
-          <SolarSystemScene shiftX={shiftX} speed={speed} onSelect={onSelect} />
+          <SolarSystemScene speed={speed} onSelect={onSelect} />
         </Suspense>
         <OrbitControls
           ref={controlsRef}
-          target={[shiftX, 0, 0]}
+          target={[0, 0, 0]}
           enablePan={false}
           enableZoom={true}
           minDistance={minDist}
