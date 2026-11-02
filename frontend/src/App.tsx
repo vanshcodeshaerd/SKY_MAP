@@ -126,7 +126,7 @@ function AppMain({
   }, [activeTab, markVisitedSky3d]);
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#090d14] text-slate-100">
+    <div className="skymap-app-shell orbitarium-root min-h-screen flex flex-col font-welcome-body text-orbit-foreground">
       {activeTab !== 'welcome' && <SafetyBanner />}
 
       <MissionCompleteToast missionIds={lastNewlyCompleted} onDismiss={clearLastNewlyCompleted} />
@@ -231,10 +231,10 @@ function AppMain({
       />
 
       {activeTab !== 'welcome' && (
-      <footer className="border-t border-slate-800/80 bg-slate-950/80 py-4 px-4 text-center text-xs text-slate-400 hidden md:block">
+      <footer className="border-t border-orbit-border bg-orbit-background/80 backdrop-blur-sm py-4 px-4 text-center text-xs text-orbit-muted-foreground hidden md:block">
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2">
           <span>SkyMap AR — Interactive Astronomy for Young Explorers</span>
-          <div className="flex items-center gap-3 text-[11px] font-mono text-slate-400">
+          <div className="flex items-center gap-3 text-[11px] font-mono text-orbit-muted-foreground">
             <span>React 18</span>
             <span>•</span>
             <span>Three.js / WebGL</span>

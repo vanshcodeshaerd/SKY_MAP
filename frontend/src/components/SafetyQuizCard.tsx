@@ -65,7 +65,7 @@ export function SafetyQuizCard() {
                 key={opt.label}
                 type="button"
                 onClick={() => handleAnswer(opt.correct)}
-                className="text-left text-xs px-3 py-2 rounded-lg border border-[#253147] bg-[#111622] hover:border-amber-500/40 text-slate-300"
+                className="text-left text-xs px-3 py-2 rounded-lg border border-orbit-border bg-orbit-card hover:border-amber-500/40 text-slate-300"
               >
                 {opt.label}
               </button>

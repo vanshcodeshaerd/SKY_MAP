@@ -204,7 +204,7 @@ export function OrbitariumWelcomePage({
             aria-label="Close mission hub"
             onClick={() => setMissionHubOpen(false)}
           />
-          <div className="relative w-full max-w-lg h-full bg-[#090d14] border-l border-slate-800 shadow-2xl overflow-y-auto p-4 pt-14">
+          <div className="relative w-full max-w-lg h-full bg-orbit-background border-l border-orbit-border shadow-2xl overflow-y-auto p-4 pt-14">
             <button
               type="button"
               onClick={() => setMissionHubOpen(false)}

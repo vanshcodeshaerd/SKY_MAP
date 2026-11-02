@@ -142,22 +142,22 @@ export function SolarDashboard({
   return (
     <div className="space-y-4 pb-12">
       {/* 1. Compact Organized Observatory Toolbar */}
-      <div className="bg-[#111622] border border-[#1e283c] rounded-lg px-4 py-3 flex flex-wrap items-center justify-between gap-3 text-xs">
+      <div className="bg-orbit-card border border-orbit-border rounded-lg px-4 py-3 flex flex-wrap items-center justify-between gap-3 text-xs">
         {/* Left: Mode Toggle & UTC Time */}
         <div className="flex flex-wrap items-center gap-3">
           <button
             onClick={() => setIsLive(!isLive)}
             className={`min-h-[34px] px-3 py-1.5 rounded-md font-medium flex items-center gap-2 transition ${
               isLive
-                ? 'bg-[#182234] text-amber-300 border border-amber-500/50 shadow-sm'
-                : 'bg-[#161d2c] text-slate-300 hover:bg-[#1a2335] border border-[#1e283c]'
+                ? 'bg-orbit-elevated text-amber-300 border border-amber-500/50 shadow-sm'
+                : 'bg-orbit-elevated text-slate-300 hover:bg-orbit-elevated border border-orbit-border'
             }`}
           >
             <span className={`w-2 h-2 rounded-full ${isLive ? 'bg-amber-400' : 'bg-slate-500'}`} />
             <span>{isLive ? 'Real-Time Tracking' : 'Simulation Mode'}</span>
           </button>
 
-          <div className="flex items-center gap-2 text-slate-300 font-mono tabular-nums text-[11px] bg-[#0c1018] px-2.5 py-1.5 rounded border border-[#1a2233]">
+          <div className="flex items-center gap-2 text-slate-300 font-mono tabular-nums text-[11px] bg-orbit-background px-2.5 py-1.5 rounded border border-orbit-border">
             <Clock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
             <span>UTC: {currentDate.toISOString().replace('T', ' ').slice(0, 19)}</span>
           </div>
@@ -183,14 +183,14 @@ export function SolarDashboard({
               const d = new Date(e.target.value);
               if (!isNaN(d.getTime())) setCurrentDate(d);
             }}
-            className="bg-[#0c1018] border border-[#1e283c] rounded px-2.5 py-1 text-slate-200 font-mono tabular-nums text-xs focus:border-amber-500 focus:outline-none"
+            className="bg-orbit-background border border-orbit-border rounded px-2.5 py-1 text-slate-200 font-mono tabular-nums text-xs focus:border-amber-500 focus:outline-none"
             aria-label="Simulation Time Selector"
           />
         </div>
       </div>
 
       {/* 2. Cohesive Celestial Object Selector Bar */}
-      <div className="bg-[#111622] border border-[#1e283c] rounded-lg p-3">
+      <div className="bg-orbit-card border border-orbit-border rounded-lg p-3">
         <div className="flex items-center justify-between text-xs mb-2 px-0.5">
           <span className="font-semibold text-slate-300 text-[11px] uppercase tracking-wider">
             Celestial Body Selector
@@ -207,7 +207,7 @@ export function SolarDashboard({
       </div>
 
       {/* 3. Selected Celestial Body Visual Anchor Card */}
-      <div className="bg-[#111622] border border-[#1e283c] rounded-lg p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-5">
+      <div className="bg-orbit-card border border-orbit-border rounded-lg p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-5">
         <div className="flex items-center gap-4">
           {/* Realistic Thumbnail Disc */}
           <div className="w-16 h-16 rounded-full overflow-hidden shrink-0 bg-black/60 border border-white/15 flex items-center justify-center shadow-lg">
@@ -225,14 +225,14 @@ export function SolarDashboard({
           <div>
             <div className="flex items-center gap-2.5">
               <h2 className="text-xl font-bold tracking-tight text-slate-100">{activeMeta.name}</h2>
-              <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-[#161d2c] text-slate-300 border border-[#253147]">
+              <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-orbit-elevated text-slate-300 border border-orbit-border">
                 {activeMeta.category.replace('_', ' ')}
               </span>
               <span
                 className={`text-[11px] font-medium px-2.5 py-0.5 rounded flex items-center gap-1.5 border ${
                   coords.isAboveHorizon
                     ? 'bg-emerald-950/40 text-emerald-300 border-emerald-800/60'
-                    : 'bg-[#161d2c] text-slate-400 border-[#253147]'
+                    : 'bg-orbit-elevated text-slate-400 border-orbit-border'
                 }`}
               >
                 {coords.isAboveHorizon ? (
@@ -256,7 +256,7 @@ export function SolarDashboard({
 
         {/* Phase / Illumination Status if present */}
         {coords.phaseFraction !== undefined && (
-          <div className="bg-[#0c1018] px-4 py-2.5 rounded-md border border-[#1e283c] text-right shrink-0">
+          <div className="bg-orbit-background px-4 py-2.5 rounded-md border border-orbit-border text-right shrink-0">
             <span className="text-[10px] text-slate-400 font-mono uppercase block tracking-wider">Illumination</span>
             <span className="text-lg font-bold font-mono tabular-nums text-amber-300">
               {Math.round(coords.phaseFraction * 100)}%
@@ -271,13 +271,13 @@ export function SolarDashboard({
       {/* 4. Grouped Aligned Measurement Area */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         {/* Azimuth Card */}
-        <div className="bg-[#111622] border border-[#1e283c] rounded-lg p-4">
+        <div className="bg-orbit-card border border-orbit-border rounded-lg p-4">
           <div className="flex items-center justify-between text-slate-400 mb-1.5">
             <span className="text-[11px] font-semibold uppercase tracking-wider flex items-center gap-1.5">
               <Compass className="w-3.5 h-3.5 text-amber-400" />
               <span>Azimuth</span>
             </span>
-            <span className="font-mono text-[11px] bg-[#161d2c] px-2 py-0.5 rounded text-amber-300 border border-[#253147]">
+            <span className="font-mono text-[11px] bg-orbit-elevated px-2 py-0.5 rounded text-amber-300 border border-orbit-border">
               {getCardinal(coords.azimuthDeg)} ({Math.round(coords.azimuthDeg)}°)
             </span>
           </div>
@@ -293,7 +293,7 @@ export function SolarDashboard({
         </div>
 
         {/* Altitude Card */}
-        <div className="bg-[#111622] border border-[#1e283c] rounded-lg p-4">
+        <div className="bg-orbit-card border border-orbit-border rounded-lg p-4">
           <div className="flex items-center justify-between text-slate-400 mb-1.5">
             <span className="text-[11px] font-semibold uppercase tracking-wider flex items-center gap-1.5">
               <ArrowUpRight className="w-3.5 h-3.5 text-sky-400" />
@@ -303,7 +303,7 @@ export function SolarDashboard({
               className={`font-mono text-[10px] px-2 py-0.5 rounded border ${
                 coords.isAboveHorizon
                   ? 'bg-emerald-950/40 text-emerald-300 border-emerald-800/60'
-                  : 'bg-[#161d2c] text-slate-400 border-[#253147]'
+                  : 'bg-orbit-elevated text-slate-400 border-orbit-border'
               }`}
             >
               {coords.isAboveHorizon ? 'Above Horizon' : 'Sub-Horizon'}
@@ -326,14 +326,14 @@ export function SolarDashboard({
         </div>
 
         {/* Distance Card */}
-        <div className="bg-[#111622] border border-[#1e283c] rounded-lg p-4">
+        <div className="bg-orbit-card border border-orbit-border rounded-lg p-4">
           <div className="flex items-center justify-between text-slate-400 mb-1.5">
             <span className="text-[11px] font-semibold uppercase tracking-wider flex items-center gap-1.5">
               <Info className="w-3.5 h-3.5 text-slate-400" />
               <span>Distance</span>
             </span>
             {coords.magnitude !== undefined && (
-              <span className="font-mono text-[10px] bg-[#161d2c] px-2 py-0.5 rounded text-slate-300 border border-[#253147]">
+              <span className="font-mono text-[10px] bg-orbit-elevated px-2 py-0.5 rounded text-slate-300 border border-orbit-border">
                 Mag {coords.magnitude.toFixed(1)}
               </span>
             )}
@@ -356,7 +356,7 @@ export function SolarDashboard({
         </div>
 
         {/* Transit Ephemeris Card */}
-        <div className="bg-[#111622] border border-[#1e283c] rounded-lg p-4">
+        <div className="bg-orbit-card border border-orbit-border rounded-lg p-4">
           <span className="text-[11px] font-semibold uppercase tracking-wider flex items-center gap-1.5 text-slate-400 mb-2">
             <Clock className="w-3.5 h-3.5 text-slate-400" />
             <span>Transit Ephemeris</span>
@@ -385,7 +385,7 @@ export function SolarDashboard({
       </div>
 
       {/* 5. Planetary Visibility Matrix Table */}
-      <div className="bg-[#111622] border border-[#1e283c] rounded-lg p-4 space-y-3">
+      <div className="bg-orbit-card border border-orbit-border rounded-lg p-4 space-y-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Eye className="w-4 h-4 text-amber-400" />
@@ -401,7 +401,7 @@ export function SolarDashboard({
         {/* Desktop View: Full Scannable Matrix Table */}
         <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-left text-xs border-collapse">
-            <thead className="bg-[#0c1018] text-slate-400 uppercase text-[10px] tracking-wider font-mono border-b border-[#1e283c]">
+            <thead className="bg-orbit-background text-slate-400 uppercase text-[10px] tracking-wider font-mono border-b border-orbit-border">
               <tr>
                 <th className="py-2 px-3">Celestial Body</th>
                 <th className="py-2 px-3">Type</th>
@@ -412,7 +412,7 @@ export function SolarDashboard({
                 <th className="py-2 px-3 text-right">Action</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-[#1e283c] font-mono text-[11px]">
+            <tbody className="divide-y divide-white/10 font-mono text-[11px]">
               {CELESTIAL_BODY_LIST.map((body) => {
                 const bPos = allPositions[body.id];
                 if (!bPos) return null;
@@ -461,7 +461,7 @@ export function SolarDashboard({
                           <Eye className="w-3 h-3 text-emerald-400" /> Visible
                         </span>
                       ) : (
-                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] bg-[#161d2c] text-slate-500 border border-[#253147] font-sans">
+                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] bg-orbit-elevated text-slate-500 border border-orbit-border font-sans">
                           <EyeOff className="w-3 h-3 text-slate-600" /> Below Horizon
                         </span>
                       )}
@@ -472,7 +472,7 @@ export function SolarDashboard({
                         className={`min-h-[28px] px-2.5 py-1 rounded text-[10px] font-sans font-medium transition ${
                           isTarget
                             ? 'bg-amber-500 text-slate-950 font-bold'
-                            : 'bg-[#161d2c] hover:bg-[#1d273b] text-slate-300 border border-[#253147]'
+                            : 'bg-orbit-elevated hover:bg-orbit-elevated text-slate-300 border border-orbit-border'
                         }`}
                       >
                         {isTarget ? 'Active' : 'Select'}
@@ -500,7 +500,7 @@ export function SolarDashboard({
                 className={`p-3 rounded-lg border transition cursor-pointer ${
                   isTarget
                     ? 'bg-[#162033] border-amber-500/60 shadow-md ring-1 ring-amber-500/20'
-                    : 'bg-[#0d121c] border-[#1e283c] hover:bg-[#131926]'
+                    : 'bg-[#0d121c] border-orbit-border hover:bg-[#131926]'
                 }`}
               >
                 <div className="flex items-center justify-between gap-2">
@@ -537,7 +537,7 @@ export function SolarDashboard({
                           <Eye className="w-2.5 h-2.5" /> Visible
                         </span>
                       ) : (
-                        <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[9px] bg-[#161d2c] text-slate-500 border border-[#253147]">
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[9px] bg-orbit-elevated text-slate-500 border border-orbit-border">
                           <EyeOff className="w-2.5 h-2.5" /> Below
                         </span>
                       )}
@@ -545,7 +545,7 @@ export function SolarDashboard({
                   </div>
                 </div>
 
-                <div className="mt-2 pt-2 border-t border-[#1e283c]/60 flex items-center justify-between text-[10px] font-mono text-slate-400">
+                <div className="mt-2 pt-2 border-t border-orbit-border/60 flex items-center justify-between text-[10px] font-mono text-slate-400">
                   <span>
                     Dist:{' '}
                     <strong className="text-slate-300">
@@ -563,7 +563,7 @@ export function SolarDashboard({
                     className={`min-h-[30px] px-3 py-1 rounded text-[10px] font-sans font-medium transition ${
                       isTarget
                         ? 'bg-amber-500 text-slate-950 font-bold'
-                        : 'bg-[#161d2c] hover:bg-[#1d273b] text-slate-300 border border-[#253147]'
+                        : 'bg-orbit-elevated hover:bg-orbit-elevated text-slate-300 border border-orbit-border'
                     }`}
                   >
                     {isTarget ? 'Active' : 'Select'}
@@ -576,7 +576,7 @@ export function SolarDashboard({
       </div>
 
       {/* 6. Secondary Backend Ephemeris Verification Tool */}
-      <div className="bg-[#111622] border border-[#1e283c] rounded-lg p-4 space-y-3">
+      <div className="bg-orbit-card border border-orbit-border rounded-lg p-4 space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <div className="flex items-center gap-2">
@@ -594,7 +594,7 @@ export function SolarDashboard({
             className={`min-h-[34px] px-3 py-1.5 rounded-md text-xs font-medium transition ${
               compareServer
                 ? 'bg-amber-500 text-slate-950 font-semibold'
-                : 'bg-[#161d2c] text-slate-300 hover:bg-[#1d273b] border border-[#253147]'
+                : 'bg-orbit-elevated text-slate-300 hover:bg-orbit-elevated border border-orbit-border'
             }`}
           >
             {compareServer ? 'Close Benchmark' : 'Run Backend Verification'}
@@ -602,7 +602,7 @@ export function SolarDashboard({
         </div>
 
         {compareServer && (
-          <div className="p-3 rounded-md bg-[#0c1018] border border-[#1e283c] text-xs font-mono space-y-3">
+          <div className="p-3 rounded-md bg-orbit-background border border-orbit-border text-xs font-mono space-y-3">
             {serverLoading && <p className="text-slate-400 animate-pulse">Calculating NASA JPL DE421 ephemeris vector via FastAPI...</p>}
             {serverError && (
               <p className="text-amber-400/90 text-[11px]">
@@ -611,19 +611,19 @@ export function SolarDashboard({
             )}
             {serverCoords && (
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                <div className="bg-[#111622] p-2.5 rounded border border-[#1e283c]">
+                <div className="bg-orbit-card p-2.5 rounded border border-orbit-border">
                   <span className="text-slate-400 text-[10px] block">Client VSOP87 Engine</span>
                   <span className="text-slate-100 font-bold text-xs tabular-nums">
                     Az: {coords.azimuthDeg.toFixed(3)}° | Alt: {coords.altitudeDeg.toFixed(3)}°
                   </span>
                 </div>
-                <div className="bg-[#111622] p-2.5 rounded border border-[#1e283c]">
+                <div className="bg-orbit-card p-2.5 rounded border border-orbit-border">
                   <span className="text-amber-400 text-[10px] block">NASA JPL DE421 Backend</span>
                   <span className="text-amber-300 font-bold text-xs tabular-nums">
                     Az: {serverCoords.azimuthDeg.toFixed(3)}° | Alt: {serverCoords.altitudeDeg.toFixed(3)}°
                   </span>
                 </div>
-                <div className="bg-[#111622] p-2.5 rounded border border-[#1e283c]">
+                <div className="bg-orbit-card p-2.5 rounded border border-orbit-border">
                   <span className="text-emerald-400 text-[10px] block">Angular Residual Delta</span>
                   <span className="text-emerald-300 font-bold text-xs tabular-nums">
                     Δ: {(

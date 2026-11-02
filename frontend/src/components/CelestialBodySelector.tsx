@@ -29,7 +29,7 @@ export function CelestialBodySelector({
               className={`min-h-[44px] px-2.5 py-1.5 rounded-md text-xs font-medium flex items-center gap-2.5 transition-colors border ${
                 isSelected
                   ? 'bg-[#151c2a] border-amber-500/70 text-slate-100 ring-1 ring-amber-500/30'
-                  : 'bg-[#0d121c] hover:bg-[#131926] border-[#1e283c] text-slate-300 hover:text-white'
+                  : 'bg-[#0d121c] hover:bg-[#131926] border-orbit-border text-slate-300 hover:text-white'
               }`}
               title={`${body.name} (${body.category.replace('_', ' ')}): ${
                 isVisible ? 'Above Horizon' : 'Sub-Horizon'

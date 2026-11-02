@@ -209,9 +209,9 @@ export function PlanetDiscoveryModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-[#06080d]/80 backdrop-blur-sm animate-fade-in select-none">
-      <div className="relative w-full max-w-lg bg-[#090d14] border border-[#1e283c] rounded-lg shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+      <div className="relative w-full max-w-lg bg-orbit-background border border-orbit-border rounded-lg shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
         {/* Header Bar */}
-        <div className="flex items-center justify-between p-3.5 border-b border-[#1e283c] bg-[#111622]">
+        <div className="flex items-center justify-between p-3.5 border-b border-orbit-border bg-orbit-card">
           <div className="flex items-center gap-2.5">
             <span className="text-xl select-none">{body.symbol}</span>
             <div>
@@ -226,7 +226,7 @@ export function PlanetDiscoveryModal({
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-md text-slate-400 hover:text-white hover:bg-[#161d2c] transition"
+            className="p-1.5 rounded-md text-slate-400 hover:text-white hover:bg-orbit-elevated transition"
             title="Close Pop-Up and Resume AR Scan"
           >
             <X className="w-5 h-5" />
@@ -236,19 +236,19 @@ export function PlanetDiscoveryModal({
         {/* Scrollable Modal Content */}
         <div className="flex-1 overflow-y-auto p-4 space-y-3.5 scrollbar-thin">
           {/* 3D Interactive Planet Canvas Box */}
-          <div className="relative w-full h-52 rounded-md bg-[#06080d] border border-[#1e283c] flex items-center justify-center overflow-hidden">
+          <div className="relative w-full h-52 rounded-md bg-[#06080d] border border-orbit-border flex items-center justify-center overflow-hidden">
             <div ref={mountRef} className="w-full h-full cursor-grab active:cursor-grabbing" />
-            <div className="absolute bottom-2 left-2.5 text-[10px] text-slate-400 bg-[#0c1018]/90 px-2 py-0.5 rounded border border-[#1e283c] flex items-center gap-1.5 pointer-events-none">
+            <div className="absolute bottom-2 left-2.5 text-[10px] text-slate-400 bg-orbit-background/90 px-2 py-0.5 rounded border border-orbit-border flex items-center gap-1.5 pointer-events-none">
               <Sparkles className="w-3 h-3 text-amber-400" />
               <span>Drag to rotate 3D sphere &bull; 2K NASA texture</span>
             </div>
-            <div className="absolute top-2 right-2.5 text-[10px] text-sky-300 bg-[#0c1018]/90 px-2 py-0.5 rounded border border-[#1e283c] pointer-events-none font-mono tabular-nums">
+            <div className="absolute top-2 right-2.5 text-[10px] text-sky-300 bg-orbit-background/90 px-2 py-0.5 rounded border border-orbit-border pointer-events-none font-mono tabular-nums">
               Tilt: {body.axialTiltDeg}°
             </div>
           </div>
 
           {/* Tab Navigation */}
-          <div className="flex items-center bg-[#111622] p-1 rounded-md border border-[#1e283c] text-xs">
+          <div className="flex items-center bg-orbit-card p-1 rounded-md border border-orbit-border text-xs">
             <button
               onClick={() => setActiveTab('overview')}
               className={`flex-1 min-h-[32px] py-1 rounded text-[11px] font-medium transition flex items-center justify-center gap-1.5 ${
@@ -288,7 +288,7 @@ export function PlanetDiscoveryModal({
           {activeTab === 'overview' && (
             <div className="space-y-3">
               {/* Distance from Earth Callout */}
-              <div className="bg-[#111622] border border-[#1e283c] rounded-md p-3 flex items-center justify-between">
+              <div className="bg-orbit-card border border-orbit-border rounded-md p-3 flex items-center justify-between">
                 <div>
                   <span className="text-[10px] text-slate-400 uppercase tracking-wider font-medium block">
                     Real-Time Distance from Earth
@@ -315,34 +315,34 @@ export function PlanetDiscoveryModal({
 
               {/* Physical Stats Grid */}
               <div className="grid grid-cols-2 gap-2 text-xs">
-                <div className="bg-[#111622] p-2 rounded-md border border-[#1e283c]">
+                <div className="bg-orbit-card p-2 rounded-md border border-orbit-border">
                   <span className="text-[9px] uppercase tracking-wider text-slate-400 block font-medium">Diameter</span>
                   <span className="text-white font-mono tabular-nums">{body.scientificInfo.diameterKm.toLocaleString()} km</span>
                 </div>
-                <div className="bg-[#111622] p-2 rounded-md border border-[#1e283c]">
+                <div className="bg-orbit-card p-2 rounded-md border border-orbit-border">
                   <span className="text-[9px] uppercase tracking-wider text-slate-400 block font-medium">Surface Gravity</span>
                   <span className="text-emerald-400 font-mono tabular-nums">{body.surfaceGravity}</span>
                 </div>
-                <div className="bg-[#111622] p-2 rounded-md border border-[#1e283c]">
+                <div className="bg-orbit-card p-2 rounded-md border border-orbit-border">
                   <span className="text-[9px] uppercase tracking-wider text-slate-400 block font-medium">Day Length (Spin)</span>
                   <span className="text-white font-mono tabular-nums">{body.scientificInfo.dayLength}</span>
                 </div>
-                <div className="bg-[#111622] p-2 rounded-md border border-[#1e283c]">
+                <div className="bg-orbit-card p-2 rounded-md border border-orbit-border">
                   <span className="text-[9px] uppercase tracking-wider text-slate-400 block font-medium">Orbital Year</span>
                   <span className="text-white font-mono tabular-nums">{body.scientificInfo.yearLength}</span>
                 </div>
-                <div className="bg-[#111622] p-2 rounded-md border border-[#1e283c]">
+                <div className="bg-orbit-card p-2 rounded-md border border-orbit-border">
                   <span className="text-[9px] uppercase tracking-wider text-slate-400 block font-medium">Temperature</span>
                   <span className="text-amber-300 font-mono tabular-nums">{body.scientificInfo.temperature}</span>
                 </div>
-                <div className="bg-[#111622] p-2 rounded-md border border-[#1e283c]">
+                <div className="bg-orbit-card p-2 rounded-md border border-orbit-border">
                   <span className="text-[9px] uppercase tracking-wider text-slate-400 block font-medium">Moons</span>
                   <span className="text-sky-300 font-mono tabular-nums">{body.scientificInfo.moons} known</span>
                 </div>
               </div>
 
               {coordinates && (
-                <div className="bg-[#111622] p-2.5 rounded-md border border-[#1e283c] text-[11px] font-mono tabular-nums text-slate-300 flex items-center justify-between">
+                <div className="bg-orbit-card p-2.5 rounded-md border border-orbit-border text-[11px] font-mono tabular-nums text-slate-300 flex items-center justify-between">
                   <span>Current Az: <strong className="text-amber-400">{coordinates.azimuthDeg.toFixed(1)}°</strong></span>
                   <span>Alt: <strong className={coordinates.altitudeDeg >= 0 ? 'text-emerald-400' : 'text-slate-400'}>
                     {coordinates.altitudeDeg >= 0 ? '+' : ''}{coordinates.altitudeDeg.toFixed(1)}°

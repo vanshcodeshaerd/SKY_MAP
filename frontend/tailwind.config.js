@@ -8,21 +8,30 @@ export default {
   theme: {
     extend: {
       colors: {
+        orbit: {
+          background: 'var(--orbit-background)',
+          foreground: 'var(--orbit-foreground)',
+          card: 'var(--orbit-card)',
+          primary: 'var(--orbit-primary)',
+          'primary-foreground': 'var(--orbit-primary-foreground)',
+          muted: 'var(--orbit-muted-foreground)',
+          border: 'var(--orbit-border)',
+        },
         obsidian: {
-          950: '#06080d',
-          900: '#090d14',
-          850: '#0d121c',
-          800: '#121824',
-          750: '#171f2f',
-          700: '#1d273b',
-          600: '#2a3750',
-          border: '#1f293d',
+          950: 'oklch(0.06 0.01 260)',
+          900: 'var(--orbit-background)',
+          850: 'oklch(0.1 0.012 260)',
+          800: 'var(--orbit-card)',
+          750: 'var(--color-obsidian-elevated)',
+          700: 'oklch(0.2 0.02 260)',
+          600: 'oklch(0.28 0.025 260)',
+          border: 'var(--orbit-border)',
         },
         solar: {
-          gold: '#f59e0b',
-          amber: '#d97706',
-          light: '#fbbf24',
-          muted: '#92400e',
+          gold: 'var(--orbit-primary)',
+          amber: 'oklch(0.72 0.12 55)',
+          light: 'oklch(0.85 0.12 80)',
+          muted: 'oklch(0.55 0.1 55)',
         },
         astro: {
           cyan: '#38bdf8',

@@ -23,8 +23,8 @@ export function MissionControlPanel({ onNavigate }: MissionControlPanelProps) {
   };
 
   return (
-    <div className="w-full max-w-3xl mx-auto mb-6 rounded-2xl border border-[#1e283c] bg-[#0c1018]/95 shadow-2xl overflow-hidden">
-      <div className="px-4 sm:px-5 py-4 border-b border-[#1e283c] bg-gradient-to-r from-[#111622] to-[#0f172a]">
+    <div className="w-full max-w-3xl mx-auto mb-6 rounded-2xl border border-orbit-border bg-orbit-background/95 shadow-2xl overflow-hidden">
+      <div className="px-4 sm:px-5 py-4 border-b border-orbit-border bg-gradient-to-r from-orbit-card to-orbit-background">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div>
             <h2 className="text-base font-semibold text-white flex items-center gap-2">
@@ -65,7 +65,7 @@ export function MissionControlPanel({ onNavigate }: MissionControlPanelProps) {
                   : isActive
                   ? 'border-amber-500/50 bg-amber-500/5 ring-1 ring-amber-500/20'
                   : unlocked
-                  ? 'border-[#253147] bg-[#111622]/80'
+                  ? 'border-orbit-border bg-orbit-card/80'
                   : 'border-slate-800 bg-slate-950/50 opacity-70'
               }`}
             >
@@ -121,7 +121,7 @@ export function MissionControlPanel({ onNavigate }: MissionControlPanelProps) {
       </div>
 
       {progress.earnedBadgeIds.length > 0 && (
-        <div className="px-4 sm:px-5 py-4 border-t border-[#1e283c] bg-[#111622]/50">
+        <div className="px-4 sm:px-5 py-4 border-t border-orbit-border bg-orbit-card/50">
           <p className="text-xs font-semibold text-slate-300 flex items-center gap-1.5 mb-2">
             <Award className="w-4 h-4 text-amber-400" />
             Your badges
@@ -134,7 +134,7 @@ export function MissionControlPanel({ onNavigate }: MissionControlPanelProps) {
                 <div
                   key={badgeId}
                   title={badge.description}
-                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#161d2c] border border-[#253147] text-[11px] text-slate-200"
+                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-orbit-elevated border border-orbit-border text-[11px] text-slate-200"
                 >
                   <span>{badge.emoji}</span>
                   <span>{badge.title}</span>
@@ -148,7 +148,7 @@ export function MissionControlPanel({ onNavigate }: MissionControlPanelProps) {
         </div>
       )}
 
-      <div className="px-4 sm:px-5 py-3 border-t border-[#1e283c] bg-[#0c1018]/80 flex justify-end">
+      <div className="px-4 sm:px-5 py-3 border-t border-orbit-border bg-orbit-background/80 flex justify-end">
         <button
           type="button"
           onClick={exportProgressCsv}

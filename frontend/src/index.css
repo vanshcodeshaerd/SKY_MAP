@@ -3,13 +3,24 @@
 @tailwind utilities;
 
 :root {
-  --color-obsidian-bg: #090d14;
-  --color-obsidian-surface: #111622;
-  --color-obsidian-elevated: #161d2c;
-  --color-border-subtle: #1e283c;
-  --color-solar-gold: #f59e0b;
+  /* Welcome / app-wide Orbitarium theme */
+  --orbit-background: oklch(0.08 0.01 260);
+  --orbit-foreground: oklch(0.96 0.01 80);
+  --orbit-card: oklch(0.14 0.015 260);
+  --orbit-card-foreground: oklch(0.97 0.01 80);
+  --orbit-primary: oklch(0.8 0.13 70);
+  --orbit-primary-foreground: oklch(0.12 0.01 260);
+  --orbit-muted-foreground: oklch(0.72 0.02 250);
+  --orbit-border: oklch(1 0 0 / 14%);
+
+  /* Legacy observatory aliases (same palette) */
+  --color-obsidian-bg: var(--orbit-background);
+  --color-obsidian-surface: var(--orbit-card);
+  --color-obsidian-elevated: oklch(0.16 0.015 260);
+  --color-border-subtle: var(--orbit-border);
+  --color-solar-gold: var(--orbit-primary);
   --color-coord-cyan: #38bdf8;
-  --color-silver-muted: #94a3b8;
+  --color-silver-muted: var(--orbit-muted-foreground);
 }
 
 @layer base {
@@ -21,8 +32,8 @@
   }
 
   body {
-    background-color: var(--color-obsidian-bg);
-    color: #f1f5f9;
+    background-color: var(--orbit-background);
+    color: var(--orbit-foreground);
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     letter-spacing: -0.011em;
     -webkit-font-smoothing: antialiased;
@@ -66,16 +77,33 @@
   }
 }
 
-/* Orbitarium Planet Atlas theme (scoped to welcome landing) */
+/* App shell — same atmosphere as welcome (no extra “panel” background) */
+.skymap-app-shell {
+  background-color: var(--orbit-background);
+  color: var(--orbit-foreground);
+  background-image: radial-gradient(
+    ellipse 100% 70% at 85% 15%,
+    oklch(0.14 0.03 270 / 35%) 0%,
+    transparent 55%
+  );
+}
+
+.skymap-page-title {
+  font-family: 'Plus Jakarta Sans', 'Inter', sans-serif;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--orbit-foreground);
+}
+
+.skymap-page-kicker {
+  font-size: 0.6875rem;
+  letter-spacing: 0.35em;
+  text-transform: uppercase;
+  color: var(--orbit-primary);
+}
+
 .orbitarium-root {
-  --orbit-background: oklch(0.08 0.01 260);
-  --orbit-foreground: oklch(0.96 0.01 80);
-  --orbit-card: oklch(0.14 0.015 260);
-  --orbit-card-foreground: oklch(0.97 0.01 80);
-  --orbit-primary: oklch(0.8 0.13 70);
-  --orbit-primary-foreground: oklch(0.12 0.01 260);
-  --orbit-muted-foreground: oklch(0.72 0.02 250);
-  --orbit-border: oklch(1 0 0 / 14%);
+  /* inherits :root tokens */
 }
 
 .bg-orbit-background {
@@ -98,6 +126,12 @@
 }
 .bg-orbit-primary {
   background-color: var(--orbit-primary);
+}
+.bg-orbit-card {
+  background-color: var(--orbit-card);
+}
+.bg-orbit-elevated {
+  background-color: var(--color-obsidian-elevated);
 }
 .bg-orbit-card-80 {
   background-color: color-mix(in oklch, var(--orbit-card) 80%, transparent);
@@ -180,34 +214,34 @@
 }
 
 .observatory-panel {
-  background-color: #111622;
-  border: 1px solid #1e283c;
+  background-color: var(--orbit-card);
+  border: 1px solid var(--orbit-border);
   border-radius: 8px;
 }
 
 .observatory-panel-elevated {
-  background-color: #161d2c;
-  border: 1px solid #253147;
+  background-color: var(--color-obsidian-elevated);
+  border: 1px solid var(--orbit-border);
   border-radius: 8px;
 }
 
 .observatory-panel-interactive {
-  background-color: #111622;
-  border: 1px solid #1e283c;
+  background-color: var(--orbit-card);
+  border: 1px solid var(--orbit-border);
   border-radius: 8px;
   transition: border-color 150ms ease, background-color 150ms ease;
 }
 
 .observatory-panel-interactive:hover {
-  background-color: #141a27;
-  border-color: #2b3952;
+  background-color: color-mix(in oklch, var(--orbit-card) 90%, var(--orbit-primary) 5%);
+  border-color: color-mix(in oklch, var(--orbit-primary) 35%, var(--orbit-border));
 }
 
 /* Restrained selection indicator */
 .observatory-selected {
-  background-color: #141c2a;
-  border-color: rgba(245, 158, 11, 0.6);
-  box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.25);
+  background-color: color-mix(in oklch, var(--orbit-card) 85%, var(--orbit-primary) 8%);
+  border-color: color-mix(in oklch, var(--orbit-primary) 60%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in oklch, var(--orbit-primary) 25%, transparent);
 }
 
 /* Clean scrollbars */
@@ -216,14 +250,14 @@
   height: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: #090d14;
+  background: var(--orbit-background);
 }
 ::-webkit-scrollbar-thumb {
-  background: #1e283c;
+  background: color-mix(in oklch, var(--orbit-card) 80%, white 8%);
   border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #2b3952;
+  background: color-mix(in oklch, var(--orbit-primary) 25%, var(--orbit-card));
 }
 
 /* ==========================================================================

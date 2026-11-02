@@ -16,7 +16,7 @@ export function MobileBottomNav({ activeTab, setActiveTab }: MobileBottomNavProp
 
   return (
     <nav
-      className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-[#090d14]/95 backdrop-blur-lg border-t border-[#1e283c] px-2 pt-1 pb-[calc(env(safe-area-inset-bottom,0px)+0.35rem)] shadow-2xl"
+      className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-orbit-background/95 backdrop-blur-lg border-t border-orbit-border px-2 pt-1 pb-[calc(env(safe-area-inset-bottom,0px)+0.35rem)] shadow-2xl"
       aria-label="Mobile Bottom Navigation"
     >
       <div className="flex items-center justify-around max-w-lg mx-auto">
@@ -30,14 +30,14 @@ export function MobileBottomNav({ activeTab, setActiveTab }: MobileBottomNavProp
               onClick={() => setActiveTab(tab.id)}
               className={`flex-1 min-h-[50px] flex flex-col items-center justify-center py-1 px-1 rounded-xl transition-all duration-150 select-none active:scale-95 ${
                 isActive
-                  ? 'text-amber-400 font-semibold'
-                  : 'text-slate-400 hover:text-slate-200 active:text-slate-100'
+                  ? 'text-orbit-primary font-semibold'
+                  : 'text-orbit-muted-foreground hover:text-orbit-foreground active:text-orbit-foreground'
               }`}
               aria-current={isActive ? 'page' : undefined}
             >
               <div
                 className={`relative p-1 rounded-lg transition-colors ${
-                  isActive ? 'bg-amber-500/15' : 'bg-transparent'
+                  isActive ? 'bg-orbit-primary/15' : 'bg-transparent'
                 }`}
               >
                 <Icon
@@ -46,7 +46,7 @@ export function MobileBottomNav({ activeTab, setActiveTab }: MobileBottomNavProp
                   }`}
                 />
                 {isActive && (
-                  <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-amber-400 ring-2 ring-[#090d14]" />
+                  <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-orbit-primary ring-2 ring-orbit-background" />
                 )}
               </div>
               <span className="text-[10px] tracking-tight mt-0.5 leading-none font-medium">

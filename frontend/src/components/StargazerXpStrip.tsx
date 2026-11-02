@@ -6,7 +6,7 @@ export function StargazerXpStrip() {
   const { level, pct } = xpLevelProgress;
 
   return (
-    <div className="w-full max-w-2xl mx-auto mb-4 rounded-xl border border-violet-500/25 bg-[#111622]/90 px-4 py-3 shadow-lg">
+    <div className="w-full max-w-2xl mx-auto mb-4 rounded-xl border border-violet-500/25 bg-orbit-card/90 px-4 py-3 shadow-lg">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
         <div>
           <p className="text-[11px] uppercase tracking-wide text-violet-400/90 font-semibold flex items-center gap-1">

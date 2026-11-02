@@ -1274,7 +1274,7 @@ export function ThreeSkyExplorer({
   return (
     <div className="space-y-4">
       {/* Planetary Carousel Selector Bar */}
-      <div className="bg-[#111622] border border-[#1e283c] rounded-lg p-3 space-y-2">
+      <div className="bg-orbit-card border border-orbit-border rounded-lg p-3 space-y-2">
         <div className="flex items-center justify-between text-xs px-0.5 text-slate-400">
           <span className="font-semibold text-slate-300 text-[11px] uppercase tracking-wider flex items-center gap-1.5">
             <Sparkles className="w-3.5 h-3.5 text-amber-400" />
@@ -1293,9 +1293,9 @@ export function ThreeSkyExplorer({
 
       {/* Sub-Horizon Notice */}
       {isBelowHorizon && (
-        <div className="bg-[#111622] border border-[#1e283c] rounded-lg p-3.5 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-300">
+        <div className="bg-orbit-card border border-orbit-border rounded-lg p-3.5 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-300">
           <div className="flex items-center gap-3">
-            <div className="p-2 rounded-md bg-[#161d2c] text-slate-400 border border-[#253147]">
+            <div className="p-2 rounded-md bg-orbit-elevated text-slate-400 border border-orbit-border">
               <AlertCircle className="w-4 h-4 text-amber-400" />
             </div>
             <div>
@@ -1318,12 +1318,12 @@ export function ThreeSkyExplorer({
       )}
 
       {/* 3D Viewport Card - Full-Bleed Digital Observatory Canvas */}
-      <div className="rounded-lg overflow-hidden relative border border-[#1e283c] bg-[#06080d] h-[60vh] sm:h-[65vh] min-h-[380px] sm:min-h-[440px] max-h-[720px]">
+      <div className="rounded-lg overflow-hidden relative border border-orbit-border bg-[#06080d] h-[60vh] sm:h-[65vh] min-h-[380px] sm:min-h-[440px] max-h-[720px]">
         {/* Top Info & Mode Controls Bar - Combined flex wrapper prevents any collision */}
         <div className="absolute top-2 left-2 right-2 sm:top-3 sm:left-3 sm:right-3 z-20 flex items-start justify-between gap-1.5 sm:gap-2 pointer-events-none">
           {/* Top Left: Coordinates & Planet Scientific Dossier Toggle */}
           <div className="pointer-events-auto flex flex-col items-start gap-1 max-w-[48%] sm:max-w-xs shrink-0">
-            <div className="bg-[#0c1018]/95 px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-md border border-[#1e283c] text-xs shadow-lg w-full">
+            <div className="bg-orbit-background/95 px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-md border border-orbit-border text-xs shadow-lg w-full">
               <div className="flex items-center justify-between gap-1 sm:gap-2">
                 <div className="flex items-center gap-1 sm:gap-1.5 text-slate-100 font-semibold truncate">
                   <Compass className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-amber-400 shrink-0" />
@@ -1333,7 +1333,7 @@ export function ThreeSkyExplorer({
                   <span
                     className={`px-1.5 py-0.2 rounded text-[8px] sm:text-[9px] uppercase font-bold hidden xs:inline-block sm:inline-block ${
                       isBelowHorizon
-                        ? 'bg-[#161d2c] text-slate-400 border border-[#253147]'
+                        ? 'bg-orbit-elevated text-slate-400 border border-orbit-border'
                         : 'bg-emerald-950/40 text-emerald-300 border border-emerald-800/60'
                     }`}
                   >
@@ -1345,7 +1345,7 @@ export function ThreeSkyExplorer({
                   className={`min-h-[26px] px-1.5 sm:px-2 py-0.5 rounded text-[9px] sm:text-[10px] font-medium flex items-center gap-1 transition shrink-0 ${
                     showDossier
                       ? 'bg-amber-500 text-slate-950 shadow-sm'
-                      : 'bg-[#161d2c] text-amber-400 border border-amber-500/30 hover:bg-[#1d273b]'
+                      : 'bg-orbit-elevated text-amber-400 border border-amber-500/30 hover:bg-orbit-elevated'
                   }`}
                   title="Scientific Planet Dossier & Facts"
                 >
@@ -1377,42 +1377,42 @@ export function ThreeSkyExplorer({
 
             {/* Planet Dossier / Scientific Fact Card */}
             {showDossier && activeBodyMeta.scientificInfo && (
-              <div className="bg-[#0c1018]/98 p-3 rounded-md border border-[#1e283c] text-xs shadow-2xl w-full max-w-sm space-y-2 text-slate-200">
-                <div className="flex items-center justify-between border-b border-[#1e283c] pb-1.5">
+              <div className="bg-orbit-background/98 p-3 rounded-md border border-orbit-border text-xs shadow-2xl w-full max-w-sm space-y-2 text-slate-200">
+                <div className="flex items-center justify-between border-b border-orbit-border pb-1.5">
                   <div>
                     <h4 className="font-semibold text-white text-xs">{activeBodyMeta.name} Science Dossier</h4>
                     <span className="text-[10px] text-amber-400 font-mono">{activeBodyMeta.scientificInfo.type}</span>
                   </div>
                   <button
                     onClick={() => setShowDossier(false)}
-                    className="text-slate-400 hover:text-white p-0.5 rounded hover:bg-[#161d2c]"
+                    className="text-slate-400 hover:text-white p-0.5 rounded hover:bg-orbit-elevated"
                   >
                     ✕
                   </button>
                 </div>
 
                 <div className="grid grid-cols-2 gap-1.5 text-[10px]">
-                  <div className="bg-[#111622] p-1.5 rounded border border-[#1e283c]">
+                  <div className="bg-orbit-card p-1.5 rounded border border-orbit-border">
                     <span className="text-[9px] uppercase tracking-wider text-slate-400 block font-medium">Diameter</span>
                     <span className="text-white font-mono tabular-nums">{activeBodyMeta.scientificInfo.diameterKm.toLocaleString()} km</span>
                   </div>
-                  <div className="bg-[#111622] p-1.5 rounded border border-[#1e283c]">
+                  <div className="bg-orbit-card p-1.5 rounded border border-orbit-border">
                     <span className="text-[9px] uppercase tracking-wider text-slate-400 block font-medium">Distance from Sun</span>
                     <span className="text-white font-mono tabular-nums">{activeBodyMeta.scientificInfo.distanceFromSunKm}</span>
                   </div>
-                  <div className="bg-[#111622] p-1.5 rounded border border-[#1e283c]">
+                  <div className="bg-orbit-card p-1.5 rounded border border-orbit-border">
                     <span className="text-[9px] uppercase tracking-wider text-slate-400 block font-medium">Rotation (Day)</span>
                     <span className="text-white font-mono tabular-nums">{activeBodyMeta.scientificInfo.dayLength}</span>
                   </div>
-                  <div className="bg-[#111622] p-1.5 rounded border border-[#1e283c]">
+                  <div className="bg-orbit-card p-1.5 rounded border border-orbit-border">
                     <span className="text-[9px] uppercase tracking-wider text-slate-400 block font-medium">Orbital Period (Year)</span>
                     <span className="text-white font-mono tabular-nums">{activeBodyMeta.scientificInfo.yearLength}</span>
                   </div>
-                  <div className="bg-[#111622] p-1.5 rounded border border-[#1e283c]">
+                  <div className="bg-orbit-card p-1.5 rounded border border-orbit-border">
                     <span className="text-[9px] uppercase tracking-wider text-slate-400 block font-medium">Temperature</span>
                     <span className="text-amber-300 font-mono tabular-nums">{activeBodyMeta.scientificInfo.temperature}</span>
                   </div>
-                  <div className="bg-[#111622] p-1.5 rounded border border-[#1e283c]">
+                  <div className="bg-orbit-card p-1.5 rounded border border-orbit-border">
                     <span className="text-[9px] uppercase tracking-wider text-slate-400 block font-medium">Moons & Tilt</span>
                     <span className="text-sky-300 font-mono tabular-nums">
                       {activeBodyMeta.scientificInfo.moons} moons &bull; {activeBodyMeta.axialTiltDeg}°
@@ -1429,9 +1429,9 @@ export function ThreeSkyExplorer({
 
           {/* Top Right: Mode Switcher & Quick Camera Controls */}
           {perspectiveMode === 'map' && (
-            <div className="pointer-events-auto bg-[#0c1018]/95 p-1 rounded-md border border-[#1e283c] flex items-center gap-1 shadow-lg max-w-[50%] sm:max-w-none overflow-x-auto scrollbar-none flex-nowrap shrink">
+            <div className="pointer-events-auto bg-orbit-background/95 p-1 rounded-md border border-orbit-border flex items-center gap-1 shadow-lg max-w-[50%] sm:max-w-none overflow-x-auto scrollbar-none flex-nowrap shrink">
               {/* Perspective Mode Switcher */}
-              <div className="flex items-center bg-[#111622] rounded p-0.5 border border-[#1e283c] mr-1 shrink-0">
+              <div className="flex items-center bg-orbit-card rounded p-0.5 border border-orbit-border mr-1 shrink-0">
                 <button
                   onClick={() => setPerspectiveMode('map')}
                   className="min-h-[28px] px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-500 text-slate-950 flex items-center gap-1 transition whitespace-nowrap"
@@ -1451,7 +1451,7 @@ export function ThreeSkyExplorer({
               </div>
 
               {/* Scale Mode Selector */}
-              <div className="flex items-center bg-[#111622] rounded p-0.5 border border-[#1e283c] mr-1">
+              <div className="flex items-center bg-orbit-card rounded p-0.5 border border-orbit-border mr-1">
                 <button
                   onClick={() => setScaleMode('dome')}
                   className={`min-h-[28px] px-2 py-0.5 rounded text-[10px] font-medium transition whitespace-nowrap ${
@@ -1478,13 +1478,13 @@ export function ThreeSkyExplorer({
 
               <button
                 onClick={() => setCameraView('default')}
-                className="min-h-[28px] px-2 py-0.5 rounded text-[10px] font-medium text-slate-300 hover:bg-[#161d2c] hover:text-white transition whitespace-nowrap"
+                className="min-h-[28px] px-2 py-0.5 rounded text-[10px] font-medium text-slate-300 hover:bg-orbit-elevated hover:text-white transition whitespace-nowrap"
               >
                 45° Orbit
               </button>
               <button
                 onClick={() => setCameraView('avatarCenter')}
-                className="min-h-[28px] px-2 py-0.5 rounded text-[10px] font-medium text-sky-300 hover:bg-[#161d2c] border border-sky-500/30 transition whitespace-nowrap flex items-center gap-1"
+                className="min-h-[28px] px-2 py-0.5 rounded text-[10px] font-medium text-sky-300 hover:bg-orbit-elevated border border-sky-500/30 transition whitespace-nowrap flex items-center gap-1"
                 title="Focus on Stargazer Person"
               >
                 <User className="w-3 h-3 text-sky-400" />
@@ -1492,7 +1492,7 @@ export function ThreeSkyExplorer({
               </button>
               <button
                 onClick={() => setCameraView('focusBody')}
-                className="min-h-[28px] px-2 py-0.5 rounded text-[10px] font-medium text-amber-300 hover:bg-[#161d2c] border border-amber-500/30 transition whitespace-nowrap"
+                className="min-h-[28px] px-2 py-0.5 rounded text-[10px] font-medium text-amber-300 hover:bg-orbit-elevated border border-amber-500/30 transition whitespace-nowrap"
               >
                 Focus
               </button>
@@ -1501,7 +1501,7 @@ export function ThreeSkyExplorer({
                 className={`min-h-[28px] px-2 py-0.5 rounded text-[10px] font-medium transition flex items-center gap-1 whitespace-nowrap ${
                   isCloseUp
                     ? 'bg-amber-500 text-slate-950 font-semibold'
-                    : 'text-amber-400 hover:bg-[#161d2c] border border-amber-500/30'
+                    : 'text-amber-400 hover:bg-orbit-elevated border border-amber-500/30'
                 }`}
                 title="Inspect 3D Surface"
               >
@@ -1533,7 +1533,7 @@ export function ThreeSkyExplorer({
                 className={`min-h-[28px] px-2 py-0.5 rounded text-[10px] font-medium transition flex items-center gap-1 whitespace-nowrap ${
                   showSpatialGuide
                     ? 'bg-sky-500 text-slate-950 font-semibold'
-                    : 'text-sky-300 hover:bg-[#161d2c] border border-sky-500/30'
+                    : 'text-sky-300 hover:bg-orbit-elevated border border-sky-500/30'
                 }`}
                 title="How to Read Spatial 3D Map"
               >
@@ -1639,15 +1639,15 @@ export function ThreeSkyExplorer({
 
         {/* Spatial Guide Overlay Card */}
         {showSpatialGuide && (
-          <div className="absolute top-16 right-3 z-30 bg-[#0c1018]/98 p-3.5 rounded-md border border-[#1e283c] text-xs shadow-2xl max-w-xs space-y-2 text-slate-200">
-            <div className="flex items-center justify-between border-b border-[#1e283c] pb-1.5">
+          <div className="absolute top-16 right-3 z-30 bg-orbit-background/98 p-3.5 rounded-md border border-orbit-border text-xs shadow-2xl max-w-xs space-y-2 text-slate-200">
+            <div className="flex items-center justify-between border-b border-orbit-border pb-1.5">
               <span className="font-semibold text-slate-200 flex items-center gap-1.5 text-xs">
                 <Info className="w-3.5 h-3.5 text-amber-400" />
                 <span>3D Celestial Map Guide</span>
               </span>
               <button
                 onClick={() => setShowSpatialGuide(false)}
-                className="text-slate-400 hover:text-white p-0.5 rounded hover:bg-[#161d2c]"
+                className="text-slate-400 hover:text-white p-0.5 rounded hover:bg-orbit-elevated"
               >
                 ✕
               </button>
@@ -1692,14 +1692,14 @@ export function ThreeSkyExplorer({
         )}
 
         {/* Orbit Control Hint */}
-        <div className="absolute bottom-3 left-3 z-10 bg-[#0c1018]/90 px-2.5 py-1 rounded border border-[#1e283c] text-[10px] text-slate-300 flex items-center gap-1.5 shadow">
+        <div className="absolute bottom-3 left-3 z-10 bg-orbit-background/90 px-2.5 py-1 rounded border border-orbit-border text-[10px] text-slate-300 flex items-center gap-1.5 shadow">
           <Eye className="w-3 h-3 text-amber-400" />
           <span className="hidden sm:inline">Drag to Orbit 360° &bull; Scroll to Zoom &bull; Click Planet to Target</span>
           <span className="sm:hidden">Touch & Drag to Orbit 360°</span>
         </div>
 
         {/* Ground Mode Toggle */}
-        <div className="absolute bottom-3 right-3 z-10 bg-[#0c1018]/90 px-2 py-1 rounded border border-[#1e283c] flex items-center gap-1.5 text-[11px] text-slate-400 shadow">
+        <div className="absolute bottom-3 right-3 z-10 bg-orbit-background/90 px-2 py-1 rounded border border-orbit-border flex items-center gap-1.5 text-[11px] text-slate-400 shadow">
           <Layers className="w-3 h-3 text-sky-400" />
           <span className="text-[10px]">Ground:</span>
           {(['translucent', 'solid', 'wireframe'] as const).map((mode) => (
@@ -1726,7 +1726,7 @@ export function ThreeSkyExplorer({
       </div>
 
       {/* Interactive 24-Hour Time Slider & Motion Controls */}
-      <div className="bg-[#111622] border border-[#1e283c] rounded-lg p-3.5 space-y-3">
+      <div className="bg-orbit-card border border-orbit-border rounded-lg p-3.5 space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2.5">
             <button
@@ -1734,7 +1734,7 @@ export function ThreeSkyExplorer({
               className={`min-h-[32px] px-3 py-1 rounded-md text-xs font-medium flex items-center gap-1.5 transition ${
                 isPlaying
                   ? 'bg-amber-500 text-slate-950 font-semibold shadow-sm'
-                  : 'bg-[#161d2c] text-slate-200 hover:bg-[#1d273b] border border-[#253147]'
+                  : 'bg-orbit-elevated text-slate-200 hover:bg-orbit-elevated border border-orbit-border'
               }`}
             >
               {isPlaying ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5 fill-current" />}
@@ -1767,7 +1767,7 @@ export function ThreeSkyExplorer({
               className={`min-h-[32px] px-2.5 py-1 rounded-md text-xs font-medium flex items-center gap-1.5 transition ${
                 isLive
                   ? 'bg-emerald-950/40 text-emerald-300 border border-emerald-800/60'
-                  : 'bg-[#161d2c] text-slate-400 hover:text-slate-200 border border-[#253147]'
+                  : 'bg-orbit-elevated text-slate-400 hover:text-slate-200 border border-orbit-border'
               }`}
             >
               <span className={`w-2 h-2 rounded-full ${isLive ? 'bg-emerald-400' : 'bg-slate-500'}`} />
@@ -1780,7 +1780,7 @@ export function ThreeSkyExplorer({
             <button
               onClick={() => jumpToTime(bodyEvents.riseUtc)}
               disabled={!bodyEvents.riseUtc}
-              className="min-h-[32px] px-2.5 py-1 rounded-md text-xs bg-[#161d2c] border border-[#253147] hover:border-amber-500/40 text-slate-300 hover:text-amber-300 flex items-center gap-1.5 transition disabled:opacity-40"
+              className="min-h-[32px] px-2.5 py-1 rounded-md text-xs bg-orbit-elevated border border-orbit-border hover:border-amber-500/40 text-slate-300 hover:text-amber-300 flex items-center gap-1.5 transition disabled:opacity-40"
             >
               <Sunrise className="w-3.5 h-3.5 text-amber-400" />
               <span>{activeBodyMeta.name} Rise</span>
@@ -1798,7 +1798,7 @@ export function ThreeSkyExplorer({
             <button
               onClick={() => jumpToTime(bodyEvents.setUtc)}
               disabled={!bodyEvents.setUtc}
-              className="min-h-[32px] px-2.5 py-1 rounded-md text-xs bg-[#161d2c] border border-[#253147] hover:border-amber-500/40 text-slate-300 hover:text-amber-300 flex items-center gap-1.5 transition disabled:opacity-40"
+              className="min-h-[32px] px-2.5 py-1 rounded-md text-xs bg-orbit-elevated border border-orbit-border hover:border-amber-500/40 text-slate-300 hover:text-amber-300 flex items-center gap-1.5 transition disabled:opacity-40"
             >
               <Sunset className="w-3.5 h-3.5 text-amber-500" />
               <span>{activeBodyMeta.name} Set</span>
@@ -1827,7 +1827,7 @@ export function ThreeSkyExplorer({
               step={1}
               value={Math.round(currentMinutes)}
               onChange={(e) => handleSliderChange(Number(e.target.value))}
-              className="w-full h-1.5 bg-[#0c1018] rounded appearance-none cursor-pointer accent-amber-500 focus:outline-none"
+              className="w-full h-1.5 bg-orbit-background rounded appearance-none cursor-pointer accent-amber-500 focus:outline-none"
             />
           </div>
 

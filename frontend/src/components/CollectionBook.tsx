@@ -7,7 +7,7 @@ export function CollectionBook() {
   const discovered = new Set(progress.discoveredBodyIds);
 
   return (
-    <div className="w-full max-w-3xl mx-auto mb-6 rounded-xl border border-[#1e283c] bg-[#111622]/80 p-4">
+    <div className="w-full max-w-3xl mx-auto mb-6 rounded-xl border border-orbit-border bg-orbit-card/80 p-4">
       <p className="text-xs font-semibold text-slate-200 mb-1">Planet collection book</p>
       <p className="text-[11px] text-slate-500 mb-3">
         Discover bodies in AR (TARGET LOCKED). {discovered.size}/{CELESTIAL_BODY_LIST.length}{' '}

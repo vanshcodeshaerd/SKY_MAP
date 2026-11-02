@@ -803,7 +803,7 @@ export function ARSkyView({
         onPointerCancel={handlePointerUp}
         style={{ touchAction: 'none' }}
         className={`relative w-full h-[68vh] min-h-[440px] max-h-[720px] rounded-lg overflow-hidden shadow-2xl border transition-colors select-none cursor-grab active:cursor-grabbing ${
-          nightVisionMode ? 'bg-[#180a0a] border-red-900/60' : 'bg-[#06080d] border-[#1e283c]'
+          nightVisionMode ? 'bg-[#180a0a] border-red-900/60' : 'bg-[#06080d] border-orbit-border'
         }`}
       >
         {/* Layer 1: Real-World Video Feed (AR Mode) */}
@@ -1012,7 +1012,7 @@ export function ARSkyView({
                 ? 'bg-[#0f1f1a] border-emerald-500 text-emerald-300 ring-1 ring-emerald-500/40'
                 : isCurrentNear
                 ? 'bg-[#1f1910] border-amber-500/60 text-amber-300'
-                : 'bg-[#0c1018]/95 border-[#1e283c] text-sky-300'
+                : 'bg-orbit-background/95 border-orbit-border text-sky-300'
             }`}
           >
             {isCurrentLocked ? (
@@ -1060,7 +1060,7 @@ export function ARSkyView({
 
           {/* Close Cluster / Conjunction Disambiguation Selector */}
           {nearbyClusterBodies.length > 0 && (
-            <div className="bg-[#0c1018]/98 px-2.5 py-1 rounded-md border border-amber-500/40 shadow-2xl flex items-center gap-1.5 text-[10px] font-mono animate-fade-in max-w-[92vw] overflow-x-auto scrollbar-none">
+            <div className="bg-orbit-background/98 px-2.5 py-1 rounded-md border border-amber-500/40 shadow-2xl flex items-center gap-1.5 text-[10px] font-mono animate-fade-in max-w-[92vw] overflow-x-auto scrollbar-none">
               <span className="text-amber-400 font-semibold shrink-0">⚡ Cluster:</span>
               <button
                 onClick={() => {
@@ -1084,7 +1084,7 @@ export function ARSkyView({
                     setDiscoveredBodyId(body.id);
                     setIsModalOpen(true);
                   }}
-                  className="px-2 py-0.5 rounded bg-[#161d2c] hover:bg-[#1d273b] text-slate-200 border border-[#253147] flex items-center gap-1 shrink-0 transition"
+                  className="px-2 py-0.5 rounded bg-orbit-elevated hover:bg-orbit-elevated text-slate-200 border border-orbit-border flex items-center gap-1 shrink-0 transition"
                 >
                   <span style={{ color: body.color }}>{body.name}</span>
                   <span className="text-slate-400 text-[9px]">({proj.angularSeparationDeg.toFixed(1)}°)</span>
