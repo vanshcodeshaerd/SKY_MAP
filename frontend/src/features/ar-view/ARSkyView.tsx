@@ -90,6 +90,7 @@ export function ARSkyView({
   const [isLayersOpen, setIsLayersOpen] = useState<boolean>(false);
   const [isTrimOpen, setIsTrimOpen] = useState<boolean>(false);
   const [showSubHorizonPlanets, setShowSubHorizonPlanets] = useState<boolean>(false);
+  const [invertPitch, setInvertPitch] = useState<boolean>(false);
 
   // Quick compass & altitude tilt trim for real-life magnetic/attitude alignment (+/- degrees on the fly)
   const [quickAzimuthNudge, setQuickAzimuthNudge] = useState<number>(0);
@@ -279,9 +280,10 @@ export function ARSkyView({
 
       const effectiveHeading =
         (rawAlpha + calibration.declinationDeg + calibration.azimuthNudgeDeg + quickAzimuthNudge + 360) % 360;
+      const basePitch = invertPitch ? -rawBeta : rawBeta;
       const effectivePitch = Math.max(
         -89.9,
-        Math.min(89.9, rawBeta + calibration.altitudeNudgeDeg + quickAltitudeNudge)
+        Math.min(89.9, basePitch + calibration.altitudeNudgeDeg + quickAltitudeNudge)
       );
       const effectiveRoll = rawGamma;
 
@@ -423,6 +425,7 @@ export function ARSkyView({
     horizonEnuPoints,
     showConstellations,
     showEcliptic,
+    invertPitch,
   ]);
 
   // Find the closest on-screen body to the optical crosshairs (Auto-Detection vs Manual Pin)
@@ -1011,6 +1014,18 @@ export function ARSkyView({
               </button>
 
               <button
+                onClick={() => setInvertPitch(!invertPitch)}
+                className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-xl border transition ${
+                  invertPitch
+                    ? 'bg-amber-500/20 text-amber-200 border-amber-500/40'
+                    : 'bg-slate-900/60 text-slate-400 border-slate-800'
+                }`}
+              >
+                <span>↕ Invert Tilt (Pitch Axis)</span>
+                <span className="text-[10px] font-mono">{invertPitch ? 'INVERTED' : 'NORMAL'}</span>
+              </button>
+
+              <button
                 onClick={() => setNightVisionMode(!nightVisionMode)}
                 className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-xl border transition ${
                   nightVisionMode
@@ -1345,6 +1360,18 @@ export function ARSkyView({
                     <RotateCcw className="w-2.5 h-2.5" />
                   </button>
                 )}
+
+                <button
+                  onClick={() => setInvertPitch(!invertPitch)}
+                  className={`px-1.5 py-0.5 rounded border ${
+                    invertPitch
+                      ? 'bg-rose-500/20 text-rose-300 border-rose-500/40'
+                      : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-white'
+                  }`}
+                  title="Invert Vertical Tilt (Pitch)"
+                >
+                  Inv: {invertPitch ? 'ON' : 'OFF'}
+                </button>
 
                 <button
                   onClick={handleAlignToTargetBody}

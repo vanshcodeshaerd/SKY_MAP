@@ -83,8 +83,8 @@ export function useDeviceOrientation() {
       // Camera optical axis (out the back of the device: -z_device) in Earth coordinates (ENU):
       const Fx = -(cA * sG + sA * sB * cG); // East component
       const Fy = -(sA * sG - cA * sB * cG); // North component
-      // Up (Zenith) component: +1 when pointed at Zenith (b=0), 0 at horizon (b=90), -1 at nadir (b=180)
-      const Fz = cB * cG;
+      // Up (Zenith) component: +1 when pointed at Zenith (b=180), 0 at horizon (b=90), -1 at nadir (b=0)
+      const Fz = -(cB * cG);
 
       // Compute Elevation Pitch: +90° = Zenith, 0° = Horizon, -90° = Nadir
       const pitchDeg = (Math.asin(Math.max(-1, Math.min(1, Fz))) * 180) / Math.PI;
