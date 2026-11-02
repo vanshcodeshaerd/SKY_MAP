@@ -1,16 +1,27 @@
 import React from 'react';
 import { CosmicParallaxBg } from '../../components/ui/CosmicParallaxBg';
+import { MissionProgressStrip } from '../../components/MissionProgressStrip';
+import { MissionControlPanel } from '../../components/MissionControlPanel';
+import { DailyChallengeCard } from '../../components/DailyChallengeCard';
+import { CollectionBook } from '../../components/CollectionBook';
 import { Compass, Sparkles, Rocket, Camera, Eye, ArrowRight, ShieldAlert, BookOpen } from 'lucide-react';
+import type { CelestialBodyId } from '../../types/astronomy';
 
 interface WelcomeViewProps {
   onNavigate: (tab: 'dashboard' | 'sky3d' | 'ar' | 'cvlab') => void;
+  onStartDailyChallenge: (bodyId: CelestialBodyId) => void;
 }
 
-export const WelcomeView: React.FC<WelcomeViewProps> = ({ onNavigate }) => {
+export const WelcomeView: React.FC<WelcomeViewProps> = ({ onNavigate, onStartDailyChallenge }) => {
   return (
     <div className="relative w-full min-h-[calc(100vh-4rem)] flex flex-col items-center justify-start overflow-hidden">
       {/* Cosmic Parallax Canvas Background */}
       <CosmicParallaxBg head="SkyMap AR" text="Explore, Discover, Learn" loop={true}>
+        <MissionProgressStrip />
+        <DailyChallengeCard onStartChallenge={onStartDailyChallenge} />
+        <MissionControlPanel onNavigate={onNavigate} />
+        <CollectionBook />
+
         {/* Child & Student Friendly Welcome Banner */}
         <div className="text-center max-w-2xl mx-auto space-y-3 mb-6">
           <p className="text-sm sm:text-base md:text-lg text-slate-200 font-light leading-relaxed">

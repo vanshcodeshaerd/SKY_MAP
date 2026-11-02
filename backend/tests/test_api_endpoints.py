@@ -44,6 +44,14 @@ def test_solar_position_invalid_lat():
     assert response.status_code == 422
 
 
+def test_solar_position_invalid_body():
+    response = client.get(
+        "/api/solar/position",
+        params={"latitude": 28.6139, "longitude": 77.2090, "body": "sirius"},
+    )
+    assert response.status_code == 422
+
+
 def test_solar_path_valid():
     response = client.get(
         "/api/solar/path",

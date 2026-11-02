@@ -30,6 +30,7 @@ import { calculateStarPositions, CONSTELLATION_DEFS } from '../../services/starC
 import { getPlanetThumbnail } from '../../services/planetTextures';
 import { CelestialBodySelector } from '../../components/CelestialBodySelector';
 import { PlanetDiscoveryModal } from './PlanetDiscoveryModal';
+import { useMissionProgressContext } from '../../hooks/useMissionProgress';
 import * as THREE from 'three';
 
 interface ARSkyViewProps {
@@ -67,6 +68,7 @@ export function ARSkyView({
   gpsLoading,
   onNavigateTo3DExplorer,
 }: ARSkyViewProps) {
+  const { setArBodyLocked } = useMissionProgressContext();
   const containerRef = useRef<HTMLDivElement | null>(null);
   const {
     videoRef,
@@ -693,6 +695,19 @@ export function ARSkyView({
   const guidanceArrowAngle = useMemo(() => {
     return (Math.atan2(-currentProj.elevationOffsetDeg, currentProj.azimuthOffsetDeg) * 180) / Math.PI;
   }, [currentProj]);
+
+  useEffect(() => {
+    if (detectedTarget?.isLocked && currentCoords.altitudeDeg >= 0) {
+      setArBodyLocked(true, detectedTarget.bodyId);
+    } else {
+      setArBodyLocked(false, null);
+    }
+  }, [
+    detectedTarget?.isLocked,
+    detectedTarget?.bodyId,
+    currentCoords.altitudeDeg,
+    setArBodyLocked,
+  ]);
 
   // Compass Tape Ticks Generation
   const compassTicks = useMemo(() => {

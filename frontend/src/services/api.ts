@@ -52,11 +52,13 @@ export async function fetchServerSolarPath(
   lat: number,
   lon: number,
   dateStr: string,
-  stepMinutes: number = 15
+  stepMinutes: number = 15,
+  elevationM: number = 0
 ): Promise<{ waypoints: DiurnalWaypoint[]; events: SolarEvents }> {
   const params = new URLSearchParams({
     latitude: lat.toString(),
     longitude: lon.toString(),
+    elevation_m: elevationM.toString(),
     date: dateStr,
     step_minutes: stepMinutes.toString(),
   });

@@ -92,26 +92,32 @@ export function useDeviceOrientation() {
       // Compute Compass Heading: 0° = North, 90° = East, 180° = South, 270° = West
       let headingDeg: number;
 
-      if (typeof webkitHeading === 'number' && !isNaN(webkitHeading) && webkitHeading >= 0) {
-        // iOS Safari provides direct True/Magnetic North heading (0 = N, 90 = E, 180 = S, 270 = W)
+      const usedWebkitHeading =
+        typeof webkitHeading === 'number' && !isNaN(webkitHeading) && webkitHeading >= 0;
+
+      if (usedWebkitHeading) {
+        // iOS Safari: heading is already in geographic frame — do not add screen rotation.
         headingDeg = (webkitHeading + 360) % 360;
       } else {
-        // Derived from W3C vector projection
+        // Derived from W3C vector projection; compensate for display rotation vs device axes.
         const rawHeading = (Math.atan2(Fx, Fy) * 180) / Math.PI;
         headingDeg = (rawHeading + 360) % 360;
-      }
 
-      // Account for screen rotation (portrait = 0, landscape-left = 90, landscape-right = 270)
-      let screenAngle = 0;
-      if (typeof window !== 'undefined') {
-        if (window.screen && window.screen.orientation && typeof window.screen.orientation.angle === 'number') {
-          screenAngle = window.screen.orientation.angle;
-        } else if (typeof (window as any).orientation === 'number') {
-          screenAngle = (window as any).orientation;
+        let screenAngle = 0;
+        if (typeof window !== 'undefined') {
+          if (
+            window.screen?.orientation &&
+            typeof window.screen.orientation.angle === 'number'
+          ) {
+            screenAngle = window.screen.orientation.angle;
+          } else if (typeof (window as any).orientation === 'number') {
+            screenAngle = (window as any).orientation;
+          }
         }
+        headingDeg = (headingDeg + screenAngle + 360) % 360;
       }
 
-      const effectiveCompassHeading = (headingDeg + screenAngle + 360) % 360;
+      const effectiveCompassHeading = headingDeg;
 
       setOrientation((prev) => ({
         ...prev,
@@ -121,7 +127,7 @@ export function useDeviceOrientation() {
         compassHeading: Number(effectiveCompassHeading.toFixed(2)),
         cameraPitch: Number(pitchDeg.toFixed(2)),
         cameraRoll: Number(gamma.toFixed(2)),
-        absolute: isAbsoluteEvent || event.absolute || typeof webkitHeading === 'number',
+        absolute: isAbsoluteEvent || event.absolute || usedWebkitHeading,
         compassAccuracy: webkitAccuracy,
       }));
     };

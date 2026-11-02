@@ -19,10 +19,11 @@ app = FastAPI(
     redoc_url="/redoc",
 )
 
-# Enable CORS for browser frontend (supports localhost and local network mobile IPs)
+# CORS: explicit origins (required when allow_credentials=True; "*" is invalid with credentials)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Permits mobile testing on LAN
+    allow_origins=settings.cors_origins,
+    allow_origin_regex=r"https?://(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+)(:\d+)?",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

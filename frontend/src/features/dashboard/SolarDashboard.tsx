@@ -27,6 +27,7 @@ import {
   getClientCelestialEvents,
 } from '../../services/astronomyEngine';
 import { fetchServerSolarPosition } from '../../services/api';
+import { useMissionProgressContext } from '../../hooks/useMissionProgress';
 import { CelestialBodySelector } from '../../components/CelestialBodySelector';
 import { getPlanetThumbnail } from '../../services/planetTextures';
 
@@ -67,6 +68,7 @@ export function SolarDashboard({
   const [serverCoords, setServerCoords] = useState<SolarCoordinates | null>(null);
   const [serverLoading, setServerLoading] = useState<boolean>(false);
   const [serverError, setServerError] = useState<string | null>(null);
+  const { setServerCompareState } = useMissionProgressContext();
 
   // Handle server comparison
   useEffect(() => {
@@ -100,6 +102,28 @@ export function SolarDashboard({
       cancelled = true;
     };
   }, [compareServer, location, currentDate, selectedBody]);
+
+  useEffect(() => {
+    if (!compareServer) {
+      setServerCompareState(false, null);
+      return;
+    }
+    if (serverCoords) {
+      const deltaDeg = Math.hypot(
+        coords.azimuthDeg - serverCoords.azimuthDeg,
+        coords.altitudeDeg - serverCoords.altitudeDeg
+      );
+      setServerCompareState(true, deltaDeg);
+    } else {
+      setServerCompareState(true, null);
+    }
+  }, [
+    compareServer,
+    serverCoords,
+    coords.azimuthDeg,
+    coords.altitudeDeg,
+    setServerCompareState,
+  ]);
 
   // Cardinal direction helper
   const getCardinal = (az: number): string => {

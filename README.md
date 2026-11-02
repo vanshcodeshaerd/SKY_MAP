@@ -164,6 +164,42 @@ SkyGazer AR is purposefully engineered as an educational laboratory for core Com
 
 ---
 
+## Implementation progress
+
+**Last updated:** 2026-11-02
+
+This section tracks the 8-phase build plan. Detailed notes live in [PROGRESS.md](PROGRESS.md); update both when a phase changes.
+
+| Phase | ID | Status | Notes |
+| --- | --- | --- | --- |
+| 1 | phase1-scaffold | Done | FastAPI + Vite/React/TS/Tailwind, `.gitignore`, `/api/health`, Vite `/api` proxy |
+| 2 | phase2-ephemeris | Done | Skyfield DE421, `/api/solar/position` & `/path`, Pydantic validation, pytest (12 tests) |
+| 3 | phase3-dashboard | Done | Dashboard, `astronomy-engine`, geolocation, server compare toggle |
+| 4 | phase4-3d | Done | `ThreeSkyExplorer` — sphere, horizon, diurnal path, OrbitControls |
+| 5–6 | phase5-6-ar | Done | `ARSkyView` — camera, orientation, `projectEnuToScreen`, calibration, safety banner |
+| 7 | phase7-cv | Done | `/api/vision/process`, CV Lab UI |
+| Extras | phase3-extras | Partial | WMM/declination in settings; gyro smoothing in AR; CSV/OpenCV.js — verify in Settings/CV Lab |
+| Gamification | phase-gamification-1 | Done | Mission engine, `localStorage` progress |
+| Gamification | phase-gamification-2 | Done | Mission Control on Welcome, Dashboard/AR/CV mission wiring |
+| Gamification | phase-gamification-3 | Done | Daily challenge, collection book, debrief toasts, progress CSV |
+| 8 | phase8-verify | In progress | Backend pytest green; frontend `npm run build` OK; manual AR/camera testing on device |
+
+**Coordinate API check (New Delhi, 2026-06-21T06:30Z):** Skyfield az/alt ≈ 133.84° / 82.70°; client `astronomy-engine` within ~0.002° — suitable for AR overlay.
+
+**Run locally**
+
+```bash
+# Terminal 1 — backend (from backend/, use .venv)
+.venv\Scripts\Activate.ps1
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+
+# Terminal 2 — frontend
+cd frontend
+npm run dev
+```
+
+---
+
 ## 📚 Technical Documentation & Research Artifacts
 
 For in-depth mathematical derivations, literature citations, and detailed implementation phases, consult the dedicated project documentation files:

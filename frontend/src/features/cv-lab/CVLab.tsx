@@ -2,6 +2,7 @@ import { useState, useRef } from 'react';
 import { Upload, Sparkles, Sliders, AlertTriangle, Layers, Info, Image as ImageIcon } from 'lucide-react';
 import { VisionProcessResult } from '../../types/astronomy';
 import { uploadVisionImage } from '../../services/api';
+import { useMissionProgressContext } from '../../hooks/useMissionProgress';
 
 export function CVLab() {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -11,6 +12,7 @@ export function CVLab() {
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<VisionProcessResult | null>(null);
+  const { markCvLabProcessed } = useMissionProgressContext();
 
   // Handle image file selection
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -72,6 +74,7 @@ export function CVLab() {
     try {
       const res = await uploadVisionImage(selectedFile, threshold);
       setResult(res);
+      markCvLabProcessed();
     } catch (err: any) {
       setError(err.message || 'Vision analysis failed');
     } finally {

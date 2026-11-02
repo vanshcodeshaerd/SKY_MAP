@@ -5,9 +5,15 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, Query, status
 
 from app.schemas.solar import SolarPathResponse, SolarPositionResponse
-from app.services.solar_calculator import calculate_diurnal_path, calculate_solar_position
+from app.services.solar_calculator import (
+    DE421_TARGET_MAP,
+    calculate_diurnal_path,
+    calculate_solar_position,
+)
 
 router = APIRouter(prefix="/solar", tags=["Solar Ephemeris"])
+
+_VALID_BODIES = frozenset(DE421_TARGET_MAP.keys())
 
 
 @router.get("/position", response_model=SolarPositionResponse)
@@ -57,12 +63,19 @@ def get_solar_position(
     else:
         dt_utc = datetime.now(timezone.utc)
 
+    body_key = body.lower().strip()
+    if body_key not in _VALID_BODIES:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Invalid body '{body}'. Allowed: {sorted(_VALID_BODIES)}",
+        )
+
     result = calculate_solar_position(
         lat=latitude,
         lon=longitude,
         elevation_m=elevation_m,
         dt_utc=dt_utc,
-        body=body,
+        body=body_key,
     )
     return SolarPositionResponse(**result)
 

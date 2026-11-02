@@ -1,5 +1,6 @@
-import { X, RefreshCw, Compass, Sliders, MapPin } from 'lucide-react';
+import { X, RefreshCw, Compass, Sliders, MapPin, RotateCcw } from 'lucide-react';
 import { GeodeticLocation, ManualCalibration } from '../types/astronomy';
+import { useMissionProgressContext } from '../hooks/useMissionProgress';
 
 interface CalibrationDrawerProps {
   isOpen: boolean;
@@ -34,6 +35,8 @@ export function CalibrationDrawer({
   manualRoll,
   setManualRoll,
 }: CalibrationDrawerProps) {
+  const { resetProgress, completedCount } = useMissionProgressContext();
+
   if (!isOpen) return null;
 
   return (
@@ -256,7 +259,7 @@ export function CalibrationDrawer({
         </div>
 
         {/* Footer */}
-        <div className="pt-6 border-t border-slate-800">
+        <div className="pt-6 border-t border-slate-800 space-y-2">
           <button
             onClick={() => {
               setCalibration({
@@ -271,8 +274,26 @@ export function CalibrationDrawer({
             }}
             className="w-full py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs rounded-lg font-medium transition"
           >
-            Reset Defaults
+            Reset Sensor Defaults
           </button>
+          {completedCount > 0 && (
+            <button
+              type="button"
+              onClick={() => {
+                if (
+                  window.confirm(
+                    'Reset all mission progress and badges on this device? This cannot be undone.'
+                  )
+                ) {
+                  resetProgress();
+                }
+              }}
+              className="w-full py-2 bg-red-950/50 hover:bg-red-900/60 text-red-300 text-xs rounded-lg font-medium transition border border-red-900/60 inline-flex items-center justify-center gap-1.5"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              Reset Mission Progress
+            </button>
+          )}
         </div>
       </div>
     </div>

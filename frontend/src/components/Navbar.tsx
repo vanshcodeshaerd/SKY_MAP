@@ -1,5 +1,6 @@
-import { Sun, Compass, Camera, Sparkles, Home, Sliders, MapPin, RefreshCw } from 'lucide-react';
+import { Sun, Compass, Camera, Sparkles, Home, Sliders, MapPin, RefreshCw, Award } from 'lucide-react';
 import { GeodeticLocation } from '../types/astronomy';
+import { useMissionProgressContext } from '../hooks/useMissionProgress';
 
 interface NavbarProps {
   activeTab: 'welcome' | 'dashboard' | 'sky3d' | 'ar' | 'cvlab';
@@ -22,6 +23,7 @@ export function Navbar({
   gpsLoading,
   isLiveGps,
 }: NavbarProps) {
+  const { rank, completedCount } = useMissionProgressContext();
   const tabs = [
     { id: 'welcome', label: 'Welcome', icon: Home },
     { id: 'dashboard', label: 'Dashboard', icon: Sun },
@@ -99,6 +101,15 @@ export function Navbar({
               </span>
             )}
           </button>
+
+          {/* Mission rank (gamification) */}
+          <div
+            className="hidden sm:flex items-center gap-1.5 text-[10px] px-2.5 py-1.5 rounded-md border border-amber-500/25 bg-amber-500/5 text-amber-200 font-medium"
+            title={`${completedCount} missions completed`}
+          >
+            <Award className="w-3.5 h-3.5 text-amber-400" />
+            <span>{rank.title}</span>
+          </div>
 
           {/* Backend Verification Engine Status */}
           <div

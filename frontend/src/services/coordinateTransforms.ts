@@ -95,7 +95,7 @@ export function projectVectorToScreen(
   // Pinhole focal lengths in pixels
   const fovYRad = THREE.MathUtils.degToRad(fovYDeg);
   const fy = viewHeight / (2.0 * Math.tan(fovYRad / 2.0));
-  const fx = fy; // Square pixels assumption
+  const fx = fy * (viewWidth / viewHeight); // Match aspect ratio (was square-only)
 
   const cx = viewWidth / 2.0;
   const cy = viewHeight / 2.0;
@@ -178,7 +178,7 @@ export function projectEnuToScreen(
   // Ideal Pinhole perspective projection
   const fovYRad = THREE.MathUtils.degToRad(fovYDeg);
   const fy = viewHeight / (2.0 * Math.tan(fovYRad / 2.0));
-  const fx = fy;
+  const fx = fy * (viewWidth / viewHeight);
   const cx = viewWidth / 2.0;
   const cy = viewHeight / 2.0;
 
