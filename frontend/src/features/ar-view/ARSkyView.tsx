@@ -89,6 +89,7 @@ export function ARSkyView({
   // Modern UI states: clean popover menus to eliminate screen clutter
   const [isLayersOpen, setIsLayersOpen] = useState<boolean>(false);
   const [isTrimOpen, setIsTrimOpen] = useState<boolean>(false);
+  const [showSubHorizonPlanets, setShowSubHorizonPlanets] = useState<boolean>(false);
 
   // Quick compass & altitude tilt trim for real-life magnetic/attitude alignment (+/- degrees on the fly)
   const [quickAzimuthNudge, setQuickAzimuthNudge] = useState<number>(0);
@@ -175,6 +176,15 @@ export function ARSkyView({
     }));
   }, []);
 
+  // 360-Degree Continuous Local Horizon Plane (Alt = 0 deg)
+  const horizonEnuPoints = useMemo(() => {
+    const points: THREE.Vector3[] = [];
+    for (let az = 0; az < 360; az += 10) {
+      points.push(azAltToEnuVector(az, 0));
+    }
+    return points;
+  }, []);
+
   // Projected screen coordinates map for all 9 bodies
   const [projectedBodies, setProjectedBodies] = useState<
     Record<
@@ -207,6 +217,9 @@ export function ARSkyView({
   const [projectedCardinals, setProjectedCardinals] = useState<
     { label: string; x: number; y: number; inFront: boolean }[]
   >([]);
+
+  // Projected Continuous 360-Degree Horizon Line
+  const [projectedHorizonLine, setProjectedHorizonLine] = useState<{ x: number; y: number; inFront: boolean }[]>([]);
 
   // Gyro Smoothing State for jitter-free 60 FPS motion
   const smoothedAnglesRef = useRef({ heading: 180, pitch: 30, roll: 0 });
@@ -246,12 +259,19 @@ export function ARSkyView({
       const targetGamma =
         orientation.cameraRoll !== undefined && orientation.cameraRoll !== null ? orientation.cameraRoll! : manualRoll;
 
-      // Exponential smoothing low-pass filter with shortest-arc angular interpolation
-      const smoothFactor = hasSensor ? 0.35 : 0.55;
+      // Dynamic adaptive smoothing: fast panning responds immediately, holding steady filters micro-jitter
       const dHeading = ((targetAlpha - smoothedAnglesRef.current.heading + 540) % 360) - 180;
-      smoothedAnglesRef.current.heading = (smoothedAnglesRef.current.heading + dHeading * smoothFactor + 360) % 360;
-      smoothedAnglesRef.current.pitch += (targetBeta - smoothedAnglesRef.current.pitch) * smoothFactor;
-      smoothedAnglesRef.current.roll += (targetGamma - smoothedAnglesRef.current.roll) * smoothFactor;
+      const dPitch = targetBeta - smoothedAnglesRef.current.pitch;
+      const dRoll = targetGamma - smoothedAnglesRef.current.roll;
+
+      const motionSpeed = Math.abs(dHeading) + Math.abs(dPitch);
+      const adaptiveFactor = hasSensor
+        ? motionSpeed > 4.0 ? 0.65 : (motionSpeed > 1.0 ? 0.35 : 0.20)
+        : 0.55;
+
+      smoothedAnglesRef.current.heading = (smoothedAnglesRef.current.heading + dHeading * adaptiveFactor + 360) % 360;
+      smoothedAnglesRef.current.pitch += dPitch * adaptiveFactor;
+      smoothedAnglesRef.current.roll += dRoll * adaptiveFactor;
 
       const rawAlpha = smoothedAnglesRef.current.heading;
       const rawBeta = smoothedAnglesRef.current.pitch;
@@ -319,6 +339,21 @@ export function ARSkyView({
       });
       setProjectedCardinals(cardinalCoords);
 
+      // Project Continuous 360-Degree Horizon Line (Alt = 0 deg)
+      const horizonCoords = horizonEnuPoints.map((vec) => {
+        const p = projectEnuToScreen(
+          vec,
+          effectiveHeading,
+          effectivePitch,
+          effectiveRoll,
+          viewport.width,
+          viewport.height,
+          calibration.fieldOfViewDeg
+        );
+        return { x: p.u, y: p.v, inFront: p.isInFront };
+      });
+      setProjectedHorizonLine(horizonCoords);
+
       // Project stars and constellation lines
       if (showConstellations) {
         const projectedStarCoords = new Map<string, { u: number; v: number; inFront: boolean }>();
@@ -385,6 +420,7 @@ export function ARSkyView({
     starsMap,
     eclipticEnuPoints,
     cardinalEnuPoints,
+    horizonEnuPoints,
     showConstellations,
     showEcliptic,
   ]);
@@ -413,6 +449,12 @@ export function ARSkyView({
     let minSep = Infinity;
 
     CELESTIAL_BODY_LIST.forEach((b) => {
+      const pos = allPositions[b.id];
+      // In AR Camera mode or when sub-horizon planets are off, NEVER auto-lock subterranean planets
+      if (!showSubHorizonPlanets && pos && pos.altitudeDeg < 0) {
+        return;
+      }
+
       const p = projectedBodies[b.id];
       if (p && p.isInFront) {
         if (p.angularSeparationDeg < minSep) {
@@ -433,7 +475,7 @@ export function ARSkyView({
     });
 
     return closest;
-  }, [autoScanMode, selectedBody, projectedBodies, viewport]);
+  }, [autoScanMode, selectedBody, projectedBodies, viewport, allPositions, showSubHorizonPlanets]);
 
   // Current active body metadata and coordinates for HUD
   const currentTargetBodyId = detectedTarget?.bodyId || selectedBody;
@@ -704,6 +746,30 @@ export function ARSkyView({
               </g>
             ))}
 
+          {/* Continuous 360-Degree Local Horizon Line (Alt = 0°) */}
+          {projectedHorizonLine.length > 2 && (
+            <g opacity={nightVisionMode ? 0.4 : 0.65}>
+              {projectedHorizonLine.map((pt, i) => {
+                const next = projectedHorizonLine[(i + 1) % projectedHorizonLine.length];
+                if (!pt.inFront && !next.inFront) return null;
+                if (Math.hypot(next.x - pt.x, next.y - pt.y) > viewport.width * 0.35) return null;
+
+                return (
+                  <line
+                    key={`horizon-${i}`}
+                    x1={pt.x}
+                    y1={pt.y}
+                    x2={next.x}
+                    y2={next.y}
+                    stroke={nightVisionMode ? '#ef4444' : '#10b981'}
+                    strokeWidth={1.5}
+                    strokeDasharray="6 4"
+                  />
+                );
+              })}
+            </g>
+          )}
+
           {/* Horizon Cardinal Markers (N, E, S, W) */}
           {projectedCardinals.map((c, i) => {
             if (!c.inFront || c.x < -30 || c.x > viewport.width + 30 || c.y < -30 || c.y > viewport.height + 30)
@@ -803,6 +869,14 @@ export function ARSkyView({
                 <Target className="w-3.5 h-3.5 text-emerald-400 animate-spin shrink-0" />
                 <span className="font-semibold">TARGET LOCKED: {currentMeta.name}</span>
                 <span className="text-[10px] text-emerald-400/80 hidden xs:inline">(Tap for 3D)</span>
+              </>
+            ) : currentCoords.altitudeDeg < 0 && viewMode === 'ar' ? (
+              <>
+                <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse shrink-0" />
+                <span className="font-semibold text-rose-300">
+                  {currentMeta.name} is Sub-Horizon ({currentCoords.altitudeDeg.toFixed(0)}°)
+                </span>
+                <span className="text-[10px] text-rose-400/80 hidden sm:inline">(Underground)</span>
               </>
             ) : isCurrentNear ? (
               <>
@@ -925,6 +999,18 @@ export function ARSkyView({
               </button>
 
               <button
+                onClick={() => setShowSubHorizonPlanets(!showSubHorizonPlanets)}
+                className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-xl border transition ${
+                  showSubHorizonPlanets
+                    ? 'bg-purple-500/20 text-purple-200 border-purple-500/40'
+                    : 'bg-slate-900/60 text-slate-400 border-slate-800'
+                }`}
+              >
+                <span>🌍 Sub-Horizon (Underground)</span>
+                <span className="text-[10px] font-mono">{showSubHorizonPlanets ? 'VISIBLE' : 'HIDDEN'}</span>
+              </button>
+
+              <button
                 onClick={() => setNightVisionMode(!nightVisionMode)}
                 className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-xl border transition ${
                   nightVisionMode
@@ -1039,11 +1125,13 @@ export function ARSkyView({
         {showAllPlanetsInAR &&
           CELESTIAL_BODY_LIST.map((b) => {
             if (b.id === currentTargetBodyId && isCurrentOnScreen) return null;
+            const isPlanetAboveHorizon = (allPositions[b.id]?.altitudeDeg || 0) > 0;
+            if (!showSubHorizonPlanets && !isPlanetAboveHorizon && viewMode === 'ar') return null;
+
             const proj = projectedBodies[b.id];
             if (!proj || !proj.isInFront) return null;
             if (proj.u < 15 || proj.u > viewport.width - 15 || proj.v < 15 || proj.v > viewport.height - 15) return null;
 
-            const isPlanetAboveHorizon = (allPositions[b.id]?.altitudeDeg || 0) > 0;
             const thumbUrl = getPlanetThumbnail(b.id, 96);
 
             return (
@@ -1142,8 +1230,13 @@ export function ARSkyView({
                   </span>
                 )}
               </div>
-              <div className="text-amber-300">
-                Az: {currentCoords.azimuthDeg.toFixed(1)}° | Alt: {currentCoords.altitudeDeg.toFixed(1)}°
+              <div className="text-amber-300 flex items-center justify-center gap-1">
+                <span>Az: {currentCoords.azimuthDeg.toFixed(1)}° | Alt: {currentCoords.altitudeDeg.toFixed(1)}°</span>
+                {currentCoords.altitudeDeg < 0 && (
+                  <span className="text-[8px] bg-red-950/90 text-red-300 px-1 py-0.5 rounded border border-red-800 font-bold">
+                    SUB-HORIZON
+                  </span>
+                )}
               </div>
             </div>
           </div>
