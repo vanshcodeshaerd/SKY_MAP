@@ -145,7 +145,7 @@ function AppMain({
       )}
 
       {activeTab === 'welcome' ? (
-        <main className="flex-1 w-full min-h-0">
+        <main className="flex-1 w-full min-h-0 bg-orbit-background">
           <WelcomeView
             onNavigate={setActiveTab}
             onStartDailyChallenge={(bodyId) => {

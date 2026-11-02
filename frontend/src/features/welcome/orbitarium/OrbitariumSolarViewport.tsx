@@ -197,14 +197,37 @@ export interface OrbitariumSolarViewportProps {
   onSelect: (info: OrbitariumInfo | null) => void;
   speed: number;
   onSpeedChange: (speed: number) => void;
+  /** Shift the solar system toward the right (full-bleed canvas, no panel). */
+  sceneShiftX?: number;
 }
 
-/** Fixed right-half 3D scene; touch-friendly on phones. */
+function SolarSystemScene({
+  shiftX,
+  speed,
+  onSelect,
+}: {
+  shiftX: number;
+  speed: number;
+  onSelect: (info: OrbitariumInfo | null) => void;
+}) {
+  return (
+    <group position={[shiftX, 0, 0]}>
+      <Stars />
+      <SunMesh onSelect={() => onSelect(ORBITARIUM_SUN)} />
+      {ORBITARIUM_PLANETS.map((p) => (
+        <PlanetMesh key={p.name} p={p} speed={speed} onSelect={onSelect} />
+      ))}
+    </group>
+  );
+}
+
+/** Full-bleed 3D layer; system sits on the right. Touch-friendly on phones. */
 export function OrbitariumSolarViewport({
   selected,
   onSelect,
   speed,
   onSpeedChange,
+  sceneShiftX = 20,
 }: OrbitariumSolarViewportProps) {
   const controlsRef = useRef<OrbitControlsImpl>(null);
   const coarse = useCoarsePointer();
@@ -212,20 +235,25 @@ export function OrbitariumSolarViewport({
   return (
     <div className="absolute inset-0 touch-none select-none">
       <Canvas
-        camera={{ position: [0, 28, 52], fov: 50 }}
+        gl={{ alpha: true, antialias: true }}
+        camera={{ position: [sceneShiftX, 28, 52], fov: 50 }}
+        onCreated={({ gl }) => gl.setClearColor(0x000000, 0)}
         onPointerMissed={() => onSelect(null)}
-        style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}
+        style={{
+          position: 'absolute',
+          inset: 0,
+          width: '100%',
+          height: '100%',
+          background: 'transparent',
+        }}
       >
         <ambientLight intensity={0.08} />
         <Suspense fallback={null}>
-          <Stars />
-          <SunMesh onSelect={() => onSelect(ORBITARIUM_SUN)} />
-          {ORBITARIUM_PLANETS.map((p) => (
-            <PlanetMesh key={p.name} p={p} speed={speed} onSelect={onSelect} />
-          ))}
+          <SolarSystemScene shiftX={sceneShiftX} speed={speed} onSelect={onSelect} />
         </Suspense>
         <OrbitControls
           ref={controlsRef}
+          target={[sceneShiftX, 0, 0]}
           enablePan={false}
           enableZoom={!coarse}
           minDistance={8}
@@ -261,8 +289,8 @@ export function OrbitariumSolarViewport({
         </div>
       )}
 
-      <nav className="absolute bottom-0 left-0 right-0 z-10 pointer-events-auto">
-        <div className="flex overflow-x-auto gap-1 px-2 py-2 scrollbar-none bg-gradient-to-t from-orbit-background to-transparent">
+      <nav className="absolute bottom-0 left-1/2 right-0 z-10 pointer-events-auto">
+        <div className="flex overflow-x-auto gap-1 px-2 py-2 scrollbar-none">
           {NAV_ITEMS.map((p) => (
             <button
               key={p.name}

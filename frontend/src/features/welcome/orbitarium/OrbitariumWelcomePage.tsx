@@ -32,10 +32,7 @@ interface OrbitariumWelcomePageProps {
   onStartQuestAr: (bodyId: CelestialBodyId) => void;
 }
 
-/**
- * One full-screen welcome: no split borders. Left half = your copy (editable later).
- * Right half = fixed live solar system; selection stays in sync on the left.
- */
+/** One background, no columns or dividers: text left, solar system fixed on the right. */
 export function OrbitariumWelcomePage({
   onNavigate,
   onOpenBodyInAr,
@@ -49,45 +46,32 @@ export function OrbitariumWelcomePage({
   return (
     <>
       <div className="orbitarium-root relative h-[100dvh] w-full overflow-hidden bg-orbit-background text-orbit-foreground">
-        {/* Right 50% — solar system (fixed to viewport half, seamless) */}
-        <div
-          className="absolute top-0 right-0 h-full w-1/2 z-0"
-          aria-hidden={false}
-        >
-          <OrbitariumSolarViewport
-            selected={selected}
-            onSelect={setSelected}
-            speed={speed}
-            onSpeedChange={setSpeed}
-          />
-        </div>
+        {/* Same background everywhere — 3D is transparent except stars/planets, shifted right */}
+        <OrbitariumSolarViewport
+          selected={selected}
+          onSelect={setSelected}
+          speed={speed}
+          onSpeedChange={setSpeed}
+        />
 
-        {/* Left 50% — welcome copy (scroll on mobile; soft blend, no partition line) */}
-        <div
-          className="absolute top-0 left-0 z-10 h-full w-1/2 overflow-y-auto overscroll-y-contain touch-pan-y pointer-events-auto"
-          style={{
-            background:
-              'linear-gradient(90deg, var(--orbit-background) 0%, var(--orbit-background) 78%, transparent 100%)',
-          }}
-        >
-          <div className="p-4 sm:p-6 md:p-8 max-w-md min-h-full flex flex-col gap-4 pb-28">
-            {/* Placeholder — replace with your welcome text when ready */}
-            <div className="welcome-copy-slot space-y-3">
+        {/* Left: your copy only (no panel, no fill) */}
+        <div className="absolute inset-y-0 left-0 z-10 w-1/2 overflow-y-auto overscroll-y-contain touch-pan-y pointer-events-auto">
+          <div className="welcome-copy-slot p-4 sm:p-6 md:p-8 max-w-md min-h-full flex flex-col gap-5 pb-28">
+            <header className="space-y-2">
               <p className="text-xs uppercase tracking-[0.35em] text-orbit-primary">SkyMap AR</p>
               <h1 className="font-orbitarium-display text-2xl sm:text-3xl md:text-4xl leading-tight">
-                Welcome, explorer
+                Welcome
               </h1>
               <p className="text-sm text-orbit-muted-foreground leading-relaxed">
-                Your welcome message and instructions will appear here. Tap a planet on the right
-                to see details below — the same selection stays in sync on mobile and desktop.
+                Your welcome text goes here. Select a world on the right to read more.
               </p>
-            </div>
+            </header>
 
             <div className="flex flex-wrap gap-2">
               <button
                 type="button"
                 onClick={() => setMissionHubOpen(true)}
-                className="inline-flex items-center gap-1.5 rounded-full border border-orbit-border/60 bg-orbit-card-60 px-3 py-2 text-xs"
+                className="inline-flex items-center gap-1.5 rounded-full border border-orbit-border/50 px-3 py-2 text-xs text-orbit-foreground"
               >
                 <Sparkles className="w-3.5 h-3.5 text-orbit-primary" />
                 Missions
@@ -103,7 +87,7 @@ export function OrbitariumWelcomePage({
             </div>
 
             {selected ? (
-              <div className="space-y-3 animate-fade-in">
+              <section className="space-y-3 animate-fade-in">
                 <p className="text-[10px] uppercase tracking-[0.25em] text-orbit-primary">
                   {selected.type}
                 </p>
@@ -111,11 +95,11 @@ export function OrbitariumWelcomePage({
                 <p className="text-sm text-orbit-muted-foreground leading-relaxed">
                   {selected.description}
                 </p>
-                <dl className="grid grid-cols-2 gap-2">
+                <dl className="grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
                   {selected.facts.slice(0, 4).map((f) => (
-                    <div key={f.label} className="rounded-lg bg-orbit-background-40 p-2">
-                      <dt className="text-[9px] uppercase text-orbit-muted-foreground">{f.label}</dt>
-                      <dd className="text-xs font-medium mt-0.5">{f.value}</dd>
+                    <div key={f.label}>
+                      <dt className="text-orbit-muted-foreground">{f.label}</dt>
+                      <dd className="font-medium mt-0.5">{f.value}</dd>
                     </div>
                   ))}
                 </dl>
@@ -123,19 +107,14 @@ export function OrbitariumWelcomePage({
                   <button
                     type="button"
                     onClick={() => onOpenBodyInAr(selected.name as CelestialBodyId)}
-                    className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-orbit-primary-90 text-orbit-primary-foreground text-sm font-medium min-h-[44px]"
+                    className="inline-flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-orbit-primary text-orbit-primary-foreground text-sm font-medium min-h-[44px]"
                   >
                     <Camera className="w-4 h-4" />
                     Track in AR
                   </button>
                 )}
-              </div>
-            ) : (
-              <p className="text-xs text-orbit-muted-foreground">
-                One finger on the right: rotate the sky. On phones use +/− to zoom. Scroll here for
-                more welcome text later.
-              </p>
-            )}
+              </section>
+            ) : null}
           </div>
         </div>
       </div>
