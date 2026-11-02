@@ -20,9 +20,7 @@ export function WelcomeResponsiveCamera({
     if (camera instanceof THREE.PerspectiveCamera) {
       camera.fov = layout.fov;
 
-      const shift =
-        layout.tier === 'desktop' ? 0.22 : layout.tier === 'tablet' ? 0.17 : 0.14;
-      const xOffset = -Math.round(size.width * shift);
+      const xOffset = -Math.round(size.width * layout.viewShiftRatio);
       camera.setViewOffset(size.width, size.height, xOffset, 0, size.width, size.height);
       camera.updateProjectionMatrix();
     }

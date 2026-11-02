@@ -238,9 +238,7 @@ export function OrbitariumSolarViewport({
   const coarse = useCoarsePointer();
   const { camY, camZ, fov, minDist, maxDist, navLeftPercent } = layout;
 
-  const navStyle = {
-    left: navLeftPercent > 0 ? `${navLeftPercent}%` : '46%',
-  } as const;
+  const navStyle = { left: `${navLeftPercent}%` } as const;
 
   return (
     <div
