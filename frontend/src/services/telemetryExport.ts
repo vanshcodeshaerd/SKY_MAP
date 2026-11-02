@@ -6,6 +6,7 @@ export function buildProgressCsv(
   location: GeodeticLocation,
   extras: {
     rankTitle: string;
+    stargazerLevel: string;
     dailyChallengeDate: string | null;
     dailyChallengeCompleted: boolean;
   }
@@ -14,6 +15,9 @@ export function buildProgressCsv(
     'field,value',
     `exported_at,${new Date().toISOString()}`,
     `rank,${extras.rankTitle}`,
+    `stargazer_level,${extras.stargazerLevel}`,
+    `stargazer_xp,${progress.stargazerXp}`,
+    `daily_streak,${progress.dailyStreak}`,
     `missions_completed,${progress.completedMissionIds.length}`,
     `missions_list,"${progress.completedMissionIds.join('; ')}"`,
     `badges,"${progress.earnedBadgeIds.join('; ')}"`,

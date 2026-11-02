@@ -38,7 +38,16 @@ export default {
         'lg': '8px',
         'xl': '10px',
         '2xl': '12px',
-      }
+      },
+      keyframes: {
+        'fade-in': {
+          from: { opacity: '0', transform: 'translateY(6px)' },
+          to: { opacity: '1', transform: 'translateY(0)' },
+        },
+      },
+      animation: {
+        'fade-in': 'fade-in 0.35s ease-out',
+      },
     },
   },
   plugins: [],

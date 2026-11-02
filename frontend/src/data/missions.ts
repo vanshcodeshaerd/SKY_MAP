@@ -51,6 +51,30 @@ export const BADGES: BadgeDefinition[] = [
     description: 'Discovered multiple bodies in AR scanner mode.',
     emoji: '🌌',
   },
+  {
+    id: 'badge_helios_seeker',
+    title: 'Helios Seeker',
+    description: 'Aligned with the Sun safely in AR during daylight.',
+    emoji: '☀️',
+  },
+  {
+    id: 'badge_lunar_observer',
+    title: 'Lunar Observer',
+    description: 'Spotted the Moon across three different phase types.',
+    emoji: '🌙',
+  },
+  {
+    id: 'badge_lord_of_rings',
+    title: 'Lord of the Rings',
+    description: 'Locked onto Saturn in AR.',
+    emoji: '🪐',
+  },
+  {
+    id: 'badge_red_planet',
+    title: 'Red Planet Rover',
+    description: 'Locked onto Mars in AR.',
+    emoji: '🔴',
+  },
 ];
 
 export const MISSIONS: MissionDefinition[] = [

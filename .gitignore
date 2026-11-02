@@ -13,3 +13,7 @@ __pycache__/
 .DS_Store
 .env
 .env.local
+
+# Local import artifacts (integrated code lives in frontend/)
+_import_orbitarium/
+orbitarium-planet-atlas*.zip

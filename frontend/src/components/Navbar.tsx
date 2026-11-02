@@ -23,7 +23,7 @@ export function Navbar({
   gpsLoading,
   isLiveGps,
 }: NavbarProps) {
-  const { rank, completedCount } = useMissionProgressContext();
+  const { rank, completedCount, xpLevelProgress } = useMissionProgressContext();
   const tabs = [
     { id: 'welcome', label: 'Welcome', icon: Home },
     { id: 'dashboard', label: 'Dashboard', icon: Sun },
@@ -103,6 +103,14 @@ export function Navbar({
           </button>
 
           {/* Mission rank (gamification) */}
+          <div
+            className="hidden sm:flex items-center gap-1.5 text-[10px] px-2.5 py-1.5 rounded-md border border-violet-500/25 bg-violet-500/5 text-violet-200 font-medium"
+            title={`${xpLevelProgress.level.title} — Stargazer XP`}
+          >
+            <Award className="w-3.5 h-3.5 text-violet-400" />
+            <span className="hidden lg:inline">{xpLevelProgress.level.title}</span>
+          </div>
+
           <div
             className="hidden sm:flex items-center gap-1.5 text-[10px] px-2.5 py-1.5 rounded-md border border-amber-500/25 bg-amber-500/5 text-amber-200 font-medium"
             title={`${completedCount} missions completed`}

@@ -3,6 +3,7 @@ import { Navbar } from './components/Navbar';
 import { SafetyBanner } from './components/SafetyBanner';
 import { CalibrationDrawer } from './components/CalibrationDrawer';
 import { MissionCompleteToast } from './components/MissionCompleteToast';
+import { XpGainToast } from './components/XpGainToast';
 import { WelcomeView } from './features/welcome/WelcomeView';
 import { SolarDashboard } from './features/dashboard/SolarDashboard';
 import { ThreeSkyExplorer } from './features/sky-explorer/ThreeSkyExplorer';
@@ -125,26 +126,37 @@ function AppMain({
 
   return (
     <div className="min-h-screen flex flex-col bg-[#090d14] text-slate-100">
-      <SafetyBanner />
+      {activeTab !== 'welcome' && <SafetyBanner />}
 
       <MissionCompleteToast missionIds={lastNewlyCompleted} onDismiss={clearLastNewlyCompleted} />
+      <XpGainToast />
 
-      <Navbar
-        activeTab={activeTab}
-        setActiveTab={setActiveTab}
-        location={location}
-        onOpenCalibration={() => setIsCalibrationOpen(true)}
-        serverOnline={serverOnline}
-        onRequestGps={requestGpsLocation}
-        gpsLoading={gpsLoading}
-        isLiveGps={isLiveGps}
-      />
+      {activeTab !== 'welcome' && (
+        <Navbar
+          activeTab={activeTab}
+          setActiveTab={setActiveTab}
+          location={location}
+          onOpenCalibration={() => setIsCalibrationOpen(true)}
+          serverOnline={serverOnline}
+          onRequestGps={requestGpsLocation}
+          gpsLoading={gpsLoading}
+          isLiveGps={isLiveGps}
+        />
+      )}
 
       {activeTab === 'welcome' ? (
-        <main className="flex-1 w-full">
+        <main className="flex-1 w-full min-h-0">
           <WelcomeView
             onNavigate={setActiveTab}
             onStartDailyChallenge={(bodyId) => {
+              setSelectedBody(bodyId);
+              setActiveTab('ar');
+            }}
+            onStartQuestAr={(bodyId) => {
+              setSelectedBody(bodyId);
+              setActiveTab('ar');
+            }}
+            onOpenBodyInAr={(bodyId) => {
               setSelectedBody(bodyId);
               setActiveTab('ar');
             }}
@@ -217,6 +229,7 @@ function AppMain({
         setManualRoll={setManualRoll}
       />
 
+      {activeTab !== 'welcome' && (
       <footer className="border-t border-slate-800/80 bg-slate-950/80 py-4 px-4 text-center text-xs text-slate-400">
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2">
           <span>SkyMap AR — Interactive Astronomy for Young Explorers</span>
@@ -233,6 +246,7 @@ function AppMain({
           </div>
         </div>
       </footer>
+      )}
     </div>
   );
 }

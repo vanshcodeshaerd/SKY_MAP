@@ -30,9 +30,71 @@
     font-family: 'JetBrains Mono', monospace;
     font-variant-numeric: tabular-nums;
   }
+
+  .font-orbitarium-display {
+    font-family: 'Cormorant Garamond', 'Times New Roman', serif;
+    font-weight: 600;
+  }
 }
 
-/* Premium Digital Observatory Surface Tokens */
+/* Orbitarium Planet Atlas theme (scoped to welcome landing) */
+.orbitarium-root {
+  --orbit-background: oklch(0.08 0.01 260);
+  --orbit-foreground: oklch(0.96 0.01 80);
+  --orbit-card: oklch(0.14 0.015 260);
+  --orbit-card-foreground: oklch(0.97 0.01 80);
+  --orbit-primary: oklch(0.8 0.13 70);
+  --orbit-primary-foreground: oklch(0.12 0.01 260);
+  --orbit-muted-foreground: oklch(0.72 0.02 250);
+  --orbit-border: oklch(1 0 0 / 14%);
+}
+
+.bg-orbit-background {
+  background-color: var(--orbit-background);
+}
+.text-orbit-foreground {
+  color: var(--orbit-foreground);
+}
+.text-orbit-card-foreground {
+  color: var(--orbit-card-foreground);
+}
+.text-orbit-primary {
+  color: var(--orbit-primary);
+}
+.text-orbit-muted-foreground {
+  color: var(--orbit-muted-foreground);
+}
+.text-orbit-primary-foreground {
+  color: var(--orbit-primary-foreground);
+}
+.bg-orbit-primary {
+  background-color: var(--orbit-primary);
+}
+.bg-orbit-card-80 {
+  background-color: color-mix(in oklch, var(--orbit-card) 80%, transparent);
+}
+.bg-orbit-card-60 {
+  background-color: color-mix(in oklch, var(--orbit-card) 60%, transparent);
+}
+.bg-orbit-background-40 {
+  background-color: color-mix(in oklch, var(--orbit-background) 40%, transparent);
+}
+.bg-orbit-background-50 {
+  background-color: color-mix(in oklch, var(--orbit-background) 50%, transparent);
+}
+.bg-orbit-primary-90 {
+  background-color: color-mix(in oklch, var(--orbit-primary) 90%, transparent);
+}
+.border-orbit-border {
+  border-color: var(--orbit-border);
+}
+.border-orbit-primary {
+  border-color: var(--orbit-primary);
+}
+.accent-orbit-primary {
+  accent-color: var(--orbit-primary);
+}
+
 .observatory-panel {
   background-color: #111622;
   border: 1px solid #1e283c;

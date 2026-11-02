@@ -16,6 +16,7 @@
 | phase-gamification-1 | Gamification · Step 1 | **Done** | Mission engine + localStorage |
 | phase-gamification-2 | Gamification · Step 2 | **Done** | Mission Control UI, wiring Dashboard/AR/CV, reset progress |
 | phase-gamification-3 | Gamification · Step 3 | **Done** | Daily challenge, collection book, mission debriefs, progress CSV |
+| phase-gamification-4 | Gamification · Step 4 | **Done** | Stargazer XP, daily quests, golden lock, discovery badges, safety quiz |
 | phase8-verify | 8 · Verify | **In progress** | `pytest` 12 passed; `npm run build` OK; device AR/camera QA pending |
 
 ## Checklist
@@ -30,6 +31,7 @@
 - [x] **phase-gamification-1** — Mission progress store, 6 missions, localStorage, auto-complete rules
 - [x] **phase-gamification-2** — Mission Control panel, step checklists, Continue, mission wiring
 - [x] **phase-gamification-3** — Daily sky challenge, collection book, debrief toasts, progress CSV export
+- [x] **phase-gamification-4** — Stargazer XP levels, 3 daily alignment quests, golden lock, discovery badges, safety quiz
 - [ ] **phase8-verify** — Full browser/device pass with shared location/time state
 
 ## Recent fixes (2026-11-02)

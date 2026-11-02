@@ -68,7 +68,8 @@ export function ARSkyView({
   gpsLoading,
   onNavigateTo3DExplorer,
 }: ARSkyViewProps) {
-  const { setArBodyLocked } = useMissionProgressContext();
+  const { setArBodyLocked, reportArAlignmentHold, alignmentHoldProgress, progress } =
+    useMissionProgressContext();
   const containerRef = useRef<HTMLDivElement | null>(null);
   const {
     videoRef,
@@ -698,7 +699,10 @@ export function ARSkyView({
 
   useEffect(() => {
     if (detectedTarget?.isLocked && currentCoords.altitudeDeg >= 0) {
-      setArBodyLocked(true, detectedTarget.bodyId);
+      setArBodyLocked(true, detectedTarget.bodyId, {
+        moonPhaseName: currentCoords.phaseName,
+        sunAltitudeDeg: currentCoords.altitudeDeg,
+      });
     } else {
       setArBodyLocked(false, null);
     }
@@ -706,7 +710,29 @@ export function ARSkyView({
     detectedTarget?.isLocked,
     detectedTarget?.bodyId,
     currentCoords.altitudeDeg,
+    currentCoords.phaseName,
     setArBodyLocked,
+  ]);
+
+  useEffect(() => {
+    const bodyId = detectedTarget?.bodyId ?? selectedBody;
+    if (!isCurrentLocked || currentCoords.altitudeDeg < 0) {
+      reportArAlignmentHold(bodyId, false, 0);
+      return;
+    }
+    const timer = window.setInterval(() => {
+      reportArAlignmentHold(bodyId, true, 0.25);
+    }, 250);
+    return () => {
+      window.clearInterval(timer);
+      reportArAlignmentHold(bodyId, false, 0);
+    };
+  }, [
+    isCurrentLocked,
+    detectedTarget?.bodyId,
+    selectedBody,
+    currentCoords.altitudeDeg,
+    reportArAlignmentHold,
   ]);
 
   // Compass Tape Ticks Generation
@@ -971,6 +997,11 @@ export function ARSkyView({
 
         {/* Sleek Floating Guidance Pill at Top Center */}
         <div className="absolute top-11 inset-x-2 flex flex-col items-center gap-1.5 pointer-events-auto z-20">
+          {currentMeta.id === 'Sun' && !progress.safetyQuizPassed && (
+            <div className="px-3 py-1.5 rounded-md border border-amber-500/50 bg-amber-950/90 text-[11px] text-amber-200 max-w-md text-center">
+              Complete the safety quest on Welcome before relying on Sun AR guidance.
+            </div>
+          )}
           <div
             onClick={() => {
               setDiscoveredBodyId(currentMeta.id);
@@ -988,6 +1019,14 @@ export function ARSkyView({
               <>
                 <Target className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
                 <span className="font-semibold">TARGET LOCKED: {currentMeta.name}</span>
+                {alignmentHoldProgress < 1 && (
+                  <span className="text-[10px] text-violet-300">
+                    Golden lock {Math.round(alignmentHoldProgress * 100)}%
+                  </span>
+                )}
+                {alignmentHoldProgress >= 1 && (
+                  <span className="text-[10px] text-violet-300">Golden lock ✓</span>
+                )}
                 <span className="text-[10px] text-emerald-400/80 hidden xs:inline">(Tap for 3D)</span>
               </>
             ) : currentCoords.altitudeDeg < 0 && viewMode === 'ar' ? (

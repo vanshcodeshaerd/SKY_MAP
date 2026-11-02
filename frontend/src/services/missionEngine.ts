@@ -21,6 +21,13 @@ export function createDefaultProgress(): MissionProgressState {
     discoveredBodyIds: [],
     dailyChallengeDate: null,
     dailyChallengeCompleted: false,
+    stargazerXp: 0,
+    dailyQuestDate: null,
+    completedDailyQuestIds: [],
+    dailyStreak: 0,
+    lastDailyPlayDate: null,
+    moonPhaseBucketsSeen: [],
+    safetyQuizPassed: false,
     updatedAt: new Date().toISOString(),
   };
 }
@@ -39,6 +46,13 @@ export function loadProgress(): MissionProgressState {
       completedMissionIds: parsed.completedMissionIds ?? [],
       earnedBadgeIds: parsed.earnedBadgeIds ?? [],
       discoveredBodyIds: parsed.discoveredBodyIds ?? [],
+      stargazerXp: parsed.stargazerXp ?? 0,
+      dailyQuestDate: parsed.dailyQuestDate ?? null,
+      completedDailyQuestIds: parsed.completedDailyQuestIds ?? [],
+      dailyStreak: parsed.dailyStreak ?? 0,
+      lastDailyPlayDate: parsed.lastDailyPlayDate ?? null,
+      moonPhaseBucketsSeen: parsed.moonPhaseBucketsSeen ?? [],
+      safetyQuizPassed: parsed.safetyQuizPassed ?? false,
     };
   } catch {
     return createDefaultProgress();

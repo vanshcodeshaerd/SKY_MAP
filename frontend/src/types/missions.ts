@@ -20,7 +20,11 @@ export type BadgeId =
   | 'badge_ar_navigator'
   | 'badge_orbit_master'
   | 'badge_lab_detective'
-  | 'badge_collector';
+  | 'badge_collector'
+  | 'badge_helios_seeker'
+  | 'badge_lunar_observer'
+  | 'badge_lord_of_rings'
+  | 'badge_red_planet';
 
 export type RankId = 'cadet' | 'navigator' | 'observer' | 'mission_specialist' | 'skygazer_pro';
 
@@ -62,6 +66,14 @@ export interface MissionProgressState {
   discoveredBodyIds: CelestialBodyId[];
   dailyChallengeDate: string | null;
   dailyChallengeCompleted: boolean;
+  /** Stargazer XP (alignment quests, missions, discoveries) */
+  stargazerXp: number;
+  dailyQuestDate: string | null;
+  completedDailyQuestIds: string[];
+  dailyStreak: number;
+  lastDailyPlayDate: string | null;
+  moonPhaseBucketsSeen: string[];
+  safetyQuizPassed: boolean;
   updatedAt: string;
 }
 

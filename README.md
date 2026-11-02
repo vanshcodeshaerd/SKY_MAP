@@ -182,6 +182,7 @@ This section tracks the 8-phase build plan. Detailed notes live in [PROGRESS.md]
 | Gamification | phase-gamification-1 | Done | Mission engine, `localStorage` progress |
 | Gamification | phase-gamification-2 | Done | Mission Control on Welcome, Dashboard/AR/CV mission wiring |
 | Gamification | phase-gamification-3 | Done | Daily challenge, collection book, debrief toasts, progress CSV |
+| Gamification | phase-gamification-4 | Done | Stargazer XP, daily quests, golden lock, discovery badges, safety quiz |
 | 8 | phase8-verify | In progress | Backend pytest green; frontend `npm run build` OK; manual AR/camera testing on device |
 
 **Coordinate API check (New Delhi, 2026-06-21T06:30Z):** Skyfield az/alt ≈ 133.84° / 82.70°; client `astronomy-engine` within ~0.002° — suitable for AR overlay.
