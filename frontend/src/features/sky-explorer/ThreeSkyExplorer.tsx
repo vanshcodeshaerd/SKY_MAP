@@ -103,6 +103,8 @@ export function ThreeSkyExplorer({
   const groundDiscRef = useRef<THREE.Mesh | null>(null);
   const diurnalGroupRef = useRef<THREE.Group | null>(null);
   const constellationsGroupRef = useRef<THREE.Group | null>(null);
+  const labelsGroupRef = useRef<THREE.Group | null>(null);
+  const leadersGroupRef = useRef<THREE.Group | null>(null);
   const avatarGroupRef = useRef<THREE.Group | null>(null);
   const avatarTelescopeRef = useRef<THREE.Group | null>(null);
 
@@ -484,6 +486,15 @@ export function ThreeSkyExplorer({
     scene.add(constGroup);
     constellationsGroupRef.current = constGroup;
 
+    // F2. Dedicated Labels & Leader Lines Groups (World Space - avoids planet axial rotation tilt)
+    const labelsGroup = new THREE.Group();
+    scene.add(labelsGroup);
+    labelsGroupRef.current = labelsGroup;
+
+    const leadersGroup = new THREE.Group();
+    scene.add(leadersGroup);
+    leadersGroupRef.current = leadersGroup;
+
     // G. Horizon Ground Disc
     const horizonRadius = 80;
     const horizonGeo = new THREE.CircleGeometry(horizonRadius, 64);
@@ -755,10 +766,9 @@ export function ThreeSkyExplorer({
         sunCoronaRef.current = coronaSprite;
       }
 
-      // Floating Name/Altitude Sprite
+      // Floating Name/Altitude Sprite in World Space (never tumbles with planet spin)
       const label = createTextSprite(`${body.symbol} ${body.name}`, body.color, 32);
-      label.position.set(0, body.sizeRadius + 4, 0);
-      mesh.add(label);
+      labelsGroup.add(label);
       bodyLabelsRef.current[body.id] = label;
     });
 
@@ -1023,16 +1033,41 @@ export function ThreeSkyExplorer({
     }
   }, [selectedBody, location, dateKey, activeBodyMeta.color, scaleMode, BODY_DEPTH_RADII]);
 
-  // 4. Real-Time Position Updates for ALL 9 Bodies with Collision Avoidance
+  // 4. Real-Time Position Updates for ALL 9 Bodies with Collision Avoidance & Leader Pins
   useEffect(() => {
-    CELESTIAL_BODY_LIST.forEach((body) => {
+    // Clear previous leader lines
+    const leadersGroup = leadersGroupRef.current;
+    if (leadersGroup) {
+      while (leadersGroup.children.length > 0) {
+        const child = leadersGroup.children[0];
+        leadersGroup.remove(child);
+        if (child instanceof THREE.Line) {
+          child.geometry.dispose();
+          if (Array.isArray(child.material)) child.material.forEach((m) => m.dispose());
+          else child.material.dispose();
+        }
+      }
+    }
+
+    // Sort visible bodies by altitude ascending to stagger bottom-to-top
+    const visibleBodies = CELESTIAL_BODY_LIST.filter((b) => showAllBodies || b.id === selectedBody);
+    const sorted = [...visibleBodies].sort((a, b) => {
+      const altA = allPositions[a.id]?.altitudeDeg ?? 0;
+      const altB = allPositions[b.id]?.altitudeDeg ?? 0;
+      return altA - altB;
+    });
+
+    const placedLabels: { az: number; alt: number; offset: number }[] = [];
+
+    sorted.forEach((body) => {
       const mesh = bodyMeshesRef.current[body.id];
-      if (!mesh) return;
-
+      const label = bodyLabelsRef.current[body.id];
       const pos = allPositions[body.id];
-      if (!pos) return;
+      if (!mesh || !label || !pos) return;
 
-      mesh.visible = showAllBodies || body.id === selectedBody;
+      const isVisible = showAllBodies || body.id === selectedBody;
+      mesh.visible = isVisible;
+      label.visible = isVisible;
 
       const bodyRadius = scaleMode === 'depth' ? BODY_DEPTH_RADII[body.id] : 80;
       const enu = azAltToEnuVector(pos.azimuthDeg, pos.altitudeDeg);
@@ -1042,40 +1077,44 @@ export function ThreeSkyExplorer({
       const sign = pos.altitudeDeg >= 0 ? '+' : '';
       const labelText = `${body.symbol} ${body.name} (${sign}${pos.altitudeDeg.toFixed(1)}°)`;
       updateBodyLabel(body.id, labelText, pos.isAboveHorizon ? body.color : '#64748B');
-    });
 
-    // Intelligent Label Staggering & Collision Avoidance
-    // Group bodies that are close in Azimuth & Altitude so their labels don't overlap into unreadable text
-    const visibleBodies = CELESTIAL_BODY_LIST.filter((b) => showAllBodies || b.id === selectedBody);
-    const placedLabels: { az: number; alt: number; offset: number }[] = [];
-
-    // Sort by altitude ascending
-    const sorted = [...visibleBodies].sort((a, b) => {
-      const altA = allPositions[a.id]?.altitudeDeg ?? 0;
-      const altB = allPositions[b.id]?.altitudeDeg ?? 0;
-      return altA - altB;
-    });
-
-    sorted.forEach((body) => {
-      const pos = allPositions[body.id];
-      const label = bodyLabelsRef.current[body.id];
-      if (!pos || !label) return;
-
-      let yOffset = body.sizeRadius + 4.2;
+      // Base label height above planet sphere in World Space
+      let yOffset = body.sizeRadius + 4.5;
 
       for (const placed of placedLabels) {
         const dAz = Math.abs(pos.azimuthDeg - placed.az);
         const azDiff = Math.min(dAz, 360 - dAz);
         const altDiff = Math.abs(pos.altitudeDeg - placed.alt);
 
-        // If angular distance is less than 15° azimuth and 12° altitude, stagger vertically
-        if (azDiff < 15 && altDiff < 12) {
-          yOffset = Math.max(yOffset, placed.offset + 5.5);
+        // If angular distance is less than 16° azimuth and 14° altitude, stagger vertically
+        if (azDiff < 16 && altDiff < 14) {
+          yOffset = Math.max(yOffset, placed.offset + 7.5);
         }
       }
 
       placedLabels.push({ az: pos.azimuthDeg, alt: pos.altitudeDeg, offset: yOffset });
-      label.position.set(0, yOffset, 0);
+
+      // Position label in World Space directly above the planet (immune to planet axial tilt/spin)
+      label.position.set(v3.x, v3.y + yOffset, v3.z);
+
+      // When planets are in close cluster and staggered high, draw a subtle glowing dashed leader line
+      if (yOffset > body.sizeRadius + 5.5 && leadersGroup && isVisible) {
+        const leaderPts = [
+          new THREE.Vector3(v3.x, v3.y + body.sizeRadius + 0.6, v3.z),
+          new THREE.Vector3(v3.x, v3.y + yOffset - 2.8, v3.z),
+        ];
+        const leaderGeo = new THREE.BufferGeometry().setFromPoints(leaderPts);
+        const leaderMat = new THREE.LineDashedMaterial({
+          color: new THREE.Color(body.color),
+          dashSize: 1.2,
+          gapSize: 0.8,
+          transparent: true,
+          opacity: 0.65,
+        });
+        const leaderLine = new THREE.Line(leaderGeo, leaderMat);
+        leaderLine.computeLineDistances();
+        leadersGroup.add(leaderLine);
+      }
     });
 
     // Update active body ray and ground projection

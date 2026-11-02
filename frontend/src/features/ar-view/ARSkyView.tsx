@@ -102,6 +102,7 @@ export function ARSkyView({
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
   const lockHoldTimerRef = useRef<{ bodyId: CelestialBodyId; startTime: number } | null>(null);
   const lastDismissedRef = useRef<{ bodyId: CelestialBodyId; time: number } | null>(null);
+  const lastLockedBodyRef = useRef<CelestialBodyId | null>(null);
 
   const [viewport, setViewport] = useState({ width: 800, height: 600 });
 
@@ -524,12 +525,31 @@ export function ARSkyView({
       }
     });
 
-    // Priority 1: Pick the ON-SCREEN body closest to the center crosshairs
+    // Priority 1: Pick the ON-SCREEN body closest to the center crosshairs with HYSTERESIS
     const onScreenCandidates = candidates.filter((c) => c.isOnScreen);
     if (onScreenCandidates.length > 0) {
       onScreenCandidates.sort((a, b) => a.distFromCenterPx - b.distFromCenterPx);
-      return onScreenCandidates[0];
+
+      const best = onScreenCandidates[0];
+      const currentlyFocused = lastLockedBodyRef.current;
+
+      // Hysteresis: If we already have a focused target on screen, require a 35px buffer to switch away
+      // This prevents rapid flickering and timer resets between close planets (e.g. Sun and Mercury)
+      if (currentlyFocused && currentlyFocused !== best.bodyId) {
+        const currentCandidate = onScreenCandidates.find((c) => c.bodyId === currentlyFocused);
+        if (currentCandidate) {
+          const hysteresisBufferPx = 35;
+          if (best.distFromCenterPx + hysteresisBufferPx > currentCandidate.distFromCenterPx) {
+            return currentCandidate;
+          }
+        }
+      }
+
+      lastLockedBodyRef.current = best.bodyId;
+      return best;
     }
+
+    lastLockedBodyRef.current = null;
 
     // Priority 2: If none on screen, pick the forward body with smallest angular separation to guide user
     if (candidates.length > 0) {
@@ -539,6 +559,25 @@ export function ARSkyView({
 
     return null;
   }, [autoScanMode, selectedBody, projectedBodies, viewport, allPositions, showSubHorizonPlanets]);
+
+  // Conjunction / Close Cluster Detection (when 2+ planets are within close proximity on screen)
+  const nearbyClusterBodies = useMemo(() => {
+    if (!detectedTarget || !detectedTarget.isOnScreen) return [];
+    const targetProj = detectedTarget.proj;
+    return CELESTIAL_BODY_LIST.filter((b) => {
+      if (b.id === detectedTarget.bodyId) return false;
+      const pos = allPositions[b.id];
+      if (!showSubHorizonPlanets && pos && pos.altitudeDeg < 0) return false;
+      const p = projectedBodies[b.id];
+      if (!p || !p.isInFront) return false;
+      const dist = Math.hypot(p.u - targetProj.u, p.v - targetProj.v);
+      return dist < 120 || p.angularSeparationDeg < 12;
+    }).map((b) => ({
+      body: b,
+      proj: projectedBodies[b.id],
+      coords: allPositions[b.id],
+    }));
+  }, [detectedTarget, projectedBodies, allPositions, showSubHorizonPlanets]);
 
   // Current active body metadata and coordinates for HUD
   const currentTargetBodyId = detectedTarget?.bodyId || selectedBody;
@@ -916,13 +955,11 @@ export function ARSkyView({
         </div>
 
         {/* Sleek Floating Guidance Pill at Top Center */}
-        <div className="absolute top-11 inset-x-2 flex justify-center pointer-events-auto z-20">
+        <div className="absolute top-11 inset-x-2 flex flex-col items-center gap-1.5 pointer-events-auto z-20">
           <div
             onClick={() => {
-              if (isCurrentLocked || isCurrentNear) {
-                setDiscoveredBodyId(currentMeta.id);
-                setIsModalOpen(true);
-              }
+              setDiscoveredBodyId(currentMeta.id);
+              setIsModalOpen(true);
             }}
             className={`px-3 py-1 rounded-full backdrop-blur-md border shadow-xl flex items-center gap-1.5 text-[11px] font-mono transition-all max-w-[90vw] truncate cursor-pointer ${
               isCurrentLocked
@@ -966,6 +1003,41 @@ export function ARSkyView({
               </>
             )}
           </div>
+
+          {/* Close Cluster / Conjunction Disambiguation Selector */}
+          {nearbyClusterBodies.length > 0 && (
+            <div className="bg-slate-950/95 backdrop-blur-xl px-2.5 py-1 rounded-full border border-amber-500/50 shadow-2xl flex items-center gap-1.5 text-[10px] font-mono animate-fade-in max-w-[92vw] overflow-x-auto scrollbar-none">
+              <span className="text-amber-400 font-semibold shrink-0">⚡ Cluster:</span>
+              <button
+                onClick={() => {
+                  lastLockedBodyRef.current = currentMeta.id;
+                  if (onSelectBody) onSelectBody(currentMeta.id);
+                  setDiscoveredBodyId(currentMeta.id);
+                  setIsModalOpen(true);
+                }}
+                className="px-2 py-0.5 rounded-full bg-amber-500 text-slate-950 font-bold flex items-center gap-1 shrink-0 shadow-sm"
+              >
+                <span>{currentMeta.name}</span>
+                <span className="text-[9px]">({currentProj?.angularSeparationDeg?.toFixed(1) || '0'}°)</span>
+              </button>
+
+              {nearbyClusterBodies.map(({ body, proj }) => (
+                <button
+                  key={body.id}
+                  onClick={() => {
+                    lastLockedBodyRef.current = body.id;
+                    if (onSelectBody) onSelectBody(body.id);
+                    setDiscoveredBodyId(body.id);
+                    setIsModalOpen(true);
+                  }}
+                  className="px-2 py-0.5 rounded-full bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700 flex items-center gap-1 shrink-0 transition"
+                >
+                  <span style={{ color: body.color }}>{body.name}</span>
+                  <span className="text-slate-400 text-[9px]">({proj.angularSeparationDeg.toFixed(1)}°)</span>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Uncluttered Top Right Action Bar (Mode Pill + Layers Button) */}
