@@ -90,8 +90,9 @@ export function ARSkyView({
   const [isLayersOpen, setIsLayersOpen] = useState<boolean>(false);
   const [isTrimOpen, setIsTrimOpen] = useState<boolean>(false);
 
-  // Quick compass trim for real-life magnetic alignment (+/- degrees on the fly)
+  // Quick compass & altitude tilt trim for real-life magnetic/attitude alignment (+/- degrees on the fly)
   const [quickAzimuthNudge, setQuickAzimuthNudge] = useState<number>(0);
+  const [quickAltitudeNudge, setQuickAltitudeNudge] = useState<number>(0);
 
   // Auto-Scan vs Manual Pin Mode (Free Sky Exploration)
   const [autoScanMode, setAutoScanMode] = useState<boolean>(true);
@@ -245,9 +246,10 @@ export function ARSkyView({
       const targetGamma =
         orientation.cameraRoll !== undefined && orientation.cameraRoll !== null ? orientation.cameraRoll! : manualRoll;
 
-      // Exponential smoothing low-pass filter
-      const smoothFactor = hasSensor ? 0.25 : 0.45;
-      smoothedAnglesRef.current.heading += (targetAlpha - smoothedAnglesRef.current.heading) * smoothFactor;
+      // Exponential smoothing low-pass filter with shortest-arc angular interpolation
+      const smoothFactor = hasSensor ? 0.35 : 0.55;
+      const dHeading = ((targetAlpha - smoothedAnglesRef.current.heading + 540) % 360) - 180;
+      smoothedAnglesRef.current.heading = (smoothedAnglesRef.current.heading + dHeading * smoothFactor + 360) % 360;
       smoothedAnglesRef.current.pitch += (targetBeta - smoothedAnglesRef.current.pitch) * smoothFactor;
       smoothedAnglesRef.current.roll += (targetGamma - smoothedAnglesRef.current.roll) * smoothFactor;
 
@@ -257,7 +259,10 @@ export function ARSkyView({
 
       const effectiveHeading =
         (rawAlpha + calibration.declinationDeg + calibration.azimuthNudgeDeg + quickAzimuthNudge + 360) % 360;
-      const effectivePitch = Math.max(-89.9, Math.min(89.9, rawBeta + calibration.altitudeNudgeDeg));
+      const effectivePitch = Math.max(
+        -89.9,
+        Math.min(89.9, rawBeta + calibration.altitudeNudgeDeg + quickAltitudeNudge)
+      );
       const effectiveRoll = rawGamma;
 
       setHudHeading(effectiveHeading);
@@ -375,6 +380,7 @@ export function ARSkyView({
     allPositions,
     calibration,
     quickAzimuthNudge,
+    quickAltitudeNudge,
     viewport,
     starsMap,
     eclipticEnuPoints,
@@ -567,10 +573,15 @@ export function ARSkyView({
     return ticks;
   }, []);
 
-  const handleSnapCompassToBody = () => {
-    const trueAz = activeCoords.azimuthDeg;
-    const diff = trueAz - hudHeading;
-    setQuickAzimuthNudge((prev) => (prev + diff + 360) % 360);
+  // 1-Tap Alignment Calibration to Target Body (Syncs both Azimuth and Altitude offsets immediately)
+  const handleAlignToTargetBody = () => {
+    const trueAz = currentCoords.azimuthDeg;
+    const trueAlt = currentCoords.altitudeDeg;
+    const azDiff = ((trueAz - hudHeading + 540) % 360) - 180;
+    const altDiff = trueAlt - hudPitch;
+
+    setQuickAzimuthNudge((prev) => (prev + azDiff + 360) % 360);
+    setQuickAltitudeNudge((prev) => Math.max(-60, Math.min(60, prev + altDiff)));
   };
 
   return (
@@ -1178,47 +1189,76 @@ export function ARSkyView({
             </span>
           </div>
 
-          {/* Quick Compass Trim Capsule */}
+          {/* Quick Compass & Tilt Calibration Trim Capsule */}
           <div className="flex items-center gap-1 bg-slate-950/90 backdrop-blur-md px-2 py-1 rounded-xl border border-slate-800 text-[10px] shadow-md">
             <button
               onClick={() => setIsTrimOpen(!isTrimOpen)}
               className="text-slate-400 hover:text-white flex items-center gap-1 font-mono pr-1"
             >
               <span>Trim</span>
-              {quickAzimuthNudge !== 0 && (
-                <span className="text-amber-400 font-bold">({quickAzimuthNudge > 0 ? '+' : ''}{quickAzimuthNudge}°)</span>
+              {(quickAzimuthNudge !== 0 || quickAltitudeNudge !== 0) && (
+                <span className="text-amber-400 font-bold">
+                  ({quickAzimuthNudge !== 0 ? `Az:${quickAzimuthNudge > 0 ? '+' : ''}${quickAzimuthNudge.toFixed(0)}° ` : ''}
+                  {quickAltitudeNudge !== 0 ? `Tilt:${quickAltitudeNudge > 0 ? '+' : ''}${quickAltitudeNudge.toFixed(0)}°` : ''})
+                </span>
               )}
             </button>
 
             {isTrimOpen && (
-              <div className="flex items-center gap-1 pl-1 border-l border-slate-800 animate-fade-in">
+              <div className="flex flex-wrap items-center gap-1.5 pl-1.5 border-l border-slate-800 animate-fade-in text-[9px] font-mono">
+                {/* Azimuth Nudge */}
+                <span className="text-slate-400">Az:</span>
                 <button
                   onClick={() => setQuickAzimuthNudge((prev) => prev - 5)}
-                  className="px-1.5 py-0.5 rounded bg-slate-900 text-amber-400 font-mono text-[9px] border border-slate-800"
+                  className="px-1.5 py-0.5 rounded bg-slate-900 text-amber-400 border border-slate-800 hover:bg-slate-800"
+                  title="Shift heading left 5°"
                 >
                   -5°
                 </button>
                 <button
                   onClick={() => setQuickAzimuthNudge((prev) => prev + 5)}
-                  className="px-1.5 py-0.5 rounded bg-slate-900 text-amber-400 font-mono text-[9px] border border-slate-800"
+                  className="px-1.5 py-0.5 rounded bg-slate-900 text-amber-400 border border-slate-800 hover:bg-slate-800"
+                  title="Shift heading right 5°"
                 >
                   +5°
                 </button>
-                {quickAzimuthNudge !== 0 && (
+
+                {/* Altitude / Tilt Nudge */}
+                <span className="text-slate-400 pl-1">Tilt:</span>
+                <button
+                  onClick={() => setQuickAltitudeNudge((prev) => prev - 3)}
+                  className="px-1.5 py-0.5 rounded bg-slate-900 text-sky-400 border border-slate-800 hover:bg-slate-800"
+                  title="Tilt pitch down by 3°"
+                >
+                  -3°
+                </button>
+                <button
+                  onClick={() => setQuickAltitudeNudge((prev) => prev + 3)}
+                  className="px-1.5 py-0.5 rounded bg-slate-900 text-sky-400 border border-slate-800 hover:bg-slate-800"
+                  title="Tilt pitch up by 3°"
+                >
+                  +3°
+                </button>
+
+                {(quickAzimuthNudge !== 0 || quickAltitudeNudge !== 0) && (
                   <button
-                    onClick={() => setQuickAzimuthNudge(0)}
-                    className="p-1 rounded bg-slate-900 text-slate-400"
-                    title="Reset"
+                    onClick={() => {
+                      setQuickAzimuthNudge(0);
+                      setQuickAltitudeNudge(0);
+                    }}
+                    className="p-1 rounded bg-slate-900 text-slate-400 hover:text-white"
+                    title="Reset Trim"
                   >
                     <RotateCcw className="w-2.5 h-2.5" />
                   </button>
                 )}
+
                 <button
-                  onClick={handleSnapCompassToBody}
-                  className="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 font-semibold text-[9px] border border-amber-500/40"
-                  title={`Snap compass heading to ${activeMeta.name}`}
+                  onClick={handleAlignToTargetBody}
+                  className="px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 font-semibold border border-amber-500/40 hover:bg-amber-500/30 whitespace-nowrap"
+                  title={`1-Tap Calibrate: Lock ${currentMeta.name} onto center crosshairs`}
                 >
-                  Snap
+                  🎯 Align to {currentMeta.name}
                 </button>
               </div>
             )}
