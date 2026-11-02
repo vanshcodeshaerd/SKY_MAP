@@ -428,28 +428,74 @@ export function ARSkyView({
     invertPitch,
   ]);
 
+  // Auto-start camera when entering AR Mode
+  useEffect(() => {
+    if (viewMode === 'ar' && !isCameraActive && !cameraError) {
+      startCamera();
+    }
+  }, [viewMode, isCameraActive, cameraError, startCamera]);
+
+  // Touch and pointer dragging to pan AR sky view (for manual fine-tuning and desktop/mobile without gyro)
+  const isDraggingRef = useRef(false);
+  const dragStartRef = useRef({ x: 0, y: 0, startAz: 0, startAlt: 0 });
+
+  const handlePointerDown = (e: React.PointerEvent) => {
+    if ((e.target as HTMLElement).closest('button') || (e.target as HTMLElement).closest('.pointer-events-auto')) return;
+    isDraggingRef.current = true;
+    dragStartRef.current = {
+      x: e.clientX,
+      y: e.clientY,
+      startAz: quickAzimuthNudge,
+      startAlt: quickAltitudeNudge,
+    };
+  };
+
+  const handlePointerMove = (e: React.PointerEvent) => {
+    if (!isDraggingRef.current) return;
+    const dx = e.clientX - dragStartRef.current.x;
+    const dy = e.clientY - dragStartRef.current.y;
+    const newAz = (dragStartRef.current.startAz - dx * 0.18 + 360) % 360;
+    const newAlt = Math.max(-75, Math.min(75, dragStartRef.current.startAlt + dy * 0.18));
+    setQuickAzimuthNudge(newAz);
+    setQuickAltitudeNudge(newAlt);
+  };
+
+  const handlePointerUp = () => {
+    isDraggingRef.current = false;
+  };
+
   // Find the closest on-screen body to the optical crosshairs (Auto-Detection vs Manual Pin)
   const detectedTarget = useMemo(() => {
+    const cx = viewport.width / 2;
+    const cy = viewport.height / 2;
+
     if (!autoScanMode && selectedBody) {
       const proj = projectedBodies[selectedBody];
       if (!proj) return null;
       const onScreen =
         proj.isInFront &&
-        proj.u >= 35 &&
-        proj.u <= viewport.width - 35 &&
-        proj.v >= 35 &&
-        proj.v <= viewport.height - 35;
+        proj.u >= 15 &&
+        proj.u <= viewport.width - 15 &&
+        proj.v >= 15 &&
+        proj.v <= viewport.height - 15;
+      const distPx = Math.hypot(proj.u - cx, proj.v - cy);
+      const isLocked = onScreen && (proj.angularSeparationDeg < 9.5 || distPx < 90);
       return {
         bodyId: selectedBody,
         proj,
         isOnScreen: onScreen,
-        isLocked: onScreen && proj.angularSeparationDeg < 5.5,
+        isLocked,
       };
     }
 
-    // Auto-Scan Mode: Evaluate all 9 celestial bodies
-    let closest: { bodyId: CelestialBodyId; proj: any; isOnScreen: boolean; isLocked: boolean } | null = null;
-    let minSep = Infinity;
+    // Auto-Scan Mode: Evaluate all 9 celestial bodies with priority to ON-SCREEN bodies
+    const candidates: {
+      bodyId: CelestialBodyId;
+      proj: any;
+      isOnScreen: boolean;
+      isLocked: boolean;
+      distFromCenterPx: number;
+    }[] = [];
 
     CELESTIAL_BODY_LIST.forEach((b) => {
       const pos = allPositions[b.id];
@@ -460,24 +506,38 @@ export function ARSkyView({
 
       const p = projectedBodies[b.id];
       if (p && p.isInFront) {
-        if (p.angularSeparationDeg < minSep) {
-          minSep = p.angularSeparationDeg;
-          const onScreen =
-            p.u >= 25 &&
-            p.u <= viewport.width - 25 &&
-            p.v >= 25 &&
-            p.v <= viewport.height - 25;
-          closest = {
-            bodyId: b.id,
-            proj: p,
-            isOnScreen: onScreen,
-            isLocked: onScreen && p.angularSeparationDeg < 5.5,
-          };
-        }
+        const onScreen =
+          p.u >= 15 &&
+          p.u <= viewport.width - 15 &&
+          p.v >= 15 &&
+          p.v <= viewport.height - 15;
+        const distPx = Math.hypot(p.u - cx, p.v - cy);
+        const isLocked = onScreen && (p.angularSeparationDeg < 9.5 || distPx < 90);
+
+        candidates.push({
+          bodyId: b.id,
+          proj: p,
+          isOnScreen: onScreen,
+          isLocked,
+          distFromCenterPx: distPx,
+        });
       }
     });
 
-    return closest;
+    // Priority 1: Pick the ON-SCREEN body closest to the center crosshairs
+    const onScreenCandidates = candidates.filter((c) => c.isOnScreen);
+    if (onScreenCandidates.length > 0) {
+      onScreenCandidates.sort((a, b) => a.distFromCenterPx - b.distFromCenterPx);
+      return onScreenCandidates[0];
+    }
+
+    // Priority 2: If none on screen, pick the forward body with smallest angular separation to guide user
+    if (candidates.length > 0) {
+      candidates.sort((a, b) => a.proj.angularSeparationDeg - b.proj.angularSeparationDeg);
+      return candidates[0];
+    }
+
+    return null;
   }, [autoScanMode, selectedBody, projectedBodies, viewport, allPositions, showSubHorizonPlanets]);
 
   // Current active body metadata and coordinates for HUD
@@ -495,7 +555,7 @@ export function ARSkyView({
 
   const isCurrentOnScreen = detectedTarget?.isOnScreen ?? false;
   const isCurrentLocked = detectedTarget?.isLocked ?? false;
-  const isCurrentNear = detectedTarget && detectedTarget.proj.angularSeparationDeg < 15;
+  const isCurrentNear = detectedTarget && (detectedTarget.proj.angularSeparationDeg < 22 || detectedTarget.isOnScreen);
 
   // Auto Lock-On Countdown & Pop-Up Trigger
   useEffect(() => {
@@ -506,18 +566,18 @@ export function ARSkyView({
 
     const { bodyId } = detectedTarget;
 
-    // Check if dismissed recently within cooldown (3 seconds)
+    // Check if dismissed recently within cooldown (2.2 seconds)
     if (
       lastDismissedRef.current &&
       lastDismissedRef.current.bodyId === bodyId &&
-      Date.now() - lastDismissedRef.current.time < 3000
+      Date.now() - lastDismissedRef.current.time < 2200
     ) {
       return;
     }
 
     if (!lockHoldTimerRef.current || lockHoldTimerRef.current.bodyId !== bodyId) {
       lockHoldTimerRef.current = { bodyId, startTime: Date.now() };
-    } else if (Date.now() - lockHoldTimerRef.current.startTime > 450) {
+    } else if (Date.now() - lockHoldTimerRef.current.startTime > 320) {
       // Locked steady for 450ms! Open 3D planet modal
       setDiscoveredBodyId(bodyId);
       setIsModalOpen(true);
@@ -657,7 +717,12 @@ export function ARSkyView({
       {/* Main AR / VR Viewport Container - Fully Responsive Height */}
       <div
         ref={containerRef}
-        className={`relative w-full h-[68vh] min-h-[440px] max-h-[720px] rounded-2xl sm:rounded-3xl overflow-hidden shadow-2xl border transition-colors select-none ${
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerUp}
+        style={{ touchAction: 'none' }}
+        className={`relative w-full h-[68vh] min-h-[440px] max-h-[720px] rounded-2xl sm:rounded-3xl overflow-hidden shadow-2xl border transition-colors select-none cursor-grab active:cursor-grabbing ${
           nightVisionMode ? 'bg-red-950/90 border-red-800' : 'bg-slate-950 border-slate-800'
         }`}
       >
