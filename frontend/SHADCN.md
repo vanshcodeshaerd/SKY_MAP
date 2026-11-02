@@ -39,7 +39,3 @@ npx shadcn@latest add button
 ## Usage
 
 Mobile site navigation uses `BottomNavBar` from `@/components/ui/bottom-nav-bar`, wired in `src/components/MobileBottomNav.tsx`.
-
-## Welcome hero
-
-`OrbitalHeroSection` (`@/components/ui/orbital-hero-section.tsx`) drives the landing canvas with helical planet wakes. Textures come from `public/textures/*.jpg` via `src/features/welcome/orbitarium/heroPlanets.ts` (same assets as Orbitarium).
