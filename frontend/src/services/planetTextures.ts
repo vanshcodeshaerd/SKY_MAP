@@ -5,8 +5,127 @@
 
 import * as THREE from 'three';
 
-// Cache generated textures to avoid re-rendering canvases
+// Cache generated textures and bump maps to avoid re-rendering canvases
 const textureCache: Map<string, THREE.CanvasTexture> = new Map();
+const bumpMapCache: Map<string, THREE.CanvasTexture> = new Map();
+
+/**
+ * Generates high-detail height/bump maps to give craters, mountains, and ridges physical 3D relief.
+ */
+export function getPlanetBumpMap(bodyId: string): THREE.CanvasTexture {
+  if (bumpMapCache.has(bodyId)) return bumpMapCache.get(bodyId)!;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = 1024;
+  canvas.height = 512;
+  const ctx = canvas.getContext('2d')!;
+
+  // Neutral mid-gray base
+  ctx.fillStyle = '#808080';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  if (bodyId === 'Moon' || bodyId === 'Mercury') {
+    // Heavy cratering: dark depressions with bright elevated rims
+    for (let i = 0; i < 900; i++) {
+      const x = Math.random() * canvas.width;
+      const y = Math.random() * canvas.height;
+      const r = 2 + Math.random() * 14;
+
+      const grad = ctx.createRadialGradient(x, y, r * 0.1, x, y, r);
+      grad.addColorStop(0, '#202020'); // deep depression
+      grad.addColorStop(0.75, '#505050');
+      grad.addColorStop(0.9, '#FFFFFF'); // high crater rim
+      grad.addColorStop(1, '#808080');
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  } else if (bodyId === 'Mars') {
+    // Mountainous ridges, craters, and Valles Marineris canyon
+    for (let i = 0; i < 500; i++) {
+      const x = Math.random() * canvas.width;
+      const y = Math.random() * canvas.height;
+      const r = 2 + Math.random() * 16;
+      const grad = ctx.createRadialGradient(x, y, r * 0.2, x, y, r);
+      grad.addColorStop(0, '#303030');
+      grad.addColorStop(0.85, '#D0D0D0');
+      grad.addColorStop(1, '#808080');
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    // Deep canyon rift (Valles Marineris)
+    ctx.strokeStyle = '#101010';
+    ctx.lineWidth = 6;
+    ctx.beginPath();
+    ctx.moveTo(350, 260);
+    ctx.bezierCurveTo(450, 250, 550, 280, 650, 265);
+    ctx.stroke();
+  } else if (bodyId === 'Earth') {
+    // Elevate continental landmasses, mountain chains (Himalayas, Andes), flat oceans
+    ctx.fillStyle = '#202020'; // Oceans (flat)
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Continental landmass heights
+    ctx.fillStyle = '#909090';
+    // Eurasia / Africa
+    ctx.beginPath();
+    ctx.ellipse(560, 210, 180, 90, 0.1, 0, Math.PI * 2);
+    ctx.fill();
+    // North America
+    ctx.beginPath();
+    ctx.ellipse(220, 160, 100, 70, -0.2, 0, Math.PI * 2);
+    ctx.fill();
+    // South America
+    ctx.beginPath();
+    ctx.ellipse(300, 320, 60, 110, 0.3, 0, Math.PI * 2);
+    ctx.fill();
+    // Australia
+    ctx.beginPath();
+    ctx.ellipse(820, 340, 60, 45, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // High mountain ridges (Himalayas, Rockies, Andes)
+    ctx.strokeStyle = '#FFFFFF';
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(580, 200);
+    ctx.lineTo(650, 190); // Himalayas
+    ctx.moveTo(180, 120);
+    ctx.lineTo(200, 210); // Rockies
+    ctx.moveTo(270, 260);
+    ctx.lineTo(290, 400); // Andes
+    ctx.stroke();
+  } else if (bodyId === 'Venus') {
+    // Rolling volcanic plains and lava dome bumps
+    for (let i = 0; i < 150; i++) {
+      const x = Math.random() * canvas.width;
+      const y = Math.random() * canvas.height;
+      const r = 8 + Math.random() * 30;
+      const grad = ctx.createRadialGradient(x, y, 0, x, y, r);
+      grad.addColorStop(0, '#B0B0B0');
+      grad.addColorStop(1, '#808080');
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  } else {
+    // Gas giants / Sun: fine turbulent atmospheric micro-relief
+    for (let i = 0; i < 1000; i++) {
+      const x = Math.random() * canvas.width;
+      const y = Math.random() * canvas.height;
+      ctx.fillStyle = Math.random() > 0.5 ? '#909090' : '#707070';
+      ctx.fillRect(x, y, 3, 2);
+    }
+  }
+
+  const texture = new THREE.CanvasTexture(canvas);
+  bumpMapCache.set(bodyId, texture);
+  return texture;
+}
 
 /**
  * Creates high-detail procedural Sun texture with turbulent solar granules and flares.
@@ -448,10 +567,143 @@ export function getNeptuneTexture(): THREE.CanvasTexture {
 }
 
 /**
+ * Creates photorealistic procedural Earth texture with deep blue oceans,
+ * green/brown continents (Eurasia, Americas, Africa, Australia), polar ice caps,
+ * and realistic swirling atmospheric clouds.
+ */
+export function getEarthTexture(): THREE.CanvasTexture {
+  if (textureCache.has('earth')) return textureCache.get('earth')!;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = 1024;
+  canvas.height = 512;
+  const ctx = canvas.getContext('2d')!;
+
+  // 1. Deep Ocean Base (Sapphire gradient)
+  const oceanGrad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+  oceanGrad.addColorStop(0, '#0c243c');
+  oceanGrad.addColorStop(0.3, '#10395b');
+  oceanGrad.addColorStop(0.5, '#13476d');
+  oceanGrad.addColorStop(0.7, '#10395b');
+  oceanGrad.addColorStop(1, '#0c243c');
+  ctx.fillStyle = oceanGrad;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // Subtle ocean depth variations & continental shelves
+  for (let i = 0; i < 40; i++) {
+    const x = Math.random() * canvas.width;
+    const y = 80 + Math.random() * 350;
+    const r = 20 + Math.random() * 80;
+    ctx.fillStyle = 'rgba(23, 88, 115, 0.25)';
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Helper to draw realistic organic landmass
+  const drawLand = (cx: number, cy: number, rx: number, ry: number, color: string, rot = 0) => {
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(rot);
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, rx, ry, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Organic coastlines
+    for (let j = 0; j < 8; j++) {
+      const angle = (j / 8) * Math.PI * 2;
+      const ox = Math.cos(angle) * (rx * 0.85);
+      const oy = Math.sin(angle) * (ry * 0.85);
+      ctx.beginPath();
+      ctx.arc(ox, oy, (rx + ry) * 0.25 * (0.6 + Math.random() * 0.6), 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  };
+
+  // 2. Continents:
+  // Eurasia (Forest green + central Asian steppes)
+  drawLand(600, 180, 160, 75, '#2d6a4f', 0.05);
+  drawLand(530, 170, 70, 50, '#40916c', -0.1); // Europe
+  drawLand(640, 220, 50, 45, '#d4a373', 0);    // India & Southeast Asia
+
+  // Africa (Sahara golden desert + tropical Congo green + savanna)
+  drawLand(510, 250, 65, 55, '#d4a373', 0.1);  // Northern Africa / Sahara
+  drawLand(520, 310, 55, 75, '#2d6a4f', 0.15); // Central & Southern Africa
+
+  // North America (Green forests + Canadian shield + Western cordillera)
+  drawLand(210, 160, 100, 65, '#2d6a4f', -0.2);
+  drawLand(250, 130, 60, 40, '#52b788', 0.1);  // Eastern NA
+
+  // South America (Amazon rainforest + Pampas)
+  drawLand(290, 330, 55, 95, '#1b4332', 0.25);
+  drawLand(310, 300, 65, 55, '#2d6a4f', 0);
+
+  // Australia (Outback ochre / red desert + coastal green)
+  drawLand(830, 350, 65, 45, '#bc6c25', 0);
+  drawLand(860, 360, 30, 30, '#52b788', 0);
+
+  // Mountain Highlights (Himalayas, Rockies, Andes)
+  ctx.strokeStyle = '#e9edc9';
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(600, 200);
+  ctx.lineTo(670, 190); // Himalayas
+  ctx.moveTo(170, 120);
+  ctx.lineTo(190, 210); // Rockies
+  ctx.moveTo(260, 260);
+  ctx.lineTo(280, 400); // Andes
+  ctx.stroke();
+
+  // 3. Polar Ice Caps (North & South)
+  const northCap = ctx.createLinearGradient(0, 0, 0, 60);
+  northCap.addColorStop(0, '#ffffff');
+  northCap.addColorStop(0.7, '#f0f9ff');
+  northCap.addColorStop(1, 'rgba(240, 249, 255, 0)');
+  ctx.fillStyle = northCap;
+  ctx.fillRect(0, 0, canvas.width, 60);
+
+  const southCap = ctx.createLinearGradient(0, canvas.height, 0, canvas.height - 70);
+  southCap.addColorStop(0, '#ffffff');
+  southCap.addColorStop(0.7, '#e0f2fe');
+  southCap.addColorStop(1, 'rgba(224, 242, 254, 0)');
+  ctx.fillStyle = southCap;
+  ctx.fillRect(0, canvas.height - 70, canvas.width, 70);
+
+  // 4. Atmospheric Swirling Clouds (Dynamic white cyclone belts)
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.45)';
+  for (let c = 0; c < 28; c++) {
+    const cx = Math.random() * canvas.width;
+    const cy = 80 + Math.random() * 340;
+    const cw = 40 + Math.random() * 120;
+    const ch = 10 + Math.random() * 30;
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, cw, ch, Math.random() * 0.4 - 0.2, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Spiraling Cyclone Formations
+  [ { x: 260, y: 180 }, { x: 700, y: 160 }, { x: 420, y: 350 } ].forEach(({ x, y }) => {
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.55)';
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.arc(x, y, 22, 0, Math.PI * 1.5);
+    ctx.stroke();
+  });
+
+  const texture = new THREE.CanvasTexture(canvas);
+  textureCache.set('earth', texture);
+  return texture;
+}
+
+/**
  * Retrieves the appropriate procedural canvas texture for any Solar System celestial body.
  */
 export function getPlanetTexture(bodyId: string): THREE.CanvasTexture {
   switch (bodyId) {
+    case 'Earth':
+      return getEarthTexture();
     case 'Sun':
       return getSunTexture();
     case 'Moon':
@@ -672,7 +924,42 @@ export function getPlanetThumbnail(bodyId: string, size: number = 96): string {
       ctx.beginPath();
       ctx.ellipse(cx + 4, cy + 5, 4.5, 3, 0.1, 0, Math.PI * 2);
       ctx.fill();
-    } else if (bodyId === 'Venus') {
+    } else if (bodyId === 'Earth') {
+    // Elevate continental landmasses, mountain chains (Himalayas, Andes), flat oceans
+    ctx.fillStyle = '#202020'; // Oceans (flat)
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Continental landmass heights
+    ctx.fillStyle = '#909090';
+    // Eurasia / Africa
+    ctx.beginPath();
+    ctx.ellipse(560, 210, 180, 90, 0.1, 0, Math.PI * 2);
+    ctx.fill();
+    // North America
+    ctx.beginPath();
+    ctx.ellipse(220, 160, 100, 70, -0.2, 0, Math.PI * 2);
+    ctx.fill();
+    // South America
+    ctx.beginPath();
+    ctx.ellipse(300, 320, 60, 110, 0.3, 0, Math.PI * 2);
+    ctx.fill();
+    // Australia
+    ctx.beginPath();
+    ctx.ellipse(820, 340, 60, 45, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // High mountain ridges (Himalayas, Rockies, Andes)
+    ctx.strokeStyle = '#FFFFFF';
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(580, 200);
+    ctx.lineTo(650, 190); // Himalayas
+    ctx.moveTo(180, 120);
+    ctx.lineTo(200, 210); // Rockies
+    ctx.moveTo(270, 260);
+    ctx.lineTo(290, 400); // Andes
+    ctx.stroke();
+  } else if (bodyId === 'Venus') {
       sphereGrad.addColorStop(0, '#FFFFFF');
       sphereGrad.addColorStop(0.3, '#FEF08A');
       sphereGrad.addColorStop(0.7, '#EAB308');

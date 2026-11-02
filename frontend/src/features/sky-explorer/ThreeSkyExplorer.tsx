@@ -13,6 +13,9 @@ import {
   AlertCircle,
   Sparkles,
   ZoomIn,
+  HelpCircle,
+  Globe,
+  Info,
 } from 'lucide-react';
 import {
   GeodeticLocation,
@@ -29,7 +32,7 @@ import {
   getClientCelestialEvents,
 } from '../../services/astronomyEngine';
 import { azAltToEnuVector, enuToThreeJsVector } from '../../services/coordinateTransforms';
-import { getPlanetTexture, getSaturnRingTexture } from '../../services/planetTextures';
+import { getPlanetTexture, getPlanetBumpMap, getSaturnRingTexture } from '../../services/planetTextures';
 import { calculateStarPositions, CONSTELLATION_DEFS, CalculatedStar } from '../../services/starCatalog';
 import { CelestialBodySelector } from '../../components/CelestialBodySelector';
 
@@ -92,6 +95,21 @@ export function ThreeSkyExplorer({
   const groundDiscRef = useRef<THREE.Mesh | null>(null);
   const diurnalGroupRef = useRef<THREE.Group | null>(null);
   const constellationsGroupRef = useRef<THREE.Group | null>(null);
+  const earthMeshRef = useRef<THREE.Mesh | null>(null);
+  const observerPinRef = useRef<THREE.Group | null>(null);
+
+  // Scale & Depth Radii (proportional AU progression for True Depth Mode)
+  const BODY_DEPTH_RADII: Record<CelestialBodyId, number> = useMemo(() => ({
+    Moon: 38,
+    Mercury: 52,
+    Venus: 66,
+    Sun: 80,
+    Mars: 96,
+    Jupiter: 118,
+    Saturn: 140,
+    Uranus: 162,
+    Neptune: 182,
+  }), []);
 
   // Visual toggles & settings
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
@@ -100,6 +118,8 @@ export function ThreeSkyExplorer({
   const [showAllBodies, setShowAllBodies] = useState<boolean>(true);
   const [showConstellations, setShowConstellations] = useState<boolean>(true);
   const [isCloseUp, setIsCloseUp] = useState<boolean>(false);
+  const [scaleMode, setScaleMode] = useState<'dome' | 'depth'>('dome');
+  const [showSpatialGuide, setShowSpatialGuide] = useState<boolean>(false);
 
   const activeBodyMeta = CELESTIAL_BODIES[selectedBody] || CELESTIAL_BODIES.Sun;
 
@@ -389,26 +409,208 @@ export function ThreeSkyExplorer({
     spriteZ.position.set(0, horizonRadius + 8, 0);
     scene.add(spriteZ);
 
-    // Observer Center Reticle
-    const observerGeo = new THREE.CylinderGeometry(0.8, 1.4, 3, 16);
-    const observerMat = new THREE.MeshBasicMaterial({ color: 0x38bdf8 });
-    const observerMesh = new THREE.Mesh(observerGeo, observerMat);
-    observerMesh.position.set(0, 1.5, 0);
-    scene.add(observerMesh);
+    // Celestial Sky Hemisphere (Upper Dome = Visible Sky Above Horizon)
+    const skyDomeGeo = new THREE.SphereGeometry(horizonRadius, 48, 24, 0, Math.PI * 2, 0, Math.PI / 2);
+    const skyDomeMat = new THREE.MeshBasicMaterial({
+      color: 0x0284c7,
+      transparent: true,
+      opacity: 0.035,
+      side: THREE.BackSide,
+      depthWrite: false,
+    });
+    const skyDomeMesh = new THREE.Mesh(skyDomeGeo, skyDomeMat);
+    scene.add(skyDomeMesh);
 
-    // I. Instantiate All 9 Celestial Bodies with Authentic Procedural Textures
+    // Altitude parallel circles at +30° and +60°
+    [30, 60].forEach((altDeg) => {
+      const altRad = THREE.MathUtils.degToRad(altDeg);
+      const ringRad = horizonRadius * Math.cos(altRad);
+      const ringY = horizonRadius * Math.sin(altRad);
+      const ringPts: THREE.Vector3[] = [];
+      for (let i = 0; i <= 64; i++) {
+        const theta = (i / 64) * Math.PI * 2;
+        ringPts.push(new THREE.Vector3(Math.cos(theta) * ringRad, ringY, Math.sin(theta) * ringRad));
+      }
+      const altRingGeo = new THREE.BufferGeometry().setFromPoints(ringPts);
+      const altRingLine = new THREE.Line(
+        altRingGeo,
+        new THREE.LineDashedMaterial({ color: 0x0284c7, dashSize: 2, gapSize: 2, transparent: true, opacity: 0.3 })
+      );
+      altRingLine.computeLineDistances();
+      scene.add(altRingLine);
+
+      const altLabel = createTextSprite(`+${altDeg}° Altitude`, '#38bdf8', 26);
+      altLabel.position.set(0, ringY + 1.5, -ringRad);
+      altLabel.scale.set(14, 7, 1);
+      scene.add(altLabel);
+    });
+
+    const horizonPlaneLabel = createTextSprite('HORIZON PLANE (0° ALTITUDE)', '#0ea5e9', 28);
+    horizonPlaneLabel.position.set(0, 1.8, -horizonRadius + 14);
+    horizonPlaneLabel.scale.set(20, 10, 1);
+    scene.add(horizonPlaneLabel);
+
+    // H. Center Observer Station & 3D Earth Globe
+    const centerGroup = new THREE.Group();
+    scene.add(centerGroup);
+
+    // 1. Photorealistic 3D Earth Globe at Center
+    const earthRadius = 6.2;
+    const earthGeo = new THREE.SphereGeometry(earthRadius, 48, 48);
+    const earthTexture = getPlanetTexture('Earth');
+    const earthBump = getPlanetBumpMap('Earth');
+    const earthMat = new THREE.MeshStandardMaterial({
+      map: earthTexture,
+      bumpMap: earthBump,
+      bumpScale: 0.25,
+      roughness: 0.55,
+      metalness: 0.08,
+    });
+    const earthMesh = new THREE.Mesh(earthGeo, earthMat);
+    // Positioned so the upper hemisphere crests gracefully above the horizon plane
+    earthMesh.position.set(0, -1.8, 0);
+    // Earth's authentic 23.44° axial tilt
+    earthMesh.rotation.z = THREE.MathUtils.degToRad(23.44);
+    centerGroup.add(earthMesh);
+    earthMeshRef.current = earthMesh;
+
+    // Atmospheric Blue Glow Shell for Earth
+    const earthAtmoGeo = new THREE.SphereGeometry(earthRadius * 1.06, 32, 32);
+    const earthAtmoMat = new THREE.MeshBasicMaterial({
+      color: 0x38bdf8,
+      transparent: true,
+      opacity: 0.22,
+      side: THREE.BackSide,
+    });
+    earthMesh.add(new THREE.Mesh(earthAtmoGeo, earthAtmoMat));
+
+    // 2. Translucent Glass Observation Deck encompassing the horizon tangent
+    const deckGeo = new THREE.CylinderGeometry(8.5, 8.5, 0.35, 48);
+    const deckMat = new THREE.MeshStandardMaterial({
+      color: 0x071126,
+      transparent: true,
+      opacity: 0.75,
+      metalness: 0.8,
+      roughness: 0.25,
+    });
+    const deckMesh = new THREE.Mesh(deckGeo, deckMat);
+    deckMesh.position.set(0, 0, 0);
+    centerGroup.add(deckMesh);
+
+    // Outer Illuminated Neon Compass Ring on Deck
+    const deckRimGeo = new THREE.RingGeometry(8.2, 8.6, 64);
+    deckRimGeo.rotateX(-Math.PI / 2);
+    const deckRimMat = new THREE.MeshBasicMaterial({
+      color: 0x38bdf8,
+      side: THREE.DoubleSide,
+      transparent: true,
+      opacity: 0.9,
+    });
+    deckMesh.add(new THREE.Mesh(deckRimGeo, deckRimMat));
+
+    // 3. Glowing Observer Pin & Human Stargazer Beacon at GPS Location
+    const pinGroup = new THREE.Group();
+    pinGroup.position.set(0, 4.4, 0); // At the apex of Earth's visible crest
+
+    // Pulsing GPS Beacon Pin
+    const pinConeGeo = new THREE.ConeGeometry(0.7, 2.2, 16);
+    pinConeGeo.rotateX(Math.PI); // Point down towards Earth
+    const pinConeMat = new THREE.MeshStandardMaterial({
+      color: 0xf59e0b,
+      emissive: 0xd97706,
+      emissiveIntensity: 0.8,
+      roughness: 0.2,
+    });
+    const pinCone = new THREE.Mesh(pinConeGeo, pinConeMat);
+    pinCone.position.set(0, 1.1, 0);
+    pinGroup.add(pinCone);
+
+    // Glowing Sphere at Pin Head
+    const pinSphereGeo = new THREE.SphereGeometry(0.65, 16, 16);
+    const pinSphereMat = new THREE.MeshBasicMaterial({ color: 0xfef08a });
+    const pinSphere = new THREE.Mesh(pinSphereGeo, pinSphereMat);
+    pinSphere.position.set(0, 2.4, 0);
+    pinGroup.add(pinSphere);
+
+    // Pulsing Base Wave Ring
+    const pulseRingGeo = new THREE.RingGeometry(1.2, 1.6, 32);
+    pulseRingGeo.rotateX(-Math.PI / 2);
+    const pulseRingMat = new THREE.MeshBasicMaterial({
+      color: 0xf59e0b,
+      transparent: true,
+      opacity: 0.6,
+      side: THREE.DoubleSide,
+    });
+    const pulseRing = new THREE.Mesh(pulseRingGeo, pulseRingMat);
+    pulseRing.position.set(0, 0.1, 0);
+    pinGroup.add(pulseRing);
+
+    // Vertical Laser Beacon towards Zenith
+    const beaconPts = [new THREE.Vector3(0, 2.4, 0), new THREE.Vector3(0, 76, 0)];
+    const beaconGeo = new THREE.BufferGeometry().setFromPoints(beaconPts);
+    const beaconLine = new THREE.Line(
+      beaconGeo,
+      new THREE.LineDashedMaterial({
+        color: 0x38bdf8,
+        dashSize: 2.0,
+        gapSize: 1.5,
+        transparent: true,
+        opacity: 0.4,
+      })
+    );
+    beaconLine.computeLineDistances();
+    pinGroup.add(beaconLine);
+
+    centerGroup.add(pinGroup);
+    observerPinRef.current = pinGroup;
+
+    // 4. Clear Floating 3D Text Badges Above Observer Pin
+    const youAreHereSprite = createTextSprite('🌍 YOU ARE HERE (Observer on Earth)', '#38bdf8', 34);
+    youAreHereSprite.position.set(0, 11.5, 0);
+    youAreHereSprite.scale.set(22, 11, 1);
+    centerGroup.add(youAreHereSprite);
+
+    const latStr = location.latitude >= 0 ? `${location.latitude.toFixed(2)}°N` : `${Math.abs(location.latitude).toFixed(2)}°S`;
+    const lonStr = location.longitude >= 0 ? `${location.longitude.toFixed(2)}°E` : `${Math.abs(location.longitude).toFixed(2)}°W`;
+    const coordsSprite = createTextSprite(`GPS: ${latStr}, ${lonStr}`, '#facc15', 28);
+    coordsSprite.position.set(0, 8.8, 0);
+    coordsSprite.scale.set(18, 9, 1);
+    centerGroup.add(coordsSprite);
+
+    // I. Instantiate All 9 Celestial Bodies with Authentic Procedural Textures & 3D Bump Displacement
     CELESTIAL_BODY_LIST.forEach((body) => {
-      const geo = new THREE.SphereGeometry(body.sizeRadius, 48, 48);
+      const geo = new THREE.SphereGeometry(body.sizeRadius, 64, 64);
       const texture = getPlanetTexture(body.id);
+      const bumpMap = getPlanetBumpMap(body.id);
+
+      const isSun = body.id === 'Sun';
       const mat = new THREE.MeshStandardMaterial({
         map: texture,
-        roughness: 0.7,
-        metalness: 0.1,
+        bumpMap: isSun ? undefined : bumpMap,
+        bumpScale: body.id === 'Moon' || body.id === 'Mercury' ? 0.35 : (body.id === 'Mars' ? 0.25 : 0.08),
+        roughness: isSun ? 0.2 : (body.id === 'Moon' || body.id === 'Mercury' ? 0.85 : 0.6),
+        metalness: 0.05,
+        emissive: isSun ? new THREE.Color(0xf59e0b) : new THREE.Color(0x000000),
+        emissiveIntensity: isSun ? 0.8 : 0,
       });
 
       const mesh = new THREE.Mesh(geo, mat);
       scene.add(mesh);
       bodyMeshesRef.current[body.id] = mesh;
+
+      // Realistic Atmospheric Glow Shell for Earth, Venus, Mars, Gas Giants
+      if (['Venus', 'Mars', 'Jupiter', 'Saturn', 'Uranus', 'Neptune'].includes(body.id)) {
+        const atmoGeo = new THREE.SphereGeometry(body.sizeRadius * 1.05, 32, 32);
+        const atmoColor = body.id === 'Mars' ? 0xef4444 : (body.id === 'Venus' ? 0xfef08a : (body.id === 'Uranus' ? 0x38bdf8 : (body.id === 'Neptune' ? 0x3b82f6 : 0xf59e0b)));
+        const atmoMat = new THREE.MeshBasicMaterial({
+          color: atmoColor,
+          transparent: true,
+          opacity: 0.18,
+          side: THREE.BackSide,
+        });
+        const atmoMesh = new THREE.Mesh(atmoGeo, atmoMat);
+        mesh.add(atmoMesh);
+      }
 
       // Special Saturn Cassini Ring Plane
       if (body.hasRings) {
@@ -484,6 +686,17 @@ export function ThreeSkyExplorer({
         const m = bodyMeshesRef.current[body.id];
         if (m) m.rotation.y += 0.003;
       });
+
+      // Authentic axial rotation for Central Earth globe
+      if (earthMeshRef.current) {
+        earthMeshRef.current.rotation.y += 0.0012;
+      }
+
+      // Pulsing Observer Beacon at GPS coordinates
+      if (observerPinRef.current) {
+        const pulse = 1.0 + 0.12 * Math.sin(time * 0.005);
+        observerPinRef.current.scale.set(pulse, 1, pulse);
+      }
 
       // Pulsing Sun Corona
       if (sunCoronaRef.current) {
@@ -580,9 +793,11 @@ export function ThreeSkyExplorer({
     const dayPoints: THREE.Vector3[] = [];
     const nightPoints: THREE.Vector3[] = [];
 
+    const activeRadius = scaleMode === 'depth' ? BODY_DEPTH_RADII[selectedBody] : 80;
+
     waypoints.forEach((wp) => {
       const enu = new THREE.Vector3(wp.vectorEnu[0], wp.vectorEnu[1], wp.vectorEnu[2]);
-      const v3 = enuToThreeJsVector(enu, 80);
+      const v3 = enuToThreeJsVector(enu, activeRadius);
       if (wp.isVisible) {
         dayPoints.push(v3);
       } else {
@@ -612,9 +827,9 @@ export function ThreeSkyExplorer({
       nightLine.computeLineDistances();
       diurnalGroup.add(nightLine);
     }
-  }, [selectedBody, location, dateKey, activeBodyMeta.color]);
+  }, [selectedBody, location, dateKey, activeBodyMeta.color, scaleMode, BODY_DEPTH_RADII]);
 
-  // 4. Real-Time Position Updates for ALL 9 Bodies
+  // 4. Real-Time Position Updates for ALL 9 Bodies with Collision Avoidance
   useEffect(() => {
     CELESTIAL_BODY_LIST.forEach((body) => {
       const mesh = bodyMeshesRef.current[body.id];
@@ -625,8 +840,9 @@ export function ThreeSkyExplorer({
 
       mesh.visible = showAllBodies || body.id === selectedBody;
 
+      const bodyRadius = scaleMode === 'depth' ? BODY_DEPTH_RADII[body.id] : 80;
       const enu = azAltToEnuVector(pos.azimuthDeg, pos.altitudeDeg);
-      const v3 = enuToThreeJsVector(enu, 80);
+      const v3 = enuToThreeJsVector(enu, bodyRadius);
       mesh.position.copy(v3);
 
       const sign = pos.altitudeDeg >= 0 ? '+' : '';
@@ -634,17 +850,53 @@ export function ThreeSkyExplorer({
       updateBodyLabel(body.id, labelText, pos.isAboveHorizon ? body.color : '#64748B');
     });
 
+    // Intelligent Label Staggering & Collision Avoidance
+    // Group bodies that are close in Azimuth & Altitude so their labels don't overlap into unreadable text
+    const visibleBodies = CELESTIAL_BODY_LIST.filter((b) => showAllBodies || b.id === selectedBody);
+    const placedLabels: { az: number; alt: number; offset: number }[] = [];
+
+    // Sort by altitude ascending
+    const sorted = [...visibleBodies].sort((a, b) => {
+      const altA = allPositions[a.id]?.altitudeDeg ?? 0;
+      const altB = allPositions[b.id]?.altitudeDeg ?? 0;
+      return altA - altB;
+    });
+
+    sorted.forEach((body) => {
+      const pos = allPositions[body.id];
+      const label = bodyLabelsRef.current[body.id];
+      if (!pos || !label) return;
+
+      let yOffset = body.sizeRadius + 4.2;
+
+      for (const placed of placedLabels) {
+        const dAz = Math.abs(pos.azimuthDeg - placed.az);
+        const azDiff = Math.min(dAz, 360 - dAz);
+        const altDiff = Math.abs(pos.altitudeDeg - placed.alt);
+
+        // If angular distance is less than 15° azimuth and 12° altitude, stagger vertically
+        if (azDiff < 15 && altDiff < 12) {
+          yOffset = Math.max(yOffset, placed.offset + 5.5);
+        }
+      }
+
+      placedLabels.push({ az: pos.azimuthDeg, alt: pos.altitudeDeg, offset: yOffset });
+      label.position.set(0, yOffset, 0);
+    });
+
     // Update active body ray and ground projection
     if (activeRayRef.current && activeProjectionRef.current && pointLightRef.current) {
       const activePos = allPositions[selectedBody];
       if (activePos) {
+        const activeRadius = scaleMode === 'depth' ? BODY_DEPTH_RADII[selectedBody] : 80;
         const enu = azAltToEnuVector(activePos.azimuthDeg, activePos.altitudeDeg);
-        const v3 = enuToThreeJsVector(enu, 80);
+        const v3 = enuToThreeJsVector(enu, activeRadius);
 
         pointLightRef.current.position.copy(v3);
         pointLightRef.current.intensity = activePos.isAboveHorizon ? 2.5 : 0.4;
 
-        activeRayRef.current.geometry.setFromPoints([new THREE.Vector3(0, 0, 0), v3]);
+        // Line-of-sight ray originating from observer pin (y = 4.4) to celestial target
+        activeRayRef.current.geometry.setFromPoints([new THREE.Vector3(0, 4.4, 0), v3]);
         (activeRayRef.current.material as THREE.LineBasicMaterial).color.set(activeBodyMeta.color);
 
         const groundFootprint = new THREE.Vector3(v3.x, 0, v3.z);
@@ -656,7 +908,7 @@ export function ThreeSkyExplorer({
         activeProjectionRef.current.computeLineDistances();
       }
     }
-  }, [allPositions, selectedBody, showAllBodies, activeBodyMeta.color]);
+  }, [allPositions, selectedBody, showAllBodies, activeBodyMeta.color, scaleMode, BODY_DEPTH_RADII]);
 
   // 5. Ground Opacity Mode Switch
   useEffect(() => {
@@ -676,7 +928,7 @@ export function ThreeSkyExplorer({
   }, [groundMode]);
 
   // Camera Presets
-  const setCameraView = (type: 'default' | 'top' | 'focusBody' | 'closeUp' | 'ground') => {
+  const setCameraView = (type: 'default' | 'top' | 'focusBody' | 'closeUp' | 'ground' | 'earthCenter') => {
     const camera = cameraRef.current;
     const controls = controlsRef.current;
     if (!camera || !controls) return;
@@ -684,6 +936,10 @@ export function ThreeSkyExplorer({
     if (type === 'default') {
       camera.position.set(0, 55, 140);
       controls.target.set(0, 0, 0);
+      setIsCloseUp(false);
+    } else if (type === 'earthCenter') {
+      camera.position.set(0, 16, 32);
+      controls.target.set(0, 4, 0);
       setIsCloseUp(false);
     } else if (type === 'top') {
       camera.position.set(0, 180, 0.1);
@@ -810,13 +1066,47 @@ export function ThreeSkyExplorer({
           </div>
         </div>
 
-        {/* Camera Preset Quick Bar - Responsive Scrollable Bar */}
-        <div className="absolute top-3 right-3 z-10 bg-slate-950/90 backdrop-blur-md p-1 rounded-xl border border-slate-800 flex items-center gap-1 shadow-lg max-w-[38vw] sm:max-w-none overflow-x-auto scrollbar-none">
+        {/* Camera Preset & Scale Quick Bar - Responsive Scrollable Bar */}
+        <div className="absolute top-3 right-3 z-10 bg-slate-950/90 backdrop-blur-md p-1 rounded-xl border border-slate-800 flex items-center gap-1 shadow-lg max-w-[50vw] sm:max-w-none overflow-x-auto scrollbar-none">
+          {/* Scale Mode Selector */}
+          <div className="flex items-center bg-slate-900/90 rounded-lg p-0.5 border border-slate-800 mr-1">
+            <button
+              onClick={() => setScaleMode('dome')}
+              className={`px-2 py-0.5 rounded text-[10px] font-semibold transition whitespace-nowrap ${
+                scaleMode === 'dome'
+                  ? 'bg-amber-500 text-slate-950 shadow-sm'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+              title="Dome View: Projects all bodies onto 80-unit celestial sky sphere"
+            >
+              Dome View
+            </button>
+            <button
+              onClick={() => setScaleMode('depth')}
+              className={`px-2 py-0.5 rounded text-[10px] font-semibold transition whitespace-nowrap ${
+                scaleMode === 'depth'
+                  ? 'bg-amber-500 text-slate-950 shadow-sm'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+              title="3D Depth: Arranges bodies radially by astronomical distance (AU) to eliminate overlap"
+            >
+              3D Depth
+            </button>
+          </div>
+
           <button
             onClick={() => setCameraView('default')}
             className="px-2 py-1 rounded-lg text-[10px] sm:text-[11px] font-medium text-slate-300 hover:bg-slate-800 hover:text-white transition whitespace-nowrap"
           >
             45° Orbit
+          </button>
+          <button
+            onClick={() => setCameraView('earthCenter')}
+            className="px-2 py-1 rounded-lg text-[10px] sm:text-[11px] font-medium text-sky-300 hover:bg-sky-950/60 border border-sky-500/30 transition whitespace-nowrap flex items-center gap-1"
+            title="Center View on Earth Observer"
+          >
+            <Globe className="w-3 h-3 text-sky-400" />
+            <span>Earth</span>
           </button>
           <button
             onClick={() => setCameraView('focusBody')}
@@ -856,7 +1146,67 @@ export function ThreeSkyExplorer({
           >
             {showAllBodies ? 'All' : 'Solo'}
           </button>
+          <button
+            onClick={() => setShowSpatialGuide(!showSpatialGuide)}
+            className={`px-2 py-1 rounded-lg text-[10px] sm:text-[11px] font-medium transition flex items-center gap-1 whitespace-nowrap ${
+              showSpatialGuide
+                ? 'bg-sky-500 text-slate-950 font-bold'
+                : 'text-sky-300 hover:bg-slate-800 border border-sky-500/30'
+            }`}
+            title="How to Read Spatial 3D Map"
+          >
+            <HelpCircle className="w-3 h-3" />
+            <span className="hidden sm:inline">Guide</span>
+          </button>
         </div>
+
+        {/* Spatial Guide Overlay Card */}
+        {showSpatialGuide && (
+          <div className="absolute top-16 right-3 z-30 bg-slate-950/95 backdrop-blur-xl p-3.5 rounded-2xl border border-sky-500/40 text-xs shadow-2xl max-w-xs space-y-2.5 animate-fade-in text-slate-200">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+              <span className="font-semibold text-sky-300 flex items-center gap-1.5 text-xs">
+                <Info className="w-4 h-4 text-sky-400" />
+                <span>How to Read 3D Sky Map</span>
+              </span>
+              <button
+                onClick={() => setShowSpatialGuide(false)}
+                className="text-slate-400 hover:text-white p-0.5 rounded-md hover:bg-slate-800"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="space-y-2 text-[11px] leading-relaxed text-slate-300">
+              <div className="flex items-start gap-2">
+                <span className="text-base leading-none">🌍</span>
+                <div>
+                  <strong className="text-white">Center Globe:</strong> You on Earth (Observer Station). The glowing gold pin marks your real GPS position.
+                </div>
+              </div>
+              <div className="flex items-start gap-2">
+                <span className="text-base leading-none">🧭</span>
+                <div>
+                  <strong className="text-sky-300">Cyan Disc (Horizon):</strong> The local ground plane. Everything <span className="text-emerald-400 font-semibold">above</span> is visible in your sky right now; everything <span className="text-indigo-400 font-semibold">below</span> is under the horizon.
+                </div>
+              </div>
+              <div className="flex items-start gap-2">
+                <span className="text-base leading-none">☀️</span>
+                <div>
+                  <strong className="text-amber-300">Golden Arc:</strong> 24-hour diurnal trajectory of the active celestial body across the sky.
+                </div>
+              </div>
+              <div className="flex items-start gap-2">
+                <span className="text-base leading-none">📏</span>
+                <div>
+                  <strong className="text-white">Scale Modes:</strong>
+                  <ul className="list-disc list-inside text-slate-400 pl-1 pt-0.5 space-y-0.5">
+                    <li><strong className="text-amber-400">Dome View:</strong> Projects all bodies onto equal celestial sky sphere.</li>
+                    <li><strong className="text-amber-400">3D Depth:</strong> Spaces planets radially by true astronomical distance (AU).</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Orbit Control Hint */}
         <div className="absolute bottom-3 left-3 z-10 bg-slate-950/80 backdrop-blur-md px-2.5 py-1 rounded-lg border border-slate-800/80 text-[10px] text-slate-300 flex items-center gap-1.5 shadow-md">
