@@ -16,6 +16,8 @@ import {
   HelpCircle,
   Globe,
   Info,
+  User,
+  Crosshair,
 } from 'lucide-react';
 import {
   GeodeticLocation,
@@ -95,8 +97,16 @@ export function ThreeSkyExplorer({
   const groundDiscRef = useRef<THREE.Mesh | null>(null);
   const diurnalGroupRef = useRef<THREE.Group | null>(null);
   const constellationsGroupRef = useRef<THREE.Group | null>(null);
-  const earthMeshRef = useRef<THREE.Mesh | null>(null);
-  const observerPinRef = useRef<THREE.Group | null>(null);
+  const avatarGroupRef = useRef<THREE.Group | null>(null);
+  const avatarTelescopeRef = useRef<THREE.Group | null>(null);
+
+  // Perspective Mode: 'map' (Whole 3D Celestial Map) vs 'human' (First-Person Stargazer POV)
+  const [perspectiveMode, setPerspectiveMode] = useState<'map' | 'human'>('map');
+  const perspectiveModeRef = useRef<'map' | 'human'>('map');
+  const humanAnglesRef = useRef<{ yaw: number; pitch: number }>({ yaw: Math.PI, pitch: 0.35 });
+  const [humanHeadingDeg, setHumanHeadingDeg] = useState<number>(180);
+  const [humanPitchDeg, setHumanPitchDeg] = useState<number>(20);
+  const [humanFov, setHumanFov] = useState<number>(55);
 
   // Scale & Depth Radii (proportional AU progression for True Depth Mode)
   const BODY_DEPTH_RADII: Record<CelestialBodyId, number> = useMemo(() => ({
@@ -239,6 +249,140 @@ export function ThreeSkyExplorer({
     const texture = new THREE.CanvasTexture(canvas);
     sprite.material.map = texture;
     sprite.material.needsUpdate = true;
+  };
+
+  // Build Procedural 3D Human Stargazer Avatar with Dynamic Telescope
+  const buildStargazerAvatar = () => {
+    const avatar = new THREE.Group();
+
+    // High-contrast materials for space observer
+    const suitMat = new THREE.MeshStandardMaterial({
+      color: 0x1e293b, // slate-800 space suit
+      roughness: 0.5,
+      metalness: 0.2,
+    });
+    const trimMat = new THREE.MeshBasicMaterial({ color: 0x38bdf8 }); // glowing cyan trim
+    const bootMat = new THREE.MeshStandardMaterial({ color: 0x090d16, roughness: 0.8 });
+    const visorMat = new THREE.MeshStandardMaterial({
+      color: 0xfacc15,
+      emissive: 0xf59e0b,
+      emissiveIntensity: 0.9,
+      roughness: 0.1,
+      metalness: 0.9,
+    });
+    const brassMat = new THREE.MeshStandardMaterial({
+      color: 0xd97706,
+      metalness: 0.85,
+      roughness: 0.25,
+    });
+
+    // 1. Boots & Legs
+    [-0.22, 0.22].forEach((x) => {
+      // Boot
+      const bootGeo = new THREE.BoxGeometry(0.24, 0.18, 0.44);
+      const boot = new THREE.Mesh(bootGeo, bootMat);
+      boot.position.set(x, 0.09, 0.05);
+      avatar.add(boot);
+
+      // Leg
+      const legGeo = new THREE.CylinderGeometry(0.11, 0.13, 0.82, 12);
+      const leg = new THREE.Mesh(legGeo, suitMat);
+      leg.position.set(x, 0.52, 0);
+      avatar.add(leg);
+
+      // Knee pad
+      const padGeo = new THREE.BoxGeometry(0.18, 0.14, 0.12);
+      const pad = new THREE.Mesh(padGeo, trimMat);
+      pad.position.set(x, 0.52, 0.11);
+      avatar.add(pad);
+    });
+
+    // 2. Belt & Pelvis
+    const beltGeo = new THREE.CylinderGeometry(0.33, 0.31, 0.16, 16);
+    const belt = new THREE.Mesh(beltGeo, trimMat);
+    belt.position.set(0, 0.96, 0);
+    avatar.add(belt);
+
+    // 3. Torso / Explorer Jacket
+    const torsoGeo = new THREE.BoxGeometry(0.68, 0.74, 0.42);
+    const torso = new THREE.Mesh(torsoGeo, suitMat);
+    torso.position.set(0, 1.4, 0);
+    avatar.add(torso);
+
+    // Glowing Chest Emblem
+    const emblemGeo = new THREE.CircleGeometry(0.09, 16);
+    const emblem = new THREE.Mesh(emblemGeo, new THREE.MeshBasicMaterial({ color: 0x38bdf8, side: THREE.DoubleSide }));
+    emblem.position.set(0, 1.48, 0.22);
+    avatar.add(emblem);
+
+    // Life support pack
+    const packGeo = new THREE.BoxGeometry(0.48, 0.58, 0.22);
+    const pack = new THREE.Mesh(packGeo, bootMat);
+    pack.position.set(0, 1.42, -0.3);
+    avatar.add(pack);
+
+    // 4. Head & Helmet Visor
+    const headGroup = new THREE.Group();
+    headGroup.position.set(0, 1.95, 0);
+
+    const helmetGeo = new THREE.SphereGeometry(0.3, 24, 24);
+    const helmet = new THREE.Mesh(helmetGeo, suitMat);
+    headGroup.add(helmet);
+
+    // Glowing Golden/Amber Face Visor
+    const visorGeo = new THREE.SphereGeometry(0.28, 16, 16, 0, Math.PI, 0, Math.PI / 1.6);
+    const visor = new THREE.Mesh(visorGeo, visorMat);
+    visor.rotation.x = Math.PI / 2;
+    visor.position.set(0, 0.02, 0.06);
+    headGroup.add(visor);
+    avatar.add(headGroup);
+
+    // 5. Left Arm holding holographic star chart tablet
+    const leftArmGeo = new THREE.CylinderGeometry(0.09, 0.08, 0.55, 12);
+    const leftArm = new THREE.Mesh(leftArmGeo, suitMat);
+    leftArm.position.set(-0.42, 1.35, 0.15);
+    leftArm.rotation.x = Math.PI / 3;
+    avatar.add(leftArm);
+
+    const tabletGeo = new THREE.BoxGeometry(0.28, 0.04, 0.38);
+    const tablet = new THREE.Mesh(tabletGeo, new THREE.MeshBasicMaterial({ color: 0x0284c7 }));
+    tablet.position.set(-0.42, 1.42, 0.36);
+    tablet.rotation.x = -Math.PI / 6;
+    avatar.add(tablet);
+
+    // 6. Right Arm & Celestial Telescope (aims dynamically)
+    const rightArmPivot = new THREE.Group();
+    rightArmPivot.position.set(0.42, 1.5, 0);
+
+    const telescopeGroup = new THREE.Group();
+
+    // Telescope Brass Barrel
+    const barrelGeo = new THREE.CylinderGeometry(0.06, 0.09, 1.3, 16);
+    barrelGeo.rotateX(Math.PI / 2);
+    const barrel = new THREE.Mesh(barrelGeo, brassMat);
+    barrel.position.set(0, 0, 0.65);
+    telescopeGroup.add(barrel);
+
+    // Objective Lens
+    const lensGeo = new THREE.CylinderGeometry(0.12, 0.09, 0.15, 16);
+    lensGeo.rotateX(Math.PI / 2);
+    const lens = new THREE.Mesh(lensGeo, trimMat);
+    lens.position.set(0, 0, 1.25);
+    telescopeGroup.add(lens);
+
+    // Light beam from lens
+    const beamPts = [new THREE.Vector3(0, 0, 1.3), new THREE.Vector3(0, 0, 4.5)];
+    const beamGeo = new THREE.BufferGeometry().setFromPoints(beamPts);
+    const beamLine = new THREE.Line(
+      beamGeo,
+      new THREE.LineBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.6 })
+    );
+    telescopeGroup.add(beamLine);
+
+    rightArmPivot.add(telescopeGroup);
+    avatar.add(rightArmPivot);
+
+    return { group: avatar, telescope: telescopeGroup, head: headGroup };
   };
 
   // 1. Initial Scene Setup (Mount Once)
@@ -450,103 +594,51 @@ export function ThreeSkyExplorer({
     horizonPlaneLabel.scale.set(20, 10, 1);
     scene.add(horizonPlaneLabel);
 
-    // H. Center Observer Station & 3D Earth Globe
+    // H. Center Observation Platform & Animated 3D Stargazer Avatar
     const centerGroup = new THREE.Group();
     scene.add(centerGroup);
 
-    // 1. Photorealistic 3D Earth Globe at Center
-    const earthRadius = 6.2;
-    const earthGeo = new THREE.SphereGeometry(earthRadius, 48, 48);
-    const earthTexture = getPlanetTexture('Earth');
-    const earthBump = getPlanetBumpMap('Earth');
-    const earthMat = new THREE.MeshStandardMaterial({
-      map: earthTexture,
-      bumpMap: earthBump,
-      bumpScale: 0.25,
-      roughness: 0.55,
-      metalness: 0.08,
-    });
-    const earthMesh = new THREE.Mesh(earthGeo, earthMat);
-    // Positioned so the upper hemisphere crests gracefully above the horizon plane
-    earthMesh.position.set(0, -1.8, 0);
-    // Earth's authentic 23.44° axial tilt
-    earthMesh.rotation.z = THREE.MathUtils.degToRad(23.44);
-    centerGroup.add(earthMesh);
-    earthMeshRef.current = earthMesh;
-
-    // Atmospheric Blue Glow Shell for Earth
-    const earthAtmoGeo = new THREE.SphereGeometry(earthRadius * 1.06, 32, 32);
-    const earthAtmoMat = new THREE.MeshBasicMaterial({
-      color: 0x38bdf8,
-      transparent: true,
-      opacity: 0.22,
-      side: THREE.BackSide,
-    });
-    earthMesh.add(new THREE.Mesh(earthAtmoGeo, earthAtmoMat));
-
-    // 2. Translucent Glass Observation Deck encompassing the horizon tangent
-    const deckGeo = new THREE.CylinderGeometry(8.5, 8.5, 0.35, 48);
+    // 1. Sleek Glass Observation Deck
+    const deckGeo = new THREE.CylinderGeometry(5.2, 5.2, 0.3, 48);
     const deckMat = new THREE.MeshStandardMaterial({
-      color: 0x071126,
+      color: 0x090f1d,
       transparent: true,
-      opacity: 0.75,
-      metalness: 0.8,
-      roughness: 0.25,
+      opacity: 0.85,
+      metalness: 0.85,
+      roughness: 0.2,
     });
     const deckMesh = new THREE.Mesh(deckGeo, deckMat);
     deckMesh.position.set(0, 0, 0);
     centerGroup.add(deckMesh);
 
-    // Outer Illuminated Neon Compass Ring on Deck
-    const deckRimGeo = new THREE.RingGeometry(8.2, 8.6, 64);
+    // Outer Illuminated Neon Compass Rim on Deck
+    const deckRimGeo = new THREE.RingGeometry(4.9, 5.2, 64);
     deckRimGeo.rotateX(-Math.PI / 2);
     const deckRimMat = new THREE.MeshBasicMaterial({
       color: 0x38bdf8,
       side: THREE.DoubleSide,
       transparent: true,
-      opacity: 0.9,
+      opacity: 0.95,
     });
     deckMesh.add(new THREE.Mesh(deckRimGeo, deckRimMat));
 
-    // 3. Glowing Observer Pin & Human Stargazer Beacon at GPS Location
-    const pinGroup = new THREE.Group();
-    pinGroup.position.set(0, 4.4, 0); // At the apex of Earth's visible crest
-
-    // Pulsing GPS Beacon Pin
-    const pinConeGeo = new THREE.ConeGeometry(0.7, 2.2, 16);
-    pinConeGeo.rotateX(Math.PI); // Point down towards Earth
-    const pinConeMat = new THREE.MeshStandardMaterial({
-      color: 0xf59e0b,
-      emissive: 0xd97706,
-      emissiveIntensity: 0.8,
-      roughness: 0.2,
+    // Concentric Inner Glowing Target Rings on Platform
+    [1.6, 3.2].forEach((r) => {
+      const ringGeo = new THREE.RingGeometry(r - 0.05, r + 0.05, 48);
+      ringGeo.rotateX(-Math.PI / 2);
+      const ringMat = new THREE.MeshBasicMaterial({ color: 0x0284c7, side: THREE.DoubleSide, transparent: true, opacity: 0.4 });
+      deckMesh.add(new THREE.Mesh(ringGeo, ringMat));
     });
-    const pinCone = new THREE.Mesh(pinConeGeo, pinConeMat);
-    pinCone.position.set(0, 1.1, 0);
-    pinGroup.add(pinCone);
 
-    // Glowing Sphere at Pin Head
-    const pinSphereGeo = new THREE.SphereGeometry(0.65, 16, 16);
-    const pinSphereMat = new THREE.MeshBasicMaterial({ color: 0xfef08a });
-    const pinSphere = new THREE.Mesh(pinSphereGeo, pinSphereMat);
-    pinSphere.position.set(0, 2.4, 0);
-    pinGroup.add(pinSphere);
+    // 2. The 3D Animated Stargazer Avatar Person
+    const { group: avatarMesh, telescope } = buildStargazerAvatar();
+    avatarMesh.position.set(0, 0.15, 0);
+    centerGroup.add(avatarMesh);
+    avatarGroupRef.current = avatarMesh;
+    avatarTelescopeRef.current = telescope;
 
-    // Pulsing Base Wave Ring
-    const pulseRingGeo = new THREE.RingGeometry(1.2, 1.6, 32);
-    pulseRingGeo.rotateX(-Math.PI / 2);
-    const pulseRingMat = new THREE.MeshBasicMaterial({
-      color: 0xf59e0b,
-      transparent: true,
-      opacity: 0.6,
-      side: THREE.DoubleSide,
-    });
-    const pulseRing = new THREE.Mesh(pulseRingGeo, pulseRingMat);
-    pulseRing.position.set(0, 0.1, 0);
-    pinGroup.add(pulseRing);
-
-    // Vertical Laser Beacon towards Zenith
-    const beaconPts = [new THREE.Vector3(0, 2.4, 0), new THREE.Vector3(0, 76, 0)];
+    // 3. Vertical Laser Beacon from Stargazer to Zenith
+    const beaconPts = [new THREE.Vector3(0, 1.8, 0), new THREE.Vector3(0, 78, 0)];
     const beaconGeo = new THREE.BufferGeometry().setFromPoints(beaconPts);
     const beaconLine = new THREE.Line(
       beaconGeo,
@@ -555,26 +647,23 @@ export function ThreeSkyExplorer({
         dashSize: 2.0,
         gapSize: 1.5,
         transparent: true,
-        opacity: 0.4,
+        opacity: 0.35,
       })
     );
     beaconLine.computeLineDistances();
-    pinGroup.add(beaconLine);
+    centerGroup.add(beaconLine);
 
-    centerGroup.add(pinGroup);
-    observerPinRef.current = pinGroup;
-
-    // 4. Clear Floating 3D Text Badges Above Observer Pin
-    const youAreHereSprite = createTextSprite('🌍 YOU ARE HERE (Observer on Earth)', '#38bdf8', 34);
-    youAreHereSprite.position.set(0, 11.5, 0);
-    youAreHereSprite.scale.set(22, 11, 1);
+    // 4. Floating 3D Text Badges Above Stargazer Avatar
+    const youAreHereSprite = createTextSprite('👤 YOU (Stargazer Observer)', '#38bdf8', 34);
+    youAreHereSprite.position.set(0, 3.4, 0);
+    youAreHereSprite.scale.set(16, 8, 1);
     centerGroup.add(youAreHereSprite);
 
     const latStr = location.latitude >= 0 ? `${location.latitude.toFixed(2)}°N` : `${Math.abs(location.latitude).toFixed(2)}°S`;
     const lonStr = location.longitude >= 0 ? `${location.longitude.toFixed(2)}°E` : `${Math.abs(location.longitude).toFixed(2)}°W`;
     const coordsSprite = createTextSprite(`GPS: ${latStr}, ${lonStr}`, '#facc15', 28);
-    coordsSprite.position.set(0, 8.8, 0);
-    coordsSprite.scale.set(18, 9, 1);
+    coordsSprite.position.set(0, 2.6, 0);
+    coordsSprite.scale.set(14, 7, 1);
     centerGroup.add(coordsSprite);
 
     // I. Instantiate All 9 Celestial Bodies with Authentic Procedural Textures & 3D Bump Displacement
@@ -687,15 +776,25 @@ export function ThreeSkyExplorer({
         if (m) m.rotation.y += 0.003;
       });
 
-      // Authentic axial rotation for Central Earth globe
-      if (earthMeshRef.current) {
-        earthMeshRef.current.rotation.y += 0.0012;
-      }
+      // Stargazer Avatar subtle breathing & dynamic celestial aiming
+      if (avatarGroupRef.current) {
+        if (perspectiveModeRef.current === 'map') {
+          avatarGroupRef.current.visible = true;
+          avatarGroupRef.current.position.y = 0.15 + Math.sin(time * 0.003) * 0.02;
 
-      // Pulsing Observer Beacon at GPS coordinates
-      if (observerPinRef.current) {
-        const pulse = 1.0 + 0.12 * Math.sin(time * 0.005);
-        observerPinRef.current.scale.set(pulse, 1, pulse);
+          // Smoothly rotate the avatar to face the target body's azimuth
+          const targetAzRad = THREE.MathUtils.degToRad(-activeCoords.azimuthDeg + 180);
+          avatarGroupRef.current.rotation.y = THREE.MathUtils.lerp(avatarGroupRef.current.rotation.y, targetAzRad, 0.05);
+
+          // Tilt telescope to point at target body altitude
+          if (avatarTelescopeRef.current) {
+            const targetAltRad = THREE.MathUtils.degToRad(Math.max(-10, activeCoords.altitudeDeg));
+            avatarTelescopeRef.current.rotation.x = THREE.MathUtils.lerp(avatarTelescopeRef.current.rotation.x, -targetAltRad, 0.05);
+          }
+        } else {
+          // Hide avatar in Human POV mode so user has unobstructed first-person view
+          avatarGroupRef.current.visible = false;
+        }
       }
 
       // Pulsing Sun Corona
@@ -708,7 +807,59 @@ export function ThreeSkyExplorer({
     };
     animate(0);
 
-    // M. Responsive Resize Observer
+    // M. Pointer Listeners for First-Person Look & Zoom in Human POV
+    let isDragging = false;
+    let lastPointer = { x: 0, y: 0 };
+    const domEl = renderer.domElement;
+
+    const onPointerDown = (e: PointerEvent) => {
+      if (perspectiveModeRef.current !== 'human') return;
+      isDragging = true;
+      lastPointer = { x: e.clientX, y: e.clientY };
+    };
+
+    const onPointerMove = (e: PointerEvent) => {
+      if (perspectiveModeRef.current !== 'human' || !isDragging) return;
+      const dx = e.clientX - lastPointer.x;
+      const dy = e.clientY - lastPointer.y;
+      lastPointer = { x: e.clientX, y: e.clientY };
+
+      humanAnglesRef.current.yaw -= dx * 0.0035;
+      humanAnglesRef.current.pitch += dy * 0.0035;
+      // Clamp pitch from looking at horizon to straight up at Zenith
+      humanAnglesRef.current.pitch = Math.max(-0.25, Math.min(Math.PI / 2 - 0.02, humanAnglesRef.current.pitch));
+
+      const { yaw, pitch } = humanAnglesRef.current;
+      camera.position.set(0, 1.85, 0);
+      const lookX = Math.sin(yaw) * Math.cos(pitch);
+      const lookY = Math.sin(pitch);
+      const lookZ = -Math.cos(yaw) * Math.cos(pitch);
+      camera.lookAt(new THREE.Vector3(lookX, 1.85 + lookY, lookZ));
+
+      let heading = (THREE.MathUtils.radToDeg(yaw) % 360 + 360) % 360;
+      setHumanHeadingDeg(Math.round(heading));
+      setHumanPitchDeg(Math.round(THREE.MathUtils.radToDeg(pitch)));
+    };
+
+    const onPointerUp = () => {
+      isDragging = false;
+    };
+
+    const onWheel = (e: WheelEvent) => {
+      if (perspectiveModeRef.current !== 'human') return;
+      e.preventDefault();
+      camera.fov = Math.max(15, Math.min(85, camera.fov + e.deltaY * 0.04));
+      camera.updateProjectionMatrix();
+      setHumanFov(Math.round(camera.fov));
+    };
+
+    domEl.addEventListener('pointerdown', onPointerDown);
+    window.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('pointerup', onPointerUp);
+    window.addEventListener('pointercancel', onPointerUp);
+    domEl.addEventListener('wheel', onWheel, { passive: false });
+
+    // N. Responsive Resize Observer
     const handleResize = () => {
       if (!mount) return;
       const w = mount.clientWidth;
@@ -721,6 +872,11 @@ export function ThreeSkyExplorer({
 
     return () => {
       cancelAnimationFrame(animId);
+      domEl.removeEventListener('pointerdown', onPointerDown);
+      window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('pointerup', onPointerUp);
+      window.removeEventListener('pointercancel', onPointerUp);
+      domEl.removeEventListener('wheel', onWheel);
       window.removeEventListener('resize', handleResize);
       controls.dispose();
       renderer.dispose();
@@ -895,8 +1051,8 @@ export function ThreeSkyExplorer({
         pointLightRef.current.position.copy(v3);
         pointLightRef.current.intensity = activePos.isAboveHorizon ? 2.5 : 0.4;
 
-        // Line-of-sight ray originating from observer pin (y = 4.4) to celestial target
-        activeRayRef.current.geometry.setFromPoints([new THREE.Vector3(0, 4.4, 0), v3]);
+        // Line-of-sight ray originating from stargazer telescope (y = 1.5) to celestial target
+        activeRayRef.current.geometry.setFromPoints([new THREE.Vector3(0, 1.5, 0), v3]);
         (activeRayRef.current.material as THREE.LineBasicMaterial).color.set(activeBodyMeta.color);
 
         const groundFootprint = new THREE.Vector3(v3.x, 0, v3.z);
@@ -910,7 +1066,60 @@ export function ThreeSkyExplorer({
     }
   }, [allPositions, selectedBody, showAllBodies, activeBodyMeta.color, scaleMode, BODY_DEPTH_RADII]);
 
-  // 5. Ground Opacity Mode Switch
+  // 5. Perspective Mode Switch Handler (Whole Map vs Human POV)
+  useEffect(() => {
+    perspectiveModeRef.current = perspectiveMode;
+    const camera = cameraRef.current;
+    const controls = controlsRef.current;
+    if (!camera || !controls) return;
+
+    if (perspectiveMode === 'human') {
+      controls.enabled = false;
+      if (avatarGroupRef.current) avatarGroupRef.current.visible = false;
+
+      // Initialize orientation looking towards selected active celestial body
+      const initYaw = THREE.MathUtils.degToRad(activeCoords.azimuthDeg);
+      const initPitch = THREE.MathUtils.degToRad(Math.max(-10, activeCoords.altitudeDeg));
+      humanAnglesRef.current = { yaw: initYaw, pitch: initPitch };
+
+      camera.position.set(0, 1.85, 0);
+      const lookX = Math.sin(initYaw) * Math.cos(initPitch);
+      const lookY = Math.sin(initPitch);
+      const lookZ = -Math.cos(initYaw) * Math.cos(initPitch);
+      camera.lookAt(new THREE.Vector3(lookX, 1.85 + lookY, lookZ));
+
+      setHumanHeadingDeg(Math.round(activeCoords.azimuthDeg));
+      setHumanPitchDeg(Math.round(activeCoords.altitudeDeg));
+    } else {
+      controls.enabled = true;
+      if (avatarGroupRef.current) avatarGroupRef.current.visible = true;
+      camera.fov = 50;
+      camera.updateProjectionMatrix();
+      camera.position.set(0, 55, 140);
+      controls.target.set(0, 0, 0);
+      controls.update();
+    }
+  }, [perspectiveMode, activeCoords.azimuthDeg, activeCoords.altitudeDeg]);
+
+  // Turn First-Person Stargazer View directly to look at selected target
+  const snapHumanToBody = () => {
+    const camera = cameraRef.current;
+    if (!camera) return;
+    const targetYaw = THREE.MathUtils.degToRad(activeCoords.azimuthDeg);
+    const targetPitch = THREE.MathUtils.degToRad(Math.max(-10, activeCoords.altitudeDeg));
+    humanAnglesRef.current = { yaw: targetYaw, pitch: targetPitch };
+
+    camera.position.set(0, 1.85, 0);
+    const lookX = Math.sin(targetYaw) * Math.cos(targetPitch);
+    const lookY = Math.sin(targetPitch);
+    const lookZ = -Math.cos(targetYaw) * Math.cos(targetPitch);
+    camera.lookAt(new THREE.Vector3(lookX, 1.85 + lookY, lookZ));
+
+    setHumanHeadingDeg(Math.round(activeCoords.azimuthDeg));
+    setHumanPitchDeg(Math.round(activeCoords.altitudeDeg));
+  };
+
+  // 6. Ground Opacity Mode Switch
   useEffect(() => {
     if (!groundDiscRef.current) return;
     const mat = groundDiscRef.current.material as THREE.MeshBasicMaterial;
@@ -928,18 +1137,24 @@ export function ThreeSkyExplorer({
   }, [groundMode]);
 
   // Camera Presets
-  const setCameraView = (type: 'default' | 'top' | 'focusBody' | 'closeUp' | 'ground' | 'earthCenter') => {
+  const setCameraView = (type: 'default' | 'top' | 'focusBody' | 'closeUp' | 'ground' | 'avatarCenter') => {
     const camera = cameraRef.current;
     const controls = controlsRef.current;
     if (!camera || !controls) return;
+
+    if (perspectiveMode !== 'map') {
+      setPerspectiveMode('map');
+      controls.enabled = true;
+      if (avatarGroupRef.current) avatarGroupRef.current.visible = true;
+    }
 
     if (type === 'default') {
       camera.position.set(0, 55, 140);
       controls.target.set(0, 0, 0);
       setIsCloseUp(false);
-    } else if (type === 'earthCenter') {
-      camera.position.set(0, 16, 32);
-      controls.target.set(0, 4, 0);
+    } else if (type === 'avatarCenter') {
+      camera.position.set(0, 5, 10);
+      controls.target.set(0, 1.5, 0);
       setIsCloseUp(false);
     } else if (type === 'top') {
       camera.position.set(0, 180, 0.1);
@@ -1066,99 +1281,202 @@ export function ThreeSkyExplorer({
           </div>
         </div>
 
-        {/* Camera Preset & Scale Quick Bar - Responsive Scrollable Bar */}
-        <div className="absolute top-3 right-3 z-10 bg-slate-950/90 backdrop-blur-md p-1 rounded-xl border border-slate-800 flex items-center gap-1 shadow-lg max-w-[50vw] sm:max-w-none overflow-x-auto scrollbar-none">
-          {/* Scale Mode Selector */}
-          <div className="flex items-center bg-slate-900/90 rounded-lg p-0.5 border border-slate-800 mr-1">
-            <button
-              onClick={() => setScaleMode('dome')}
-              className={`px-2 py-0.5 rounded text-[10px] font-semibold transition whitespace-nowrap ${
-                scaleMode === 'dome'
-                  ? 'bg-amber-500 text-slate-950 shadow-sm'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-              title="Dome View: Projects all bodies onto 80-unit celestial sky sphere"
-            >
-              Dome View
-            </button>
-            <button
-              onClick={() => setScaleMode('depth')}
-              className={`px-2 py-0.5 rounded text-[10px] font-semibold transition whitespace-nowrap ${
-                scaleMode === 'depth'
-                  ? 'bg-amber-500 text-slate-950 shadow-sm'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-              title="3D Depth: Arranges bodies radially by astronomical distance (AU) to eliminate overlap"
-            >
-              3D Depth
-            </button>
-          </div>
-
+        {/* Primary Perspective Mode Tabs: Whole 3D Map vs Human POV Stargazer */}
+        <div className="absolute top-3 left-1/2 -translate-x-1/2 z-20 bg-slate-950/95 backdrop-blur-md p-1 rounded-xl border border-slate-700/80 shadow-2xl flex items-center gap-1">
           <button
-            onClick={() => setCameraView('default')}
-            className="px-2 py-1 rounded-lg text-[10px] sm:text-[11px] font-medium text-slate-300 hover:bg-slate-800 hover:text-white transition whitespace-nowrap"
-          >
-            45° Orbit
-          </button>
-          <button
-            onClick={() => setCameraView('earthCenter')}
-            className="px-2 py-1 rounded-lg text-[10px] sm:text-[11px] font-medium text-sky-300 hover:bg-sky-950/60 border border-sky-500/30 transition whitespace-nowrap flex items-center gap-1"
-            title="Center View on Earth Observer"
-          >
-            <Globe className="w-3 h-3 text-sky-400" />
-            <span>Earth</span>
-          </button>
-          <button
-            onClick={() => setCameraView('focusBody')}
-            className="px-2 py-1 rounded-lg text-[10px] sm:text-[11px] font-medium text-amber-300 hover:bg-amber-950/60 border border-amber-500/30 transition whitespace-nowrap"
-          >
-            Focus
-          </button>
-          <button
-            onClick={() => setCameraView('closeUp')}
-            className={`px-2 py-1 rounded-lg text-[10px] sm:text-[11px] font-medium transition flex items-center gap-1 whitespace-nowrap ${
-              isCloseUp
-                ? 'bg-amber-500 text-slate-950 font-bold'
-                : 'text-amber-400 hover:bg-slate-800 border border-amber-500/30'
+            onClick={() => setPerspectiveMode('map')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition whitespace-nowrap ${
+              perspectiveMode === 'map'
+                ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20'
+                : 'text-slate-300 hover:text-white hover:bg-slate-800'
             }`}
-            title="Inspect 3D Surface"
+            title="Whole 3D Celestial Map: Orbital 360° View"
           >
-            <ZoomIn className="w-3 h-3" />
-            <span className="hidden sm:inline">Inspect</span>
+            <Globe className="w-3.5 h-3.5" />
+            <span>Whole 3D Map</span>
           </button>
           <button
-            onClick={() => setShowConstellations(!showConstellations)}
-            className={`px-2 py-1 rounded-lg text-[10px] sm:text-[11px] font-medium transition whitespace-nowrap ${
-              showConstellations
-                ? 'bg-sky-500/20 text-sky-300 border border-sky-500/40'
-                : 'text-slate-400 hover:text-slate-200'
+            onClick={() => setPerspectiveMode('human')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition whitespace-nowrap ${
+              perspectiveMode === 'human'
+                ? 'bg-sky-500 text-slate-950 shadow-md shadow-sky-500/20'
+                : 'text-slate-300 hover:text-white hover:bg-slate-800'
             }`}
+            title="Human POV: Stand in the center and look around 360° through human eyes"
           >
-            {showConstellations ? '✨ Stars ON' : 'Stars OFF'}
-          </button>
-          <button
-            onClick={() => setShowAllBodies(!showAllBodies)}
-            className={`px-2 py-1 rounded-lg text-[10px] sm:text-[11px] font-medium transition whitespace-nowrap ${
-              showAllBodies
-                ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            {showAllBodies ? 'All' : 'Solo'}
-          </button>
-          <button
-            onClick={() => setShowSpatialGuide(!showSpatialGuide)}
-            className={`px-2 py-1 rounded-lg text-[10px] sm:text-[11px] font-medium transition flex items-center gap-1 whitespace-nowrap ${
-              showSpatialGuide
-                ? 'bg-sky-500 text-slate-950 font-bold'
-                : 'text-sky-300 hover:bg-slate-800 border border-sky-500/30'
-            }`}
-            title="How to Read Spatial 3D Map"
-          >
-            <HelpCircle className="w-3 h-3" />
-            <span className="hidden sm:inline">Guide</span>
+            <User className="w-3.5 h-3.5" />
+            <span>Human POV (Stargazer)</span>
           </button>
         </div>
+
+        {/* Human POV Reticle & Heading Tape */}
+        {perspectiveMode === 'human' && (
+          <>
+            {/* Center Crosshairs */}
+            <div className="absolute inset-0 pointer-events-none flex items-center justify-center z-10">
+              <div className="relative flex items-center justify-center opacity-60">
+                <Crosshair className="w-8 h-8 text-sky-400" />
+                <div className="absolute w-2 h-2 rounded-full bg-amber-400" />
+              </div>
+            </div>
+
+            {/* Compass Heading & Elevation Ribbon */}
+            <div className="absolute top-14 left-1/2 -translate-x-1/2 z-20 bg-slate-950/90 backdrop-blur-md px-3.5 py-1.5 rounded-full border border-sky-500/40 text-[11px] font-mono flex items-center gap-3 shadow-lg text-sky-200">
+              <span className="flex items-center gap-1">
+                <Compass className="w-3.5 h-3.5 text-amber-400" />
+                <strong>{humanHeadingDeg}°</strong>
+              </span>
+              <span className="text-slate-600">|</span>
+              <span>
+                Elevation:{' '}
+                <strong className={humanPitchDeg >= 0 ? 'text-emerald-400' : 'text-indigo-400'}>
+                  {humanPitchDeg >= 0 ? '+' : ''}
+                  {humanPitchDeg}°
+                </strong>
+              </span>
+              <span className="text-slate-600">|</span>
+              <span className="text-slate-400">Zoom: {humanFov}° FOV</span>
+            </div>
+
+            {/* First-Person Action Quick Bar */}
+            <div className="absolute top-3 right-3 z-20 flex items-center gap-2">
+              <button
+                onClick={snapHumanToBody}
+                className="px-2.5 py-1.5 rounded-xl text-xs font-semibold bg-amber-500 hover:bg-amber-400 text-slate-950 transition flex items-center gap-1.5 shadow-md shadow-amber-500/20 whitespace-nowrap"
+                title={`Turn view directly to ${activeBodyMeta.name}`}
+              >
+                <Crosshair className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Face</span> {activeBodyMeta.name}
+              </button>
+
+              <div className="hidden sm:flex items-center bg-slate-900/90 rounded-xl p-0.5 border border-slate-800">
+                {[
+                  { label: '1x Wide', fov: 65 },
+                  { label: '2x Mid', fov: 40 },
+                  { label: '5x Tele', fov: 18 },
+                ].map((z) => (
+                  <button
+                    key={z.label}
+                    onClick={() => {
+                      if (!cameraRef.current) return;
+                      cameraRef.current.fov = z.fov;
+                      cameraRef.current.updateProjectionMatrix();
+                      setHumanFov(z.fov);
+                    }}
+                    className={`px-2 py-1 rounded-lg text-[10px] font-semibold transition ${
+                      humanFov === z.fov
+                        ? 'bg-sky-500 text-slate-950'
+                        : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    {z.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Bottom Interaction Guide */}
+            <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-10 bg-slate-950/85 backdrop-blur-md px-3.5 py-1.5 rounded-full border border-sky-500/30 text-[10px] text-slate-300 shadow-md whitespace-nowrap flex items-center gap-1.5">
+              <span>👆 Drag on screen to turn 360° & tilt up · Scroll/Pinch to zoom in</span>
+            </div>
+          </>
+        )}
+
+        {/* Camera Preset & Scale Quick Bar (Map Mode) */}
+        {perspectiveMode === 'map' && (
+          <div className="absolute top-3 right-3 z-10 bg-slate-950/90 backdrop-blur-md p-1 rounded-xl border border-slate-800 flex items-center gap-1 shadow-lg max-w-[50vw] sm:max-w-none overflow-x-auto scrollbar-none">
+            {/* Scale Mode Selector */}
+            <div className="flex items-center bg-slate-900/90 rounded-lg p-0.5 border border-slate-800 mr-1">
+              <button
+                onClick={() => setScaleMode('dome')}
+                className={`px-2 py-0.5 rounded text-[10px] font-semibold transition whitespace-nowrap ${
+                  scaleMode === 'dome'
+                    ? 'bg-amber-500 text-slate-950 shadow-sm'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+                title="Dome View: Projects all bodies onto 80-unit celestial sky sphere"
+              >
+                Dome View
+              </button>
+              <button
+                onClick={() => setScaleMode('depth')}
+                className={`px-2 py-0.5 rounded text-[10px] font-semibold transition whitespace-nowrap ${
+                  scaleMode === 'depth'
+                    ? 'bg-amber-500 text-slate-950 shadow-sm'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+                title="3D Depth: Arranges bodies radially by astronomical distance (AU) to eliminate overlap"
+              >
+                3D Depth
+              </button>
+            </div>
+
+            <button
+              onClick={() => setCameraView('default')}
+              className="px-2 py-1 rounded-lg text-[10px] sm:text-[11px] font-medium text-slate-300 hover:bg-slate-800 hover:text-white transition whitespace-nowrap"
+            >
+              45° Orbit
+            </button>
+            <button
+              onClick={() => setCameraView('avatarCenter')}
+              className="px-2 py-1 rounded-lg text-[10px] sm:text-[11px] font-medium text-sky-300 hover:bg-sky-950/60 border border-sky-500/30 transition whitespace-nowrap flex items-center gap-1"
+              title="Focus on Stargazer Person"
+            >
+              <User className="w-3 h-3 text-sky-400" />
+              <span>Person</span>
+            </button>
+            <button
+              onClick={() => setCameraView('focusBody')}
+              className="px-2 py-1 rounded-lg text-[10px] sm:text-[11px] font-medium text-amber-300 hover:bg-amber-950/60 border border-amber-500/30 transition whitespace-nowrap"
+            >
+              Focus
+            </button>
+            <button
+              onClick={() => setCameraView('closeUp')}
+              className={`px-2 py-1 rounded-lg text-[10px] sm:text-[11px] font-medium transition flex items-center gap-1 whitespace-nowrap ${
+                isCloseUp
+                  ? 'bg-amber-500 text-slate-950 font-bold'
+                  : 'text-amber-400 hover:bg-slate-800 border border-amber-500/30'
+              }`}
+              title="Inspect 3D Surface"
+            >
+              <ZoomIn className="w-3 h-3" />
+              <span className="hidden sm:inline">Inspect</span>
+            </button>
+            <button
+              onClick={() => setShowConstellations(!showConstellations)}
+              className={`px-2 py-1 rounded-lg text-[10px] sm:text-[11px] font-medium transition whitespace-nowrap ${
+                showConstellations
+                  ? 'bg-sky-500/20 text-sky-300 border border-sky-500/40'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              {showConstellations ? '✨ Stars ON' : 'Stars OFF'}
+            </button>
+            <button
+              onClick={() => setShowAllBodies(!showAllBodies)}
+              className={`px-2 py-1 rounded-lg text-[10px] sm:text-[11px] font-medium transition whitespace-nowrap ${
+                showAllBodies
+                  ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              {showAllBodies ? 'All' : 'Solo'}
+            </button>
+            <button
+              onClick={() => setShowSpatialGuide(!showSpatialGuide)}
+              className={`px-2 py-1 rounded-lg text-[10px] sm:text-[11px] font-medium transition flex items-center gap-1 whitespace-nowrap ${
+                showSpatialGuide
+                  ? 'bg-sky-500 text-slate-950 font-bold'
+                  : 'text-sky-300 hover:bg-slate-800 border border-sky-500/30'
+              }`}
+              title="How to Read Spatial 3D Map"
+            >
+              <HelpCircle className="w-3 h-3" />
+              <span className="hidden sm:inline">Guide</span>
+            </button>
+          </div>
+        )}
 
         {/* Spatial Guide Overlay Card */}
         {showSpatialGuide && (
@@ -1177,9 +1495,15 @@ export function ThreeSkyExplorer({
             </div>
             <div className="space-y-2 text-[11px] leading-relaxed text-slate-300">
               <div className="flex items-start gap-2">
-                <span className="text-base leading-none">🌍</span>
+                <span className="text-base leading-none">👤</span>
                 <div>
-                  <strong className="text-white">Center Globe:</strong> You on Earth (Observer Station). The glowing gold pin marks your real GPS position.
+                  <strong className="text-white">Center Stargazer:</strong> The 3D person in the middle represents YOU standing at your real GPS coordinates, with their telescope dynamically aiming at the active planet.
+                </div>
+              </div>
+              <div className="flex items-start gap-2">
+                <span className="text-base leading-none">👀</span>
+                <div>
+                  <strong className="text-sky-300">Human POV:</strong> Switch to First-Person view to see through the stargazer's eyes! Drag around 360° to scan the horizon and look up at the stars.
                 </div>
               </div>
               <div className="flex items-start gap-2">
