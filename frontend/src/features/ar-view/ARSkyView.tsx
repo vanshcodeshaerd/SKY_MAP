@@ -13,6 +13,7 @@ import {
   X,
   Sliders,
   MapPin,
+  Radio,
 } from 'lucide-react';
 import {
   GeodeticLocation,
@@ -28,6 +29,7 @@ import { useCameraStream } from '../../hooks/useCameraStream';
 import { calculateStarPositions, CONSTELLATION_DEFS } from '../../services/starCatalog';
 import { getPlanetThumbnail } from '../../services/planetTextures';
 import { CelestialBodySelector } from '../../components/CelestialBodySelector';
+import { PlanetDiscoveryModal } from './PlanetDiscoveryModal';
 import * as THREE from 'three';
 
 interface ARSkyViewProps {
@@ -45,6 +47,7 @@ interface ARSkyViewProps {
   onSelectBody?: (body: CelestialBodyId) => void;
   onRequestGps?: () => void;
   gpsLoading?: boolean;
+  onNavigateTo3DExplorer?: (body: CelestialBodyId) => void;
 }
 
 export function ARSkyView({
@@ -62,6 +65,7 @@ export function ARSkyView({
   onSelectBody,
   onRequestGps,
   gpsLoading,
+  onNavigateTo3DExplorer,
 }: ARSkyViewProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const {
@@ -88,6 +92,13 @@ export function ARSkyView({
 
   // Quick compass trim for real-life magnetic alignment (+/- degrees on the fly)
   const [quickAzimuthNudge, setQuickAzimuthNudge] = useState<number>(0);
+
+  // Auto-Scan vs Manual Pin Mode (Free Sky Exploration)
+  const [autoScanMode, setAutoScanMode] = useState<boolean>(true);
+  const [discoveredBodyId, setDiscoveredBodyId] = useState<CelestialBodyId | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
+  const lockHoldTimerRef = useRef<{ bodyId: CelestialBodyId; startTime: number } | null>(null);
+  const lastDismissedRef = useRef<{ bodyId: CelestialBodyId; time: number } | null>(null);
 
   const [viewport, setViewport] = useState({ width: 800, height: 600 });
 
@@ -372,34 +383,115 @@ export function ARSkyView({
     showEcliptic,
   ]);
 
-  const activeProj = projectedBodies[selectedBody] || {
+  // Find the closest on-screen body to the optical crosshairs (Auto-Detection vs Manual Pin)
+  const detectedTarget = useMemo(() => {
+    if (!autoScanMode && selectedBody) {
+      const proj = projectedBodies[selectedBody];
+      if (!proj) return null;
+      const onScreen =
+        proj.isInFront &&
+        proj.u >= 35 &&
+        proj.u <= viewport.width - 35 &&
+        proj.v >= 35 &&
+        proj.v <= viewport.height - 35;
+      return {
+        bodyId: selectedBody,
+        proj,
+        isOnScreen: onScreen,
+        isLocked: onScreen && proj.angularSeparationDeg < 5.5,
+      };
+    }
+
+    // Auto-Scan Mode: Evaluate all 9 celestial bodies
+    let closest: { bodyId: CelestialBodyId; proj: any; isOnScreen: boolean; isLocked: boolean } | null = null;
+    let minSep = Infinity;
+
+    CELESTIAL_BODY_LIST.forEach((b) => {
+      const p = projectedBodies[b.id];
+      if (p && p.isInFront) {
+        if (p.angularSeparationDeg < minSep) {
+          minSep = p.angularSeparationDeg;
+          const onScreen =
+            p.u >= 25 &&
+            p.u <= viewport.width - 25 &&
+            p.v >= 25 &&
+            p.v <= viewport.height - 25;
+          closest = {
+            bodyId: b.id,
+            proj: p,
+            isOnScreen: onScreen,
+            isLocked: onScreen && p.angularSeparationDeg < 5.5,
+          };
+        }
+      }
+    });
+
+    return closest;
+  }, [autoScanMode, selectedBody, projectedBodies, viewport]);
+
+  // Current active body metadata and coordinates for HUD
+  const currentTargetBodyId = detectedTarget?.bodyId || selectedBody;
+  const currentMeta = CELESTIAL_BODIES[currentTargetBodyId] || CELESTIAL_BODIES.Sun;
+  const currentCoords = allPositions[currentTargetBodyId] || activeCoords;
+  const currentProj = detectedTarget?.proj || (projectedBodies[currentTargetBodyId] || {
     u: -1000,
     v: -1000,
     isInFront: false,
     angularSeparationDeg: 180,
     azimuthOffsetDeg: 0,
     elevationOffsetDeg: 0,
+  });
+
+  const isCurrentOnScreen = detectedTarget?.isOnScreen ?? false;
+  const isCurrentLocked = detectedTarget?.isLocked ?? false;
+  const isCurrentNear = detectedTarget && detectedTarget.proj.angularSeparationDeg < 15;
+
+  // Auto Lock-On Countdown & Pop-Up Trigger
+  useEffect(() => {
+    if (!detectedTarget || !detectedTarget.isLocked) {
+      lockHoldTimerRef.current = null;
+      return;
+    }
+
+    const { bodyId } = detectedTarget;
+
+    // Check if dismissed recently within cooldown (3 seconds)
+    if (
+      lastDismissedRef.current &&
+      lastDismissedRef.current.bodyId === bodyId &&
+      Date.now() - lastDismissedRef.current.time < 3000
+    ) {
+      return;
+    }
+
+    if (!lockHoldTimerRef.current || lockHoldTimerRef.current.bodyId !== bodyId) {
+      lockHoldTimerRef.current = { bodyId, startTime: Date.now() };
+    } else if (Date.now() - lockHoldTimerRef.current.startTime > 450) {
+      // Locked steady for 450ms! Open 3D planet modal
+      setDiscoveredBodyId(bodyId);
+      setIsModalOpen(true);
+      lockHoldTimerRef.current = null;
+      if (onSelectBody) onSelectBody(bodyId);
+    }
+  }, [detectedTarget, onSelectBody]);
+
+  const handleCloseModal = () => {
+    if (discoveredBodyId) {
+      lastDismissedRef.current = { bodyId: discoveredBodyId, time: Date.now() };
+    }
+    setIsModalOpen(false);
   };
-
-  const isTargetOnScreen =
-    activeProj.isInFront &&
-    activeProj.u >= 35 &&
-    activeProj.u <= viewport.width - 35 &&
-    activeProj.v >= 35 &&
-    activeProj.v <= viewport.height - 35;
-
-  const isTargetLocked = isTargetOnScreen && activeProj.angularSeparationDeg < 5.5;
 
   // Screen perimeter guidance beacon calculation
   const edgeRadar = useMemo(() => {
-    if (isTargetOnScreen) return null;
+    if (isCurrentOnScreen) return null;
 
     const cx = viewport.width / 2;
     const cy = viewport.height / 2;
-    let dx = activeProj.u - cx;
-    let dy = activeProj.v - cy;
+    let dx = currentProj.u - cx;
+    let dy = currentProj.v - cy;
 
-    if (!activeProj.isInFront) {
+    if (!currentProj.isInFront) {
       dx = -dx;
       dy = -dy;
     }
@@ -420,16 +512,18 @@ export function ARSkyView({
       x: edgeX,
       y: edgeY,
       angleDeg,
-      separation: activeProj.angularSeparationDeg || 90,
+      separation: currentProj.angularSeparationDeg || 90,
+      bodyName: currentMeta.name,
+      bodyColor: currentMeta.color,
     };
-  }, [activeProj, isTargetOnScreen, viewport]);
+  }, [currentProj, isCurrentOnScreen, viewport, currentMeta]);
 
   // Turn guidance instructions
   const guidanceInstruction = useMemo(() => {
-    if (isTargetLocked) return 'TARGET LOCKED';
+    if (isCurrentLocked) return 'TARGET LOCKED';
 
-    const azDiff = activeProj.azimuthOffsetDeg;
-    const elDiff = activeProj.elevationOffsetDeg;
+    const azDiff = currentProj.azimuthOffsetDeg;
+    const elDiff = currentProj.elevationOffsetDeg;
 
     const parts: string[] = [];
     if (Math.abs(azDiff) > 2.5) {
@@ -444,11 +538,11 @@ export function ARSkyView({
 
     if (parts.length === 0) return 'Centering...';
     return parts.join(' · ');
-  }, [activeProj, isTargetLocked]);
+  }, [currentProj, isCurrentLocked]);
 
   const guidanceArrowAngle = useMemo(() => {
-    return (Math.atan2(-activeProj.elevationOffsetDeg, activeProj.azimuthOffsetDeg) * 180) / Math.PI;
-  }, [activeProj]);
+    return (Math.atan2(-currentProj.elevationOffsetDeg, currentProj.azimuthOffsetDeg) * 180) / Math.PI;
+  }, [currentProj]);
 
   // Compass Tape Ticks Generation
   const compassTicks = useMemo(() => {
@@ -677,31 +771,66 @@ export function ARSkyView({
         </div>
 
         {/* Sleek Floating Guidance Pill at Top Center */}
-        <div className="absolute top-11 inset-x-2 flex justify-center pointer-events-none z-20">
+        <div className="absolute top-11 inset-x-2 flex justify-center pointer-events-auto z-20">
           <div
-            className={`px-3 py-1 rounded-full backdrop-blur-md border shadow-xl flex items-center gap-1.5 text-[11px] font-mono transition-all max-w-[90vw] truncate ${
-              isTargetLocked
-                ? 'bg-emerald-950/90 border-emerald-500 text-emerald-300 ring-2 ring-emerald-500/40'
-                : 'bg-slate-950/90 border-amber-500/50 text-amber-300'
+            onClick={() => {
+              if (isCurrentLocked || isCurrentNear) {
+                setDiscoveredBodyId(currentMeta.id);
+                setIsModalOpen(true);
+              }
+            }}
+            className={`px-3 py-1 rounded-full backdrop-blur-md border shadow-xl flex items-center gap-1.5 text-[11px] font-mono transition-all max-w-[90vw] truncate cursor-pointer ${
+              isCurrentLocked
+                ? 'bg-emerald-950/90 border-emerald-500 text-emerald-300 ring-2 ring-emerald-500/40 animate-pulse'
+                : isCurrentNear
+                ? 'bg-amber-950/90 border-amber-500/70 text-amber-300 ring-1 ring-amber-500/30'
+                : 'bg-slate-950/90 border-sky-500/40 text-sky-300'
             }`}
           >
-            {isTargetLocked ? (
-              <Target className="w-3.5 h-3.5 text-emerald-400 animate-spin shrink-0" />
+            {isCurrentLocked ? (
+              <>
+                <Target className="w-3.5 h-3.5 text-emerald-400 animate-spin shrink-0" />
+                <span className="font-semibold">TARGET LOCKED: {currentMeta.name}</span>
+                <span className="text-[10px] text-emerald-400/80 hidden xs:inline">(Tap for 3D)</span>
+              </>
+            ) : isCurrentNear ? (
+              <>
+                <div
+                  className="w-3.5 h-3.5 flex items-center justify-center transition-transform shrink-0"
+                  style={{ transform: `rotate(${guidanceArrowAngle}deg)` }}
+                >
+                  <Navigation className="w-3 h-3 text-amber-400 fill-amber-400" />
+                </div>
+                <span className="font-semibold">{guidanceInstruction}</span>
+                <span className="text-[10px] text-slate-400">({currentMeta.name})</span>
+              </>
             ) : (
-              <div
-                className="w-3.5 h-3.5 flex items-center justify-center transition-transform shrink-0"
-                style={{ transform: `rotate(${guidanceArrowAngle}deg)` }}
-              >
-                <Navigation className="w-3 h-3 text-amber-400 fill-amber-400" />
-              </div>
+              <>
+                <Radio className="w-3.5 h-3.5 text-sky-400 animate-pulse shrink-0" />
+                <span className="font-semibold">
+                  {autoScanMode ? 'Scanning Night Sky: Sweep camera across sky' : `Aligning with ${activeMeta.name}`}
+                </span>
+              </>
             )}
-            <span className="font-semibold">{guidanceInstruction}</span>
-            <span className="text-[10px] text-slate-400 truncate">({activeMeta.name})</span>
           </div>
         </div>
 
         {/* Uncluttered Top Right Action Bar (Mode Pill + Layers Button) */}
         <div className="absolute top-10 right-3 z-30 flex items-center gap-1.5 pointer-events-auto">
+          {/* Auto-Scan Mode Switch Pill */}
+          <button
+            onClick={() => setAutoScanMode(!autoScanMode)}
+            className={`px-2.5 py-1 rounded-xl text-xs font-semibold flex items-center gap-1.5 border backdrop-blur-md transition shadow-md ${
+              autoScanMode
+                ? 'bg-amber-500 text-slate-950 border-amber-400 font-bold'
+                : 'bg-slate-900/80 text-slate-300 border-slate-800 hover:bg-slate-800'
+            }`}
+            title={autoScanMode ? 'Auto-Scan Mode: Detects whichever planet you aim at' : 'Manual Target Pin Mode'}
+          >
+            <Radio className="w-3.5 h-3.5" />
+            <span className="text-[11px] hidden sm:inline">{autoScanMode ? 'Auto-Scan' : 'Manual Pin'}</span>
+          </button>
+
           {/* Mode Switch Pill */}
           <button
             onClick={() => setViewMode(viewMode === 'ar' ? 'vr' : 'ar')}
@@ -716,7 +845,7 @@ export function ARSkyView({
             <span className="text-[11px] hidden xs:inline">{viewMode === 'ar' ? 'AR' : 'VR'}</span>
           </button>
 
-          {/* Unified Layers & Controls Button (Unclutters the viewport!) */}
+          {/* Unified Layers & Controls Button */}
           <button
             onClick={() => setIsLayersOpen(!isLayersOpen)}
             className={`p-1.5 rounded-xl text-xs font-semibold flex items-center gap-1 border backdrop-blur-md transition shadow-md ${
@@ -862,19 +991,43 @@ export function ARSkyView({
           </div>
         )}
 
-        {/* Center Crosshair */}
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
-          <div className="relative w-7 h-7 flex items-center justify-center opacity-30">
-            <div className="absolute w-full h-[1px] bg-slate-400" />
-            <div className="absolute h-full w-[1px] bg-slate-400" />
-            <div className="w-2.5 h-2.5 rounded-full border border-slate-400" />
+        {/* Central Optical HUD Scanner Crosshairs */}
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-15">
+          <div className="relative flex items-center justify-center">
+            {/* Outer Scanning Reticle Ring */}
+            <div
+              className={`rounded-full border border-dashed transition-all duration-300 ${
+                isCurrentLocked
+                  ? 'w-28 h-28 border-emerald-400 ring-4 ring-emerald-500/30 scale-95 animate-[spin_4s_linear_infinite]'
+                  : isCurrentNear
+                  ? 'w-26 h-26 border-amber-400/80 scale-100 animate-[spin_10s_linear_infinite]'
+                  : 'w-24 h-24 border-sky-400/30 scale-100 animate-[spin_24s_linear_infinite]'
+              }`}
+            />
+
+            {/* Precision Crosshairs Reticle */}
+            <div className="absolute w-6 h-6 border border-sky-400/40 rounded-full flex items-center justify-center">
+              <div
+                className={`w-1.5 h-1.5 rounded-full ${
+                  isCurrentLocked
+                    ? 'bg-emerald-400 animate-ping'
+                    : isCurrentNear
+                    ? 'bg-amber-400'
+                    : 'bg-sky-400/60'
+                }`}
+              />
+            </div>
+            <div className="absolute w-10 h-px bg-sky-400/30 -left-10" />
+            <div className="absolute w-10 h-px bg-sky-400/30 -right-10" />
+            <div className="absolute h-10 w-px bg-sky-400/30 -top-10" />
+            <div className="absolute h-10 w-px bg-sky-400/30 -bottom-10" />
           </div>
         </div>
 
         {/* Render ALL Visible Solar System Planets with Photorealistic 3D Appearance */}
         {showAllPlanetsInAR &&
           CELESTIAL_BODY_LIST.map((b) => {
-            if (b.id === selectedBody) return null;
+            if (b.id === currentTargetBodyId && isCurrentOnScreen) return null;
             const proj = projectedBodies[b.id];
             if (!proj || !proj.isInFront) return null;
             if (proj.u < 15 || proj.u > viewport.width - 15 || proj.v < 15 || proj.v > viewport.height - 15) return null;
@@ -885,7 +1038,11 @@ export function ARSkyView({
             return (
               <div
                 key={b.id}
-                onClick={() => onSelectBody && onSelectBody(b.id)}
+                onClick={() => {
+                  if (onSelectBody) onSelectBody(b.id);
+                  setDiscoveredBodyId(b.id);
+                  setIsModalOpen(true);
+                }}
                 className="absolute pointer-events-auto cursor-pointer transform -translate-x-1/2 -translate-y-1/2 z-15 flex flex-col items-center hover:scale-125 transition-transform group"
                 style={{ left: `${proj.u}px`, top: `${proj.v}px` }}
               >
@@ -915,59 +1072,67 @@ export function ARSkyView({
           })}
 
         {/* Primary Selected Target AR Reticle */}
-        {isTargetOnScreen && (
+        {isCurrentOnScreen && (
           <div
-            className="absolute pointer-events-none transform -translate-x-1/2 -translate-y-1/2 transition-transform duration-75 ease-out z-25 flex flex-col items-center"
-            style={{ left: `${activeProj.u}px`, top: `${activeProj.v}px` }}
+            onClick={() => {
+              setDiscoveredBodyId(currentMeta.id);
+              setIsModalOpen(true);
+            }}
+            className="absolute pointer-events-auto cursor-pointer transform -translate-x-1/2 -translate-y-1/2 transition-transform duration-75 ease-out z-25 flex flex-col items-center group"
+            style={{ left: `${currentProj.u}px`, top: `${currentProj.v}px` }}
           >
             <div className="relative flex items-center justify-center">
               <div
                 className={`w-24 h-24 sm:w-28 sm:h-28 rounded-full border-2 border-dashed ${
-                  isTargetLocked
-                    ? 'animate-[spin_4s_linear_infinite] border-amber-400 ring-4 ring-amber-400/25'
+                  isCurrentLocked
+                    ? 'animate-[spin_4s_linear_infinite] border-amber-400 ring-4 ring-amber-400/30'
                     : 'animate-[spin_12s_linear_infinite]'
                 }`}
-                style={{ borderColor: activeMeta.color }}
+                style={{ borderColor: currentMeta.color }}
               />
 
               <div
                 className="absolute w-18 h-18 rounded-full border border-current opacity-85"
-                style={{ color: activeMeta.color }}
+                style={{ color: currentMeta.color }}
               />
 
               <div
                 className="absolute w-20 h-20 border-t-2 border-l-2 border-current opacity-75 -top-1 -left-1"
-                style={{ color: activeMeta.color }}
+                style={{ color: currentMeta.color }}
               />
               <div
                 className="absolute w-20 h-20 border-b-2 border-r-2 border-current opacity-75 -bottom-1 -right-1"
-                style={{ color: activeMeta.color }}
+                style={{ color: currentMeta.color }}
               />
 
               <div className="relative flex items-center justify-center">
                 <div
                   className="absolute -inset-2 rounded-full blur-md opacity-70 animate-pulse"
-                  style={{ backgroundColor: activeMeta.color }}
+                  style={{ backgroundColor: currentMeta.color }}
                 />
                 <img
-                  src={getPlanetThumbnail(activeMeta.id, 128)}
-                  alt={activeMeta.name}
-                  className="relative w-12 h-12 sm:w-14 sm:h-14 object-contain drop-shadow-[0_0_16px_rgba(0,0,0,0.9)]"
+                  src={getPlanetThumbnail(currentMeta.id, 128)}
+                  alt={currentMeta.name}
+                  className="relative w-12 h-12 sm:w-14 sm:h-14 object-contain drop-shadow-[0_0_16px_rgba(0,0,0,0.9)] group-hover:scale-110 transition-transform"
                 />
               </div>
             </div>
 
             <div className="mt-2 bg-slate-950/95 backdrop-blur-md px-3 py-1 rounded-xl border border-slate-800 text-center font-mono text-[10px] space-y-0.5 shadow-2xl">
               <div className="flex items-center justify-center gap-1.5">
-                <span className="font-bold text-white text-xs">{activeMeta.name}</span>
-                {isTargetLocked && (
-                  <span className="px-1.5 py-0.2 rounded text-[8px] bg-emerald-500 text-slate-950 font-bold uppercase">
-                    LOCKED
+                <span className="font-bold text-white text-xs">{currentMeta.name}</span>
+                {isCurrentLocked ? (
+                  <span className="px-1.5 py-0.2 rounded text-[8px] bg-emerald-500 text-slate-950 font-bold uppercase animate-pulse">
+                    LOCKED (TAP FOR 3D)
+                  </span>
+                ) : (
+                  <span className="px-1.5 py-0.2 rounded text-[8px] bg-amber-500/30 text-amber-300 font-bold uppercase">
+                    {currentProj.angularSeparationDeg.toFixed(1)}°
                   </span>
                 )}
               </div>
               <div className="text-amber-300">
-                Az: {activeCoords.azimuthDeg.toFixed(1)}° | Alt: {activeCoords.altitudeDeg.toFixed(1)}°
+                Az: {currentCoords.azimuthDeg.toFixed(1)}° | Alt: {currentCoords.altitudeDeg.toFixed(1)}°
               </div>
             </div>
           </div>
@@ -978,8 +1143,10 @@ export function ARSkyView({
           <div
             className="absolute pointer-events-auto cursor-pointer transform -translate-x-1/2 -translate-y-1/2 z-30 transition-all duration-75 ease-out animate-pulse"
             style={{ left: `${edgeRadar.x}px`, top: `${edgeRadar.y}px` }}
-            onClick={() => onSelectBody && onSelectBody(activeMeta.id)}
-            title={`Pan towards ${activeMeta.name} (${edgeRadar.separation.toFixed(0)}°)`}
+            onClick={() => {
+              if (onSelectBody) onSelectBody(currentMeta.id);
+            }}
+            title={`Pan towards ${currentMeta.name} (${edgeRadar.separation.toFixed(0)}°)`}
           >
             <div className="flex items-center gap-1.5 bg-slate-950/95 border border-amber-400 px-2 py-1 rounded-full shadow-xl backdrop-blur-md text-slate-100">
               <div
@@ -989,11 +1156,11 @@ export function ARSkyView({
                 ➔
               </div>
               <img
-                src={getPlanetThumbnail(activeMeta.id, 64)}
-                alt={activeMeta.name}
+                src={getPlanetThumbnail(currentMeta.id, 64)}
+                alt={currentMeta.name}
                 className="w-4 h-4 rounded-full object-contain"
               />
-              <span className="font-bold text-[10px] text-white">{activeMeta.name}</span>
+              <span className="font-bold text-[10px] text-white">{currentMeta.name}</span>
               <span className="text-[9px] font-mono text-amber-300 bg-amber-500/20 px-1 rounded">
                 {edgeRadar.separation.toFixed(0)}°
               </span>
@@ -1057,6 +1224,16 @@ export function ARSkyView({
             )}
           </div>
         </div>
+
+        {/* Photorealistic 3D Planet Discovery Pop-Up Modal */}
+        {isModalOpen && discoveredBodyId && (
+          <PlanetDiscoveryModal
+            bodyId={discoveredBodyId}
+            coordinates={allPositions[discoveredBodyId]}
+            onClose={handleCloseModal}
+            onNavigateTo3DExplorer={onNavigateTo3DExplorer}
+          />
+        )}
       </div>
     </div>
   );

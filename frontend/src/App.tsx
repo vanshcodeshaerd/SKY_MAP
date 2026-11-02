@@ -121,6 +121,10 @@ export default function App() {
             onSelectBody={setSelectedBody}
             onRequestGps={requestGpsLocation}
             gpsLoading={gpsLoading}
+            onNavigateTo3DExplorer={(id) => {
+              setSelectedBody(id);
+              setActiveTab('sky3d');
+            }}
           />
         )}
 

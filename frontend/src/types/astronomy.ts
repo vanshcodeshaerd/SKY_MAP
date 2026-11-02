@@ -13,6 +13,13 @@ export type CelestialBodyId =
   | 'Uranus'
   | 'Neptune';
 
+export interface CelestialBodyComposition {
+  core: string;
+  mantle: string;
+  crust: string;
+  atmosphere: string;
+}
+
 export interface CelestialBodyInfo {
   id: CelestialBodyId;
   name: string;
@@ -26,6 +33,10 @@ export interface CelestialBodyInfo {
   hasRings?: boolean;
   category: 'star' | 'moon' | 'terrestrial' | 'gas_giant' | 'ice_giant';
   description: string;
+  surfaceGravity: string;
+  composition: CelestialBodyComposition;
+  mineralsAndElements: string[];
+  funFacts: string[];
   scientificInfo: {
     type: string;
     diameterKm: number;
@@ -51,6 +62,19 @@ export const CELESTIAL_BODIES: Record<CelestialBodyId, CelestialBodyInfo> = {
     orbitSpeed: 0,
     category: 'star',
     description: 'G-type main-sequence star holding 99.86% of the Solar System mass.',
+    surfaceGravity: '274.0 m/s² (28.0g — 28× Earth gravity)',
+    composition: {
+      core: 'Nuclear fusion core (dense ionized hydrogen & helium plasma under 250 billion atm pressure)',
+      mantle: 'Radiative zone (photons take ~100,000 years to migrate outward) & Convective envelope',
+      crust: 'Photosphere (~500 km thick visible boundary with granular convection cells)',
+      atmosphere: 'Chromosphere and Corona extending millions of km into space (1–3 million °C solar plasma)',
+    },
+    mineralsAndElements: ['Hydrogen (73.4%)', 'Helium (24.8%)', 'Oxygen (0.77%)', 'Carbon (0.29%)', 'Iron (0.16%)', 'Neon (0.12%)'],
+    funFacts: [
+      'About 1.3 million Earths could fit inside the volume of the Sun.',
+      'The Sun converts 600 million tons of hydrogen into helium every second, losing 4 million tons as pure energy.',
+      'Light generated in the solar core takes up to 100,000 years to reach the surface, but then only 8.3 minutes to reach Earth!',
+    ],
     scientificInfo: {
       type: 'G-type Main-Sequence Star',
       diameterKm: 1392700,
@@ -74,6 +98,19 @@ export const CELESTIAL_BODIES: Record<CelestialBodyId, CelestialBodyInfo> = {
     orbitSpeed: 0.38,
     category: 'moon',
     description: 'Earth’s only natural satellite, exhibiting cyclical phases and oceanic tidal lock.',
+    surfaceGravity: '1.62 m/s² (0.166g — you weigh 83% less!)',
+    composition: {
+      core: 'Small metallic iron core (~350 km radius) alloyed with nickel and sulfur',
+      mantle: 'Rigid silicate-rich lithospheric mantle of olivine, orthopyroxene, and clinopyroxene',
+      crust: 'Anorthosite regolith crust (60 km near side, 100 km far side) pulverized by billions of years of impacts',
+      atmosphere: 'Near-vacuum exosphere (helium, argon, neon, and sodium traces without weather)',
+    },
+    mineralsAndElements: ['Anorthosite (Plagioclase)', 'Basalt (Lunar Maria)', 'Ilmenite (Titanium ore)', 'Olivine', 'Pyroxene', 'Water Ice (Polar Traps)'],
+    funFacts: [
+      'Footprints left by Apollo astronauts will stay visible for millions of years with no wind or rain to erode them.',
+      'The Moon is tidally locked to Earth, meaning humanity only ever sees 59% of its surface from the ground.',
+      'The Moon is slowly drifting away from Earth at a steady rate of 3.8 cm (1.5 inches) per year.',
+    ],
     scientificInfo: {
       type: 'Natural Satellite',
       diameterKm: 3475,
@@ -97,6 +134,19 @@ export const CELESTIAL_BODIES: Record<CelestialBodyId, CelestialBodyInfo> = {
     orbitSpeed: 0.48,
     category: 'terrestrial',
     description: 'Innermost rocky planet, heavily cratered with Caloris Basin and extreme temperature swings.',
+    surfaceGravity: '3.70 m/s² (0.38g — jump 2.6× higher!)',
+    composition: {
+      core: 'Enormous metallic iron core making up 85% of planetary radius, partially molten',
+      mantle: 'Thin silicate rocky mantle (~400 km thick) compressed by planetary cooling',
+      crust: 'Dense silicate crust marked by impact craters and long thrust faults (scarps)',
+      atmosphere: 'Extremely thin exosphere containing oxygen, sodium, hydrogen, helium, and potassium',
+    },
+    mineralsAndElements: ['Metallic Iron & Nickel', 'Magnesium Silicates', 'Enstatite', 'Sulfur Compounds', 'Graphite (Carbon Crust)', 'Water Ice (Polar craters)'],
+    funFacts: [
+      'Despite daytime temperatures reaching 430 °C, water ice survives inside permanently shadowed polar craters.',
+      'A single solar day on Mercury lasts 176 Earth days — twice as long as its entire 88-day orbital year!',
+      'Mercury has shrunk by about 7 km in radius as its colossal iron core gradually cooled and solidified.',
+    ],
     scientificInfo: {
       type: 'Terrestrial Planet',
       diameterKm: 4879,
@@ -120,6 +170,19 @@ export const CELESTIAL_BODIES: Record<CelestialBodyId, CelestialBodyInfo> = {
     orbitSpeed: 0.35,
     category: 'terrestrial',
     description: 'Hottest planet with runaway greenhouse effect and retrograde backward rotation.',
+    surfaceGravity: '8.87 m/s² (0.90g — almost identical to Earth)',
+    composition: {
+      core: 'Central metallic iron-nickel core (~3,000 km radius), dynamo currently dormant',
+      mantle: 'Silicate rock mantle churning with massive internal convective heat plumes',
+      crust: 'Single unbroken basaltic crust dominated by volcanic plains, lava flows, and tesserae',
+      atmosphere: 'Crushing 96.5% Carbon Dioxide atmosphere with sulfuric acid aerosol clouds (92 atm pressure)',
+    },
+    mineralsAndElements: ['Basalt (Volcanic rock)', 'Pyrite & Hematite', 'Magnetite', 'Sulfuric Acid Droplets', 'Carbon Dioxide (96.5%)', 'Nitrogen (3.5%)'],
+    funFacts: [
+      'Venus is hotter than Mercury despite being nearly twice as far from the Sun, due to an extreme runaway greenhouse effect.',
+      'Venus spins in retrograde (clockwise) so slowly that its day (243 Earth days) is longer than its orbital year (225 days)!',
+      'The surface atmospheric pressure equals the crushing pressure 900 meters (3,000 ft) beneath Earth’s oceans.',
+    ],
     scientificInfo: {
       type: 'Terrestrial Planet',
       diameterKm: 12104,
@@ -143,6 +206,19 @@ export const CELESTIAL_BODIES: Record<CelestialBodyId, CelestialBodyInfo> = {
     orbitSpeed: 0.24,
     category: 'terrestrial',
     description: 'Red planet with rusty iron-oxide dust, Valles Marineris canyon, and polar ice caps.',
+    surfaceGravity: '3.72 m/s² (0.38g — jump 2.6× higher!)',
+    composition: {
+      core: 'Dense metallic core of iron, nickel, and sulfur (~1,800 km radius), partially fluid',
+      mantle: 'Silicate mantle rich in olivine and peridotite with extinct volcanic conduits',
+      crust: 'Basaltic crust enriched in iron oxide (rust) dust, varying from 10 km to 50 km thick',
+      atmosphere: 'Thin atmosphere: 95.3% Carbon Dioxide, 2.6% Nitrogen, 1.9% Argon, surface pressure 6.1 mbar',
+    },
+    mineralsAndElements: ['Hematite (Rust Fe₂O₃)', 'Basalt', 'Smectite Clays', 'Perchlorates (Salts)', 'Water Ice & CO₂ Dry Ice', 'Gypsum & Sulfates'],
+    funFacts: [
+      'Home to Olympus Mons, the tallest volcano in the Solar System — 22 km high (nearly 3× Mount Everest)!',
+      'Valles Marineris is a colossal canyon system 4,000 km long, stretching the distance from New York to Los Angeles.',
+      'Sunsets on Mars glow an eerie electric blue because fine dust particles scatter red light and let blue pass through.',
+    ],
     scientificInfo: {
       type: 'Terrestrial Planet',
       diameterKm: 6779,
@@ -166,6 +242,19 @@ export const CELESTIAL_BODIES: Record<CelestialBodyId, CelestialBodyInfo> = {
     orbitSpeed: 0.13,
     category: 'gas_giant',
     description: 'Largest gas giant in the Solar System with turbulent cloud bands and the Great Red Spot.',
+    surfaceGravity: '24.79 m/s² (2.53g — you would feel 2.5× heavier)',
+    composition: {
+      core: 'Dense diffuse core of rock, metal, and high-pressure ice (12–25 Earth masses)',
+      mantle: 'Vast ocean of liquid metallic hydrogen conducting colossal electrical currents',
+      crust: 'Gradual transition from liquid molecular hydrogen ocean to deep gaseous atmosphere',
+      atmosphere: 'Dynamic cloud belts of ammonia crystals, ammonium hydrosulfide, water vapor, and phosphine',
+    },
+    mineralsAndElements: ['Hydrogen (89.8%)', 'Helium (10.2%)', 'Liquid Metallic Hydrogen', 'Ammonia Ice Crystals', 'Water Vapor', 'Methane & Phosphine'],
+    funFacts: [
+      'Jupiter acts as a cosmic shield for Earth, using its massive gravitational pull to swallow or deflect incoming comets.',
+      'The Great Red Spot is a counter-clockwise anticyclonic storm that has raged for over 350 years and could swallow Earth whole.',
+      'Jupiter has 95 officially confirmed moons; its moon Ganymede is larger than Mercury and has its own magnetic field.',
+    ],
     scientificInfo: {
       type: 'Gas Giant',
       diameterKm: 139820,
@@ -190,6 +279,19 @@ export const CELESTIAL_BODIES: Record<CelestialBodyId, CelestialBodyInfo> = {
     orbitSpeed: 0.10,
     category: 'gas_giant',
     description: 'Ringed gas giant celebrated for majestic icy rings and polar hexagon storm.',
+    surfaceGravity: '10.44 m/s² (1.07g — almost identical to Earth gravity)',
+    composition: {
+      core: 'Dense core of iron, nickel, silicates, and high-pressure water/ammonia ices (~15 Earth masses)',
+      mantle: 'Fluid metallic hydrogen envelope generating Saturn’s symmetric magnetic field',
+      crust: 'Deep layer of liquid molecular hydrogen and helium rain droplets',
+      atmosphere: 'Hazy golden atmosphere of molecular hydrogen (96%) and helium (3%) with ammonia clouds',
+    },
+    mineralsAndElements: ['Water Ice (99% of Rings)', 'Molecular Hydrogen (96%)', 'Helium (3%)', 'Ammonia Ice', 'Tholins (Organic compounds)', 'Silicate Dust'],
+    funFacts: [
+      'Saturn has the lowest density of any planet (0.687 g/cm³) — it would literally float in a giant cosmic bathtub of water!',
+      'Saturn’s rings span 282,000 km across, yet they are remarkably razor-thin, averaging only 10 to 30 meters in thickness.',
+      'Saturn possesses 146 confirmed moons, the highest count in the solar system, including Titan with rivers of liquid methane.',
+    ],
     scientificInfo: {
       type: 'Gas Giant',
       diameterKm: 116460,
@@ -213,6 +315,19 @@ export const CELESTIAL_BODIES: Record<CelestialBodyId, CelestialBodyInfo> = {
     orbitSpeed: 0.07,
     category: 'ice_giant',
     description: 'Pale cyan methane ice giant rotating completely on its side.',
+    surfaceGravity: '8.69 m/s² (0.89g — jump 12% higher!)',
+    composition: {
+      core: 'Small rocky core composed of iron, nickel, and silicates (~0.55 Earth masses)',
+      mantle: 'Vast, dense supercritical icy mantle of water, ammonia, and methane under millions of atmospheres',
+      crust: 'Supercritical ionic ocean where extreme temperature and pressure split methane into pure diamond rain',
+      atmosphere: 'Pale cyan upper atmosphere: Hydrogen (82.5%), Helium (15.2%), and Methane (2.3%)',
+    },
+    mineralsAndElements: ['Methane Gas & Crystals (CH₄)', 'Water Ice & Superionic Water', 'Ammonia Ice (NH₃)', 'Hydrogen & Helium Gas', 'Solid Carbon Diamonds', 'Hydrogen Sulfide'],
+    funFacts: [
+      'Uranus spins on its side with an axial tilt of 97.8°, meaning its poles face the Sun directly for 42 years at a time!',
+      'Deep inside Uranus, extreme pressures compress carbon into literal diamond precipitation that sinks to the core.',
+      'Uranus holds the record for the coldest recorded planetary atmosphere in the Solar System at −224 °C (−371 °F).',
+    ],
     scientificInfo: {
       type: 'Ice Giant',
       diameterKm: 50724,
@@ -236,6 +351,19 @@ export const CELESTIAL_BODIES: Record<CelestialBodyId, CelestialBodyInfo> = {
     orbitSpeed: 0.055,
     category: 'ice_giant',
     description: 'Distant deep-azure ice giant with Great Dark Spot and supersonic winds.',
+    surfaceGravity: '11.15 m/s² (1.14g — slightly heavier than Earth)',
+    composition: {
+      core: 'Rocky and metallic core of iron, nickel, and magnesium silicates (~1.2 Earth masses)',
+      mantle: 'Hot, dense, electrically conductive fluid mantle of water, ammonia, and methane molecules',
+      crust: 'Deep fluid mantle transition region where hydrocarbon compression precipitates solid diamond crystals',
+      atmosphere: 'Rich azure blue atmosphere: Hydrogen (80%), Helium (19%), Methane (1.5%) with high-altitude methane cirrus clouds',
+    },
+    mineralsAndElements: ['Methane Ice Cirrus', 'Supercritical Water & Ammonia', 'Silicate Minerals (Core)', 'Molecular Hydrogen & Helium', 'Solid Diamond Crystals', 'Ammonia Hydrosulfide'],
+    funFacts: [
+      'Neptune features the fastest recorded winds in the solar system, clocking speeds over 2,100 km/h (1,300 mph).',
+      'Neptune was discovered through mathematical prediction by Urbain Le Verrier before it was ever seen through a telescope.',
+      'Its moon Triton orbits backward (retrograde) and shoots active liquid nitrogen geysers 8 km up into the vacuum of space!',
+    ],
     scientificInfo: {
       type: 'Ice Giant',
       diameterKm: 49244,
