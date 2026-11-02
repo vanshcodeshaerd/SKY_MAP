@@ -444,10 +444,14 @@ export function ThreeSkyExplorer({
       depthWrite: false,
     });
     const milkyMesh = new THREE.Mesh(milkyGeo, milkyMat);
+    milkyMesh.visible = false;
     scene.add(milkyMesh);
     loadSolarSystemScopeTexture('MilkyWay', (tex) => {
-      milkyMat.map = tex;
-      milkyMat.needsUpdate = true;
+      if (tex) {
+        milkyMat.map = tex;
+        milkyMat.needsUpdate = true;
+        milkyMesh.visible = true;
+      }
     });
 
     // E2. 2,500 Starfield Particles (Deep Space)
@@ -1296,7 +1300,7 @@ export function ThreeSkyExplorer({
       {/* 3D Viewport Card - Responsive Height & Edge-to-Edge Canvas */}
       <div className="glass-panel rounded-2xl sm:rounded-3xl overflow-hidden relative border border-slate-800 bg-slate-950 shadow-2xl h-[65vh] min-h-[440px] max-h-[720px]">
         {/* Top Info Bar - Coordinates & Planet Scientific Dossier Toggle */}
-        <div className="absolute top-3 left-3 z-20 flex flex-col items-start gap-1.5 max-w-[70vw] sm:max-w-md">
+        <div className="absolute top-3 left-3 z-20 flex flex-col items-start gap-1.5 max-w-[280px] sm:max-w-xs">
           <div className="bg-slate-950/90 backdrop-blur-md px-3 py-1.5 sm:px-3.5 sm:py-2.5 rounded-xl border border-slate-800 text-xs shadow-lg w-full">
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-1.5 text-slate-100 font-semibold truncate">
@@ -1404,34 +1408,6 @@ export function ThreeSkyExplorer({
           )}
         </div>
 
-        {/* Primary Perspective Mode Tabs: Whole 3D Map vs Human POV Stargazer */}
-        <div className="absolute top-3 left-1/2 -translate-x-1/2 z-20 bg-slate-950/95 backdrop-blur-md p-1 rounded-xl border border-slate-700/80 shadow-2xl flex items-center gap-1">
-          <button
-            onClick={() => setPerspectiveMode('map')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition whitespace-nowrap ${
-              perspectiveMode === 'map'
-                ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20'
-                : 'text-slate-300 hover:text-white hover:bg-slate-800'
-            }`}
-            title="Whole 3D Celestial Map: Orbital 360° View"
-          >
-            <Globe className="w-3.5 h-3.5" />
-            <span>Whole 3D Map</span>
-          </button>
-          <button
-            onClick={() => setPerspectiveMode('human')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition whitespace-nowrap ${
-              perspectiveMode === 'human'
-                ? 'bg-sky-500 text-slate-950 shadow-md shadow-sky-500/20'
-                : 'text-slate-300 hover:text-white hover:bg-slate-800'
-            }`}
-            title="Human POV: Stand in the center and look around 360° through human eyes"
-          >
-            <User className="w-3.5 h-3.5" />
-            <span>Human POV (Stargazer)</span>
-          </button>
-        </div>
-
         {/* Human POV Reticle & Heading Tape */}
         {perspectiveMode === 'human' && (
           <>
@@ -1462,10 +1438,30 @@ export function ThreeSkyExplorer({
             </div>
 
             {/* First-Person Action Quick Bar */}
-            <div className="absolute top-3 right-3 z-20 flex items-center gap-2">
+            <div className="absolute top-3 right-3 z-20 flex items-center gap-1.5 bg-slate-950/90 backdrop-blur-md p-1 rounded-xl border border-slate-800 shadow-lg">
+              {/* Perspective Mode Switcher */}
+              <div className="flex items-center bg-slate-900/90 rounded-lg p-0.5 border border-slate-700 mr-1 shrink-0">
+                <button
+                  onClick={() => setPerspectiveMode('map')}
+                  className="px-2 py-1 rounded text-[10px] sm:text-xs font-semibold text-slate-400 hover:text-white flex items-center gap-1 transition whitespace-nowrap"
+                  title="Switch to Whole 3D Celestial Map"
+                >
+                  <Globe className="w-3 h-3" />
+                  <span>3D Map</span>
+                </button>
+                <button
+                  onClick={() => setPerspectiveMode('human')}
+                  className="px-2 py-1 rounded text-[10px] sm:text-xs font-semibold bg-sky-500 text-slate-950 shadow-sm flex items-center gap-1 transition whitespace-nowrap"
+                  title="Human POV (Stargazer)"
+                >
+                  <User className="w-3 h-3" />
+                  <span>Human POV</span>
+                </button>
+              </div>
+
               <button
                 onClick={snapHumanToBody}
-                className="px-2.5 py-1.5 rounded-xl text-xs font-semibold bg-amber-500 hover:bg-amber-400 text-slate-950 transition flex items-center gap-1.5 shadow-md shadow-amber-500/20 whitespace-nowrap"
+                className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-amber-500 hover:bg-amber-400 text-slate-950 transition flex items-center gap-1.5 shadow-md shadow-amber-500/20 whitespace-nowrap"
                 title={`Turn view directly to ${activeBodyMeta.name}`}
               >
                 <Crosshair className="w-3.5 h-3.5" />
@@ -1507,7 +1503,27 @@ export function ThreeSkyExplorer({
 
         {/* Camera Preset & Scale Quick Bar (Map Mode) */}
         {perspectiveMode === 'map' && (
-          <div className="absolute top-3 right-3 z-10 bg-slate-950/90 backdrop-blur-md p-1 rounded-xl border border-slate-800 flex items-center gap-1 shadow-lg max-w-[50vw] sm:max-w-none overflow-x-auto scrollbar-none">
+          <div className="absolute top-3 right-3 z-10 bg-slate-950/90 backdrop-blur-md p-1 rounded-xl border border-slate-800 flex items-center gap-1 shadow-lg max-w-[65vw] sm:max-w-none overflow-x-auto scrollbar-none">
+            {/* Perspective Mode Switcher */}
+            <div className="flex items-center bg-slate-900/90 rounded-lg p-0.5 border border-slate-700 mr-1 shrink-0">
+              <button
+                onClick={() => setPerspectiveMode('map')}
+                className="px-2 py-1 rounded text-[10px] sm:text-xs font-semibold bg-amber-500 text-slate-950 shadow-sm flex items-center gap-1 transition whitespace-nowrap"
+                title="Whole 3D Celestial Map"
+              >
+                <Globe className="w-3 h-3" />
+                <span>3D Map</span>
+              </button>
+              <button
+                onClick={() => setPerspectiveMode('human')}
+                className="px-2 py-1 rounded text-[10px] sm:text-xs font-semibold text-slate-400 hover:text-white flex items-center gap-1 transition whitespace-nowrap"
+                title="Switch to Human POV (Stargazer)"
+              >
+                <User className="w-3 h-3" />
+                <span>Human POV</span>
+              </button>
+            </div>
+
             {/* Scale Mode Selector */}
             <div className="flex items-center bg-slate-900/90 rounded-lg p-0.5 border border-slate-800 mr-1">
               <button
