@@ -146,7 +146,7 @@ function AppMain({
       )}
 
       {activeTab === 'welcome' ? (
-        <main className="flex-1 w-full min-h-0 bg-orbit-background pb-20 md:pb-0">
+        <main className="flex-1 w-full min-h-0 bg-orbit-background">
           <WelcomeView
             onNavigate={setActiveTab}
             onStartDailyChallenge={(bodyId) => {
@@ -249,8 +249,10 @@ function AppMain({
       </footer>
       )}
 
-      {/* Persistent Mobile Bottom Navigation Dock */}
-      <MobileBottomNav activeTab={activeTab} setActiveTab={setActiveTab} />
+      {/* Mobile Bottom Navigation Dock (shown on dashboard, 3D, AR, and CV lab) */}
+      {activeTab !== 'welcome' && (
+        <MobileBottomNav activeTab={activeTab} setActiveTab={setActiveTab} />
+      )}
     </div>
   );
 }

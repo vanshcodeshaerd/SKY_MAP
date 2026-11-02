@@ -194,12 +194,6 @@ export function OrbitariumWelcomePage({
             )}
           </div>
         </div>
-
-        {isPhone && !selected && (
-          <p className="pointer-events-none absolute left-4 right-4 top-[min(42dvh,340px)] z-[5] text-[11px] text-orbit-muted-foreground/70">
-            Full solar system — pinch or use +/− to zoom
-          </p>
-        )}
       </div>
 
       {missionHubOpen && (
