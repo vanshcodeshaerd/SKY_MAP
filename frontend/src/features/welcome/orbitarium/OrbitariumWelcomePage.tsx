@@ -42,7 +42,6 @@ export function OrbitariumWelcomePage({
 }: OrbitariumWelcomePageProps) {
   const [missionHubOpen, setMissionHubOpen] = useState(false);
   const [selected, setSelected] = useState<OrbitariumInfo | null>(null);
-  const [speed, setSpeed] = useState(1);
   const layout = useWelcomeViewportLayout();
 
   return (
@@ -50,14 +49,7 @@ export function OrbitariumWelcomePage({
       <div className="orbitarium-root relative h-[100dvh] min-h-[100dvh] w-full overflow-hidden bg-orbit-background text-orbit-foreground font-welcome-body">
         <div className="welcome-earth-glow pointer-events-none" aria-hidden />
 
-        <OrbitariumSolarViewport
-          selected={selected}
-          onSelect={setSelected}
-          speed={speed}
-          onSpeedChange={setSpeed}
-          layout={layout}
-          fullBleed
-        />
+        <OrbitariumSolarViewport onSelect={setSelected} layout={layout} fullBleed />
 
         <div
           className="welcome-copy-slot absolute inset-y-0 left-0 z-10 flex max-w-2xl items-center overflow-y-auto overscroll-y-contain touch-pan-y pointer-events-auto pt-[max(0.5rem,env(safe-area-inset-top))] pb-[max(0.75rem,env(safe-area-inset-bottom))]"
@@ -140,7 +132,7 @@ export function OrbitariumWelcomePage({
               </section>
             ) : (
               <p className="text-[11px] sm:text-xs text-orbit-muted-foreground/80 max-w-sm">
-                Spin the sky on the right · pinch or use +/− to zoom · pick a label below the map.
+                Tap a planet in the sky on the right · drag to spin · use +/− to zoom on touch devices.
               </p>
             )}
           </div>

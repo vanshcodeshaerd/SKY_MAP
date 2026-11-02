@@ -68,16 +68,6 @@ function Ring({ inner, outer }: { inner: number; outer: number }) {
   );
 }
 
-const NAV_ITEMS: OrbitariumInfo[] = [
-  ORBITARIUM_SUN,
-  ...ORBITARIUM_PLANETS.map((p) => ({
-    name: p.name,
-    type: p.type,
-    description: p.description,
-    facts: p.facts,
-  })),
-];
-
 function planetToInfo(p: OrbitariumPlanet): OrbitariumInfo {
   return {
     name: p.name,
@@ -200,12 +190,11 @@ function Stars() {
 }
 
 export interface OrbitariumSolarViewportProps {
-  selected: OrbitariumInfo | null;
   onSelect: (info: OrbitariumInfo | null) => void;
-  speed: number;
-  onSpeedChange: (speed: number) => void;
   layout: WelcomeViewportLayout;
   fullBleed?: boolean;
+  /** Orbit animation multiplier (fixed; no on-screen control). */
+  speed?: number;
 }
 
 function SolarSystemScene({
@@ -227,18 +216,14 @@ function SolarSystemScene({
 }
 
 export function OrbitariumSolarViewport({
-  selected,
   onSelect,
-  speed,
-  onSpeedChange,
   layout,
   fullBleed = true,
+  speed = 1,
 }: OrbitariumSolarViewportProps) {
   const controlsRef = useRef<OrbitControlsImpl>(null);
   const coarse = useCoarsePointer();
-  const { camY, camZ, fov, minDist, maxDist, navLeftPercent } = layout;
-
-  const navStyle = { left: `${navLeftPercent}%` } as const;
+  const { camY, camZ, fov, minDist, maxDist } = layout;
 
   return (
     <div
@@ -300,42 +285,6 @@ export function OrbitariumSolarViewport({
           </button>
         </div>
       )}
-
-      <nav
-        className="absolute bottom-0 right-0 z-10 pointer-events-auto pb-[max(0.35rem,env(safe-area-inset-bottom))]"
-        style={navStyle}
-        aria-label="Planet shortcuts"
-      >
-        <div className="flex overflow-x-auto gap-1 px-2 py-1.5 scrollbar-none">
-          {NAV_ITEMS.map((p) => (
-            <button
-              key={p.name}
-              type="button"
-              onClick={() => onSelect(p)}
-              className={`shrink-0 rounded-full border px-2.5 py-1.5 text-[10px] sm:text-[11px] backdrop-blur min-h-[40px] sm:min-h-[36px] ${
-                selected?.name === p.name
-                  ? 'border-orbit-primary bg-orbit-primary text-orbit-primary-foreground'
-                  : 'border-orbit-border/80 bg-orbit-card-60 text-orbit-foreground'
-              }`}
-            >
-              {p.name}
-            </button>
-          ))}
-        </div>
-        <label className="flex items-center justify-center gap-2 pb-1 text-[10px] text-orbit-muted-foreground">
-          Orbit speed
-          <input
-            type="range"
-            min={0}
-            max={5}
-            step={0.1}
-            value={speed}
-            onChange={(e) => onSpeedChange(+e.target.value)}
-            className="accent-orbit-primary w-20 min-h-[44px] sm:min-h-0 sm:w-24"
-            aria-label="Orbit animation speed"
-          />
-        </label>
-      </nav>
     </div>
   );
 }

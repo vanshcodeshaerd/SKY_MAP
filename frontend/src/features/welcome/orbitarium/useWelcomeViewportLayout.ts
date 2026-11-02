@@ -8,7 +8,6 @@ export type WelcomeViewportLayout = {
   maxDist: number;
   /** Left copy column width — matches original desktop split. */
   copyWidthPercent: number;
-  navLeftPercent: number;
   /** Camera view offset so the system fills the right pane. */
   viewShiftRatio: number;
   tier: 'phone' | 'tablet' | 'desktop';
@@ -29,7 +28,6 @@ function compute(width: number, height: number): WelcomeViewportLayout {
       minDist: 8,
       maxDist: 96,
       copyWidthPercent,
-      navLeftPercent: copyWidthPercent,
       viewShiftRatio: 0.17,
       tier: 'phone',
     };
@@ -43,7 +41,6 @@ function compute(width: number, height: number): WelcomeViewportLayout {
       minDist: 8,
       maxDist: 88,
       copyWidthPercent,
-      navLeftPercent: copyWidthPercent,
       viewShiftRatio: 0.2,
       tier: 'tablet',
     };
@@ -56,7 +53,6 @@ function compute(width: number, height: number): WelcomeViewportLayout {
     minDist: 7,
     maxDist: 82,
     copyWidthPercent,
-    navLeftPercent: copyWidthPercent,
     viewShiftRatio: 0.22,
     tier: 'desktop',
   };
