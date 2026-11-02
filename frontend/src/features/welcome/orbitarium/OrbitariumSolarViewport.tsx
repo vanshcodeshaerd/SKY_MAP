@@ -197,46 +197,49 @@ export interface OrbitariumSolarViewportProps {
   onSelect: (info: OrbitariumInfo | null) => void;
   speed: number;
   onSpeedChange: (speed: number) => void;
-  /** Shift the solar system toward the right (full-bleed canvas, no panel). */
-  sceneShiftX?: number;
+  /** Tighter camera for right-column hero (reference layout). */
+  compact?: boolean;
 }
 
 function SolarSystemScene({
-  shiftX,
   speed,
   onSelect,
 }: {
-  shiftX: number;
   speed: number;
   onSelect: (info: OrbitariumInfo | null) => void;
 }) {
   return (
-    <group position={[shiftX, 0, 0]}>
+    <>
       <Stars />
       <SunMesh onSelect={() => onSelect(ORBITARIUM_SUN)} />
       {ORBITARIUM_PLANETS.map((p) => (
         <PlanetMesh key={p.name} p={p} speed={speed} onSelect={onSelect} />
       ))}
-    </group>
+    </>
   );
 }
 
-/** Full-bleed 3D layer; system sits on the right. Touch-friendly on phones. */
+/** Solar system in its column — centered like the reference hero. */
 export function OrbitariumSolarViewport({
   selected,
   onSelect,
   speed,
   onSpeedChange,
-  sceneShiftX = 20,
+  compact = false,
 }: OrbitariumSolarViewportProps) {
   const controlsRef = useRef<OrbitControlsImpl>(null);
   const coarse = useCoarsePointer();
 
+  const camY = compact ? 24 : 28;
+  const camZ = compact ? 38 : 52;
+  const minDist = compact ? 6 : 8;
+  const maxDist = compact ? 72 : 120;
+
   return (
-    <div className="absolute inset-0 touch-none select-none">
+    <div className="absolute inset-0 touch-none select-none bg-orbit-background">
       <Canvas
         gl={{ alpha: true, antialias: true }}
-        camera={{ position: [sceneShiftX, 28, 52], fov: 50 }}
+        camera={{ position: [0, camY, camZ], fov: compact ? 42 : 50 }}
         onCreated={({ gl }) => gl.setClearColor(0x000000, 0)}
         onPointerMissed={() => onSelect(null)}
         style={{
@@ -249,15 +252,14 @@ export function OrbitariumSolarViewport({
       >
         <ambientLight intensity={0.08} />
         <Suspense fallback={null}>
-          <SolarSystemScene shiftX={sceneShiftX} speed={speed} onSelect={onSelect} />
+          <SolarSystemScene speed={speed} onSelect={onSelect} />
         </Suspense>
         <OrbitControls
           ref={controlsRef}
-          target={[sceneShiftX, 0, 0]}
           enablePan={false}
           enableZoom={!coarse}
-          minDistance={8}
-          maxDistance={120}
+          minDistance={minDist}
+          maxDistance={maxDist}
           rotateSpeed={coarse ? 0.45 : 0.65}
         />
       </Canvas>
@@ -289,7 +291,7 @@ export function OrbitariumSolarViewport({
         </div>
       )}
 
-      <nav className="absolute bottom-0 left-1/2 right-0 z-10 pointer-events-auto">
+      <nav className="absolute bottom-0 left-0 right-0 z-10 pointer-events-auto">
         <div className="flex overflow-x-auto gap-1 px-2 py-2 scrollbar-none">
           {NAV_ITEMS.map((p) => (
             <button
