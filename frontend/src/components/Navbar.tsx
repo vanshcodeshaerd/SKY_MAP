@@ -1,4 +1,4 @@
-import { Sun, Compass, Camera, Sparkles, Sliders, MapPin, CheckCircle2, AlertCircle, RefreshCw } from 'lucide-react';
+import { Sun, Compass, Camera, Sparkles, Sliders, MapPin, RefreshCw } from 'lucide-react';
 import { GeodeticLocation } from '../types/astronomy';
 
 interface NavbarProps {
@@ -30,26 +30,26 @@ export function Navbar({
   ] as const;
 
   return (
-    <header className="sticky top-0 z-30 bg-[#0B0F19]/90 border-b border-slate-800/80 backdrop-blur-md">
-      <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
-        {/* Brand */}
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-amber-500 to-amber-300 flex items-center justify-center shadow-lg shadow-amber-500/20">
-            <Sun className="w-5 h-5 text-slate-950 stroke-[2.5]" />
+    <header className="sticky top-0 z-30 bg-[#090d14] border-b border-[#1e283c]">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
+        {/* Brand & Observatory Identity */}
+        <div className="flex items-center gap-3 shrink-0">
+          <div className="w-8 h-8 rounded-md bg-[#161d2c] border border-[#253147] flex items-center justify-center">
+            <Sun className="w-4 h-4 text-amber-400 stroke-[2.2]" />
           </div>
           <div>
-            <div className="flex items-center gap-2">
-              <span className="font-bold text-base tracking-tight text-slate-100">SkyGazer</span>
-              <span className="text-[10px] font-mono uppercase px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">
+            <div className="flex items-center gap-1.5">
+              <span className="font-semibold text-sm tracking-tight text-slate-100">SkyGazer</span>
+              <span className="text-[10px] font-mono uppercase px-1.5 py-0.2 rounded bg-amber-500/10 text-amber-400 border border-amber-500/30">
                 AR
               </span>
             </div>
-            <span className="text-[11px] text-slate-400 block -mt-0.5">CGIP Celestial Engine</span>
+            <span className="text-[10px] text-slate-400 block tracking-normal">Digital Observatory &bull; CG&IP</span>
           </div>
         </div>
 
-        {/* Navigation Tabs */}
-        <nav className="flex items-center gap-1 bg-slate-900/80 p-1 rounded-xl border border-slate-800/80">
+        {/* Primary Destination Navigation */}
+        <nav className="flex items-center bg-[#111622] p-1 rounded-md border border-[#1e283c]" aria-label="Main Navigation">
           {tabs.map((tab) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
@@ -57,62 +57,65 @@ export function Navbar({
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-all ${
+                className={`min-h-[38px] sm:min-h-[36px] flex items-center gap-2 px-3 py-1.5 rounded text-xs font-medium transition-colors ${
                   isActive
-                    ? 'bg-amber-500 text-slate-950 font-semibold shadow-md shadow-amber-500/20'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+                    ? 'bg-[#1a2335] text-amber-300 border border-amber-500/40 font-semibold shadow-sm'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-[#161d2c]'
                 }`}
+                aria-current={isActive ? 'page' : undefined}
               >
-                <Icon className={`w-4 h-4 ${isActive ? 'stroke-[2.5]' : ''}`} />
-                <span className="hidden sm:inline">{tab.label}</span>
+                <Icon className={`w-3.5 h-3.5 ${isActive ? 'text-amber-400 stroke-[2.2]' : 'text-slate-400'}`} />
+                <span className="hidden md:inline">{tab.label}</span>
               </button>
             );
           })}
         </nav>
 
-        {/* Status badges & controls */}
-        <div className="flex items-center gap-2 sm:gap-3">
-          {/* Location badge with 1-click GPS sync */}
+        {/* Telemetry, Status & Calibration Controls */}
+        <div className="flex items-center gap-2 shrink-0">
+          {/* Location Badge with Direct GPS Sync */}
           <button
             onClick={onRequestGps}
             title={isLiveGps ? 'Live GPS Active (Click to refresh)' : 'Click to acquire precise GPS coordinates'}
-            className="flex items-center gap-1.5 text-xs text-slate-300 bg-slate-900/80 hover:bg-slate-800 px-2.5 py-1.5 rounded-lg border border-slate-800 transition shadow-sm"
+            className="min-h-[38px] flex items-center gap-2 text-xs text-slate-300 bg-[#111622] hover:bg-[#161d2c] px-3 py-1.5 rounded-md border border-[#1e283c] transition"
           >
-            <MapPin className={`w-3.5 h-3.5 shrink-0 ${isLiveGps ? 'text-emerald-400 animate-pulse' : 'text-amber-400'}`} />
-            <span className="font-mono hidden sm:inline">
-              {location.latitude.toFixed(2)}°, {location.longitude.toFixed(2)}°
+            <MapPin className={`w-3.5 h-3.5 shrink-0 ${isLiveGps ? 'text-emerald-400' : 'text-amber-400'}`} />
+            <span className="font-mono tabular-nums text-[11px] hidden lg:inline">
+              {location.latitude >= 0 ? `${location.latitude.toFixed(2)}°N` : `${Math.abs(location.latitude).toFixed(2)}°S`},{' '}
+              {location.longitude >= 0 ? `${location.longitude.toFixed(2)}°E` : `${Math.abs(location.longitude).toFixed(2)}°W`}
             </span>
             {gpsLoading ? (
               <RefreshCw className="w-3 h-3 text-amber-400 animate-spin" />
             ) : (
-              <span className={`text-[9px] px-1 rounded uppercase font-bold ${isLiveGps ? 'bg-emerald-500/20 text-emerald-300' : 'bg-slate-800 text-slate-400'}`}>
+              <span className={`text-[9px] px-1.5 py-0.2 rounded font-mono uppercase font-semibold ${
+                isLiveGps ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30' : 'bg-[#161d2c] text-slate-400'
+              }`}>
                 {isLiveGps ? 'GPS' : 'Fix'}
               </span>
             )}
           </button>
 
-          {/* Backend server indicator */}
+          {/* Backend Verification Engine Status */}
           <div
-            className={`flex items-center gap-1 text-[11px] px-2 py-1 rounded-md border font-mono ${
+            className={`min-h-[38px] flex items-center gap-1.5 text-[11px] px-2.5 py-1.5 rounded-md border font-mono ${
               serverOnline
-                ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
-                : 'bg-rose-500/10 text-rose-400 border-rose-500/30'
+                ? 'bg-[#111622] text-slate-300 border-[#1e283c]'
+                : 'bg-[#111622] text-slate-400 border-[#1e283c]'
             }`}
-            title={serverOnline ? 'Backend API (FastAPI) Online' : 'Backend API Disconnected'}
+            title={serverOnline ? 'Backend API (NASA JPL DE421) Connected' : 'Local VSOP87 Engine active (Backend verification offline)'}
           >
-            {serverOnline ? (
-              <CheckCircle2 className="w-3 h-3 text-emerald-400" />
-            ) : (
-              <AlertCircle className="w-3 h-3 text-rose-400" />
-            )}
-            <span className="hidden lg:inline">{serverOnline ? 'API 200' : 'API Offline'}</span>
+            <span className={`w-2 h-2 rounded-full shrink-0 ${serverOnline ? 'bg-emerald-400' : 'bg-slate-500'}`} />
+            <span className="hidden xl:inline text-[10px]">
+              {serverOnline ? 'JPL DE421' : 'Local VSOP87'}
+            </span>
           </div>
 
-          {/* Calibration button */}
+          {/* Precision Calibration Drawer Trigger */}
           <button
             onClick={onOpenCalibration}
-            className="p-2 rounded-lg bg-slate-900/80 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-amber-400 transition"
-            title="Open Calibration & Coordinate Settings"
+            className="min-h-[38px] min-w-[38px] flex items-center justify-center rounded-md bg-[#111622] hover:bg-[#161d2c] border border-[#1e283c] text-slate-300 hover:text-amber-400 transition"
+            title="Open Calibration & Instrument Settings"
+            aria-label="Calibration Settings"
           >
             <Sliders className="w-4 h-4" />
           </button>

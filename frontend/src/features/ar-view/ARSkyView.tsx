@@ -761,8 +761,8 @@ export function ARSkyView({
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerUp}
         style={{ touchAction: 'none' }}
-        className={`relative w-full h-[68vh] min-h-[440px] max-h-[720px] rounded-2xl sm:rounded-3xl overflow-hidden shadow-2xl border transition-colors select-none cursor-grab active:cursor-grabbing ${
-          nightVisionMode ? 'bg-red-950/90 border-red-800' : 'bg-slate-950 border-slate-800'
+        className={`relative w-full h-[68vh] min-h-[440px] max-h-[720px] rounded-lg overflow-hidden shadow-2xl border transition-colors select-none cursor-grab active:cursor-grabbing ${
+          nightVisionMode ? 'bg-[#180a0a] border-red-900/60' : 'bg-[#06080d] border-[#1e283c]'
         }`}
       >
         {/* Layer 1: Real-World Video Feed (AR Mode) */}
@@ -961,23 +961,23 @@ export function ARSkyView({
               setDiscoveredBodyId(currentMeta.id);
               setIsModalOpen(true);
             }}
-            className={`px-3 py-1 rounded-full backdrop-blur-md border shadow-xl flex items-center gap-1.5 text-[11px] font-mono transition-all max-w-[90vw] truncate cursor-pointer ${
+            className={`px-3 py-1 rounded-md border shadow-lg flex items-center gap-1.5 text-[11px] font-mono transition-all max-w-[90vw] truncate cursor-pointer ${
               isCurrentLocked
-                ? 'bg-emerald-950/90 border-emerald-500 text-emerald-300 ring-2 ring-emerald-500/40 animate-pulse'
+                ? 'bg-[#0f1f1a] border-emerald-500 text-emerald-300 ring-1 ring-emerald-500/40'
                 : isCurrentNear
-                ? 'bg-amber-950/90 border-amber-500/70 text-amber-300 ring-1 ring-amber-500/30'
-                : 'bg-slate-950/90 border-sky-500/40 text-sky-300'
+                ? 'bg-[#1f1910] border-amber-500/60 text-amber-300'
+                : 'bg-[#0c1018]/95 border-[#1e283c] text-sky-300'
             }`}
           >
             {isCurrentLocked ? (
               <>
-                <Target className="w-3.5 h-3.5 text-emerald-400 animate-spin shrink-0" />
+                <Target className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
                 <span className="font-semibold">TARGET LOCKED: {currentMeta.name}</span>
                 <span className="text-[10px] text-emerald-400/80 hidden xs:inline">(Tap for 3D)</span>
               </>
             ) : currentCoords.altitudeDeg < 0 && viewMode === 'ar' ? (
               <>
-                <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse shrink-0" />
+                <span className="w-2 h-2 rounded-full bg-rose-500 shrink-0" />
                 <span className="font-semibold text-rose-300">
                   {currentMeta.name} is Sub-Horizon ({currentCoords.altitudeDeg.toFixed(0)}°)
                 </span>
@@ -996,7 +996,7 @@ export function ARSkyView({
               </>
             ) : (
               <>
-                <Radio className="w-3.5 h-3.5 text-sky-400 animate-pulse shrink-0" />
+                <Radio className="w-3.5 h-3.5 text-sky-400 shrink-0" />
                 <span className="font-semibold">
                   {autoScanMode ? 'Scanning Night Sky: Sweep camera across sky' : `Aligning with ${activeMeta.name}`}
                 </span>
@@ -1006,7 +1006,7 @@ export function ARSkyView({
 
           {/* Close Cluster / Conjunction Disambiguation Selector */}
           {nearbyClusterBodies.length > 0 && (
-            <div className="bg-slate-950/95 backdrop-blur-xl px-2.5 py-1 rounded-full border border-amber-500/50 shadow-2xl flex items-center gap-1.5 text-[10px] font-mono animate-fade-in max-w-[92vw] overflow-x-auto scrollbar-none">
+            <div className="bg-[#0c1018]/98 px-2.5 py-1 rounded-md border border-amber-500/40 shadow-2xl flex items-center gap-1.5 text-[10px] font-mono animate-fade-in max-w-[92vw] overflow-x-auto scrollbar-none">
               <span className="text-amber-400 font-semibold shrink-0">⚡ Cluster:</span>
               <button
                 onClick={() => {
@@ -1015,7 +1015,7 @@ export function ARSkyView({
                   setDiscoveredBodyId(currentMeta.id);
                   setIsModalOpen(true);
                 }}
-                className="px-2 py-0.5 rounded-full bg-amber-500 text-slate-950 font-bold flex items-center gap-1 shrink-0 shadow-sm"
+                className="px-2 py-0.5 rounded bg-amber-500 text-slate-950 font-bold flex items-center gap-1 shrink-0 shadow-sm"
               >
                 <span>{currentMeta.name}</span>
                 <span className="text-[9px]">({currentProj?.angularSeparationDeg?.toFixed(1) || '0'}°)</span>
@@ -1030,7 +1030,7 @@ export function ARSkyView({
                     setDiscoveredBodyId(body.id);
                     setIsModalOpen(true);
                   }}
-                  className="px-2 py-0.5 rounded-full bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700 flex items-center gap-1 shrink-0 transition"
+                  className="px-2 py-0.5 rounded bg-[#161d2c] hover:bg-[#1d273b] text-slate-200 border border-[#253147] flex items-center gap-1 shrink-0 transition"
                 >
                   <span style={{ color: body.color }}>{body.name}</span>
                   <span className="text-slate-400 text-[9px]">({proj.angularSeparationDeg.toFixed(1)}°)</span>

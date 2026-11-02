@@ -208,28 +208,25 @@ export function PlanetDiscoveryModal({
   }, [body]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-slate-950/80 backdrop-blur-md animate-fade-in select-none">
-      <div className="relative w-full max-w-lg bg-slate-900/95 border border-amber-500/40 rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
-        {/* Glow Header Accent */}
-        <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-amber-500 via-sky-400 to-indigo-500" />
-
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-[#06080d]/80 backdrop-blur-sm animate-fade-in select-none">
+      <div className="relative w-full max-w-lg bg-[#090d14] border border-[#1e283c] rounded-lg shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
         {/* Header Bar */}
-        <div className="flex items-center justify-between p-4 border-b border-slate-800">
-          <div className="flex items-center gap-3">
-            <span className="text-3xl leading-none">{body.symbol}</span>
+        <div className="flex items-center justify-between p-3.5 border-b border-[#1e283c] bg-[#111622]">
+          <div className="flex items-center gap-2.5">
+            <span className="text-xl select-none">{body.symbol}</span>
             <div>
               <div className="flex items-center gap-2">
-                <h3 className="text-xl font-bold text-white tracking-wide">{body.name}</h3>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-500/20 text-amber-300 border border-amber-500/30 uppercase tracking-wider">
+                <h3 className="text-base font-bold text-slate-100">{body.name}</h3>
+                <span className="px-1.5 py-0.2 rounded text-[10px] font-mono bg-amber-500/15 text-amber-300 border border-amber-500/30 uppercase">
                   Target Locked
                 </span>
               </div>
-              <p className="text-xs text-slate-400">{body.scientificInfo.type}</p>
+              <p className="text-[11px] text-slate-400">{body.scientificInfo.type}</p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition"
+            className="p-1.5 rounded-md text-slate-400 hover:text-white hover:bg-[#161d2c] transition"
             title="Close Pop-Up and Resume AR Scan"
           >
             <X className="w-5 h-5" />
@@ -237,26 +234,26 @@ export function PlanetDiscoveryModal({
         </div>
 
         {/* Scrollable Modal Content */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-4 scrollbar-thin">
+        <div className="flex-1 overflow-y-auto p-4 space-y-3.5 scrollbar-thin">
           {/* 3D Interactive Planet Canvas Box */}
-          <div className="relative w-full h-56 rounded-2xl bg-gradient-to-b from-slate-950 to-slate-900 border border-slate-800 flex items-center justify-center overflow-hidden">
+          <div className="relative w-full h-52 rounded-md bg-[#06080d] border border-[#1e283c] flex items-center justify-center overflow-hidden">
             <div ref={mountRef} className="w-full h-full cursor-grab active:cursor-grabbing" />
-            <div className="absolute bottom-2 left-3 text-[10px] text-slate-400 bg-slate-950/70 backdrop-blur-md px-2 py-0.5 rounded-md border border-slate-800 flex items-center gap-1.5 pointer-events-none">
+            <div className="absolute bottom-2 left-2.5 text-[10px] text-slate-400 bg-[#0c1018]/90 px-2 py-0.5 rounded border border-[#1e283c] flex items-center gap-1.5 pointer-events-none">
               <Sparkles className="w-3 h-3 text-amber-400" />
-              <span>Drag to rotate 3D sphere · 2K NASA texture</span>
+              <span>Drag to rotate 3D sphere &bull; 2K NASA texture</span>
             </div>
-            <div className="absolute top-2 right-3 text-[10px] text-sky-300 bg-slate-950/70 backdrop-blur-md px-2 py-0.5 rounded-md border border-slate-800 pointer-events-none font-mono">
+            <div className="absolute top-2 right-2.5 text-[10px] text-sky-300 bg-[#0c1018]/90 px-2 py-0.5 rounded border border-[#1e283c] pointer-events-none font-mono tabular-nums">
               Tilt: {body.axialTiltDeg}°
             </div>
           </div>
 
           {/* Tab Navigation */}
-          <div className="flex items-center bg-slate-950/80 p-1 rounded-xl border border-slate-800 text-xs">
+          <div className="flex items-center bg-[#111622] p-1 rounded-md border border-[#1e283c] text-xs">
             <button
               onClick={() => setActiveTab('overview')}
-              className={`flex-1 py-1.5 rounded-lg font-semibold transition flex items-center justify-center gap-1.5 ${
+              className={`flex-1 min-h-[32px] py-1 rounded text-[11px] font-medium transition flex items-center justify-center gap-1.5 ${
                 activeTab === 'overview'
-                  ? 'bg-amber-500 text-slate-950 shadow-md'
+                  ? 'bg-amber-500 text-slate-950 font-semibold shadow-sm'
                   : 'text-slate-400 hover:text-white'
               }`}
             >
@@ -265,51 +262,51 @@ export function PlanetDiscoveryModal({
             </button>
             <button
               onClick={() => setActiveTab('geology')}
-              className={`flex-1 py-1.5 rounded-lg font-semibold transition flex items-center justify-center gap-1.5 ${
+              className={`flex-1 min-h-[32px] py-1 rounded text-[11px] font-medium transition flex items-center justify-center gap-1.5 ${
                 activeTab === 'geology'
-                  ? 'bg-amber-500 text-slate-950 shadow-md'
+                  ? 'bg-amber-500 text-slate-950 font-semibold shadow-sm'
                   : 'text-slate-400 hover:text-white'
               }`}
             >
               <Layers className="w-3.5 h-3.5" />
-              <span>Structure & Minerals</span>
+              <span>Structure</span>
             </button>
             <button
               onClick={() => setActiveTab('facts')}
-              className={`flex-1 py-1.5 rounded-lg font-semibold transition flex items-center justify-center gap-1.5 ${
+              className={`flex-1 min-h-[32px] py-1 rounded text-[11px] font-medium transition flex items-center justify-center gap-1.5 ${
                 activeTab === 'facts'
-                  ? 'bg-amber-500 text-slate-950 shadow-md'
+                  ? 'bg-amber-500 text-slate-950 font-semibold shadow-sm'
                   : 'text-slate-400 hover:text-white'
               }`}
             >
               <Zap className="w-3.5 h-3.5" />
-              <span>Fun Facts</span>
+              <span>Science Facts</span>
             </button>
           </div>
 
           {/* TAB 1: Distance & Overview */}
           {activeTab === 'overview' && (
-            <div className="space-y-3 animate-fade-in">
+            <div className="space-y-3">
               {/* Distance from Earth Callout */}
-              <div className="bg-gradient-to-r from-sky-950/60 to-indigo-950/60 border border-sky-500/30 rounded-2xl p-3.5 flex items-center justify-between">
+              <div className="bg-[#111622] border border-[#1e283c] rounded-md p-3 flex items-center justify-between">
                 <div>
-                  <span className="text-[10px] text-sky-400 uppercase tracking-wider font-semibold block">
+                  <span className="text-[10px] text-slate-400 uppercase tracking-wider font-medium block">
                     Real-Time Distance from Earth
                   </span>
                   <div className="flex items-baseline gap-2 pt-0.5">
-                    <span className="text-xl font-bold font-mono text-white">
+                    <span className="text-xl font-bold font-mono tabular-nums text-white">
                       {distanceKm > 1000000
                         ? `${(distanceKm / 1000000).toFixed(1)}M km`
                         : `${distanceKm.toLocaleString()} km`}
                     </span>
-                    <span className="text-xs text-sky-300 font-mono">({distanceAu.toFixed(3)} AU)</span>
+                    <span className="text-xs text-sky-400 font-mono tabular-nums">({distanceAu.toFixed(3)} AU)</span>
                   </div>
                 </div>
                 <div className="text-right">
-                  <span className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold block">
+                  <span className="text-[10px] text-slate-400 uppercase tracking-wider font-medium block">
                     Light Travel Time
                   </span>
-                  <span className="text-xs font-mono font-semibold text-amber-400 flex items-center gap-1 justify-end pt-0.5">
+                  <span className="text-xs font-mono tabular-nums font-medium text-amber-400 flex items-center gap-1 justify-end pt-0.5">
                     <Clock className="w-3.5 h-3.5" />
                     <span>{lightTimeFormatted}</span>
                   </span>
@@ -318,39 +315,39 @@ export function PlanetDiscoveryModal({
 
               {/* Physical Stats Grid */}
               <div className="grid grid-cols-2 gap-2 text-xs">
-                <div className="bg-slate-950/60 p-2.5 rounded-xl border border-slate-800">
-                  <span className="text-[9px] uppercase tracking-wider text-slate-400 block font-semibold">Diameter</span>
-                  <span className="text-white font-mono font-medium">{body.scientificInfo.diameterKm.toLocaleString()} km</span>
+                <div className="bg-[#111622] p-2 rounded-md border border-[#1e283c]">
+                  <span className="text-[9px] uppercase tracking-wider text-slate-400 block font-medium">Diameter</span>
+                  <span className="text-white font-mono tabular-nums">{body.scientificInfo.diameterKm.toLocaleString()} km</span>
                 </div>
-                <div className="bg-slate-950/60 p-2.5 rounded-xl border border-slate-800">
-                  <span className="text-[9px] uppercase tracking-wider text-slate-400 block font-semibold">Surface Gravity</span>
-                  <span className="text-emerald-400 font-mono font-medium">{body.surfaceGravity}</span>
+                <div className="bg-[#111622] p-2 rounded-md border border-[#1e283c]">
+                  <span className="text-[9px] uppercase tracking-wider text-slate-400 block font-medium">Surface Gravity</span>
+                  <span className="text-emerald-400 font-mono tabular-nums">{body.surfaceGravity}</span>
                 </div>
-                <div className="bg-slate-950/60 p-2.5 rounded-xl border border-slate-800">
-                  <span className="text-[9px] uppercase tracking-wider text-slate-400 block font-semibold">Day Length (Spin)</span>
-                  <span className="text-white font-mono font-medium">{body.scientificInfo.dayLength}</span>
+                <div className="bg-[#111622] p-2 rounded-md border border-[#1e283c]">
+                  <span className="text-[9px] uppercase tracking-wider text-slate-400 block font-medium">Day Length (Spin)</span>
+                  <span className="text-white font-mono tabular-nums">{body.scientificInfo.dayLength}</span>
                 </div>
-                <div className="bg-slate-950/60 p-2.5 rounded-xl border border-slate-800">
-                  <span className="text-[9px] uppercase tracking-wider text-slate-400 block font-semibold">Orbital Year</span>
-                  <span className="text-white font-mono font-medium">{body.scientificInfo.yearLength}</span>
+                <div className="bg-[#111622] p-2 rounded-md border border-[#1e283c]">
+                  <span className="text-[9px] uppercase tracking-wider text-slate-400 block font-medium">Orbital Year</span>
+                  <span className="text-white font-mono tabular-nums">{body.scientificInfo.yearLength}</span>
                 </div>
-                <div className="bg-slate-950/60 p-2.5 rounded-xl border border-slate-800">
-                  <span className="text-[9px] uppercase tracking-wider text-slate-400 block font-semibold">Temperature</span>
-                  <span className="text-amber-300 font-mono font-medium">{body.scientificInfo.temperature}</span>
+                <div className="bg-[#111622] p-2 rounded-md border border-[#1e283c]">
+                  <span className="text-[9px] uppercase tracking-wider text-slate-400 block font-medium">Temperature</span>
+                  <span className="text-amber-300 font-mono tabular-nums">{body.scientificInfo.temperature}</span>
                 </div>
-                <div className="bg-slate-950/60 p-2.5 rounded-xl border border-slate-800">
-                  <span className="text-[9px] uppercase tracking-wider text-slate-400 block font-semibold">Known Moons</span>
-                  <span className="text-sky-300 font-mono font-medium">{body.scientificInfo.moons} Moons</span>
+                <div className="bg-[#111622] p-2 rounded-md border border-[#1e283c]">
+                  <span className="text-[9px] uppercase tracking-wider text-slate-400 block font-medium">Moons</span>
+                  <span className="text-sky-300 font-mono tabular-nums">{body.scientificInfo.moons} known</span>
                 </div>
               </div>
 
               {coordinates && (
-                <div className="bg-slate-950/40 p-2.5 rounded-xl border border-slate-800 text-[11px] font-mono text-slate-300 flex items-center justify-between">
+                <div className="bg-[#111622] p-2.5 rounded-md border border-[#1e283c] text-[11px] font-mono tabular-nums text-slate-300 flex items-center justify-between">
                   <span>Current Az: <strong className="text-amber-400">{coordinates.azimuthDeg.toFixed(1)}°</strong></span>
-                  <span>Alt: <strong className={coordinates.altitudeDeg >= 0 ? 'text-emerald-400' : 'text-indigo-400'}>
+                  <span>Alt: <strong className={coordinates.altitudeDeg >= 0 ? 'text-emerald-400' : 'text-slate-400'}>
                     {coordinates.altitudeDeg >= 0 ? '+' : ''}{coordinates.altitudeDeg.toFixed(1)}°
                   </strong></span>
-                  <span>Status: <strong className={coordinates.isAboveHorizon ? 'text-emerald-400' : 'text-indigo-400'}>
+                  <span>Status: <strong className={coordinates.isAboveHorizon ? 'text-emerald-400' : 'text-slate-400'}>
                     {coordinates.isAboveHorizon ? 'Above Horizon' : 'Sub-Horizon'}
                   </strong></span>
                 </div>

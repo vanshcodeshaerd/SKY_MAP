@@ -63,7 +63,7 @@ export default function App() {
   }, []);
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#0B0F19] text-slate-100">
+    <div className="min-h-screen flex flex-col bg-[#090d14] text-slate-100">
       {/* Top Solar Eye Safety Banner */}
       <SafetyBanner />
 
@@ -80,7 +80,7 @@ export default function App() {
       />
 
       {/* Primary Application Content */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 py-6">
+      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
         {activeTab === 'dashboard' && (
           <SolarDashboard
             location={location}

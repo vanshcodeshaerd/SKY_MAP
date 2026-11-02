@@ -80,31 +80,31 @@ export function CVLab() {
   };
 
   return (
-    <div className="space-y-6 animate-fade-in pb-12">
+    <div className="space-y-4 pb-12">
       {/* Top Banner */}
-      <div className="glass-panel p-5 rounded-2xl border border-slate-800 space-y-2">
-        <div className="flex items-center gap-2.5">
-          <Sparkles className="w-5 h-5 text-amber-400" />
-          <h2 className="text-base font-semibold text-slate-100">
+      <div className="bg-[#111622] border border-[#1e283c] rounded-lg p-4 space-y-1.5">
+        <div className="flex items-center gap-2">
+          <Sparkles className="w-4 h-4 text-amber-400" />
+          <h2 className="text-sm font-semibold text-slate-100">
             OpenCV Computer Vision Laboratory (Digital Image Processing)
           </h2>
         </div>
         <p className="text-xs text-slate-400 max-w-4xl leading-relaxed">
-          This laboratory evaluates how classical digital image processing extracts the physical Sun’s centroid from optical camera frames. The pipeline executes <strong>color-space conversion (BGR &rarr; Grayscale)</strong>, <strong>Gaussian smoothing</strong>, <strong>intensity thresholding</strong>, <strong>morphological filtering (Opening, Closing)</strong>, and <strong>spatial image moments (m10/m00, m01/m00)</strong>.
+          Evaluates classical digital image processing algorithms for extracting optical solar centroids from camera frames. Pipeline: <strong>BGR &rarr; Grayscale</strong>, <strong>Gaussian blur</strong>, <strong>luminance thresholding</strong>, <strong>morphological opening/closing</strong>, and <strong>spatial image moments (m10/m00, m01/m00)</strong>.
         </p>
       </div>
 
       {/* Main Workspace Grid: Controls & Preview */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Left Column: Input & Parameter Controls */}
-        <div className="glass-panel p-5 rounded-2xl border border-slate-800 space-y-5">
-          <div className="flex items-center gap-2 text-slate-200 font-semibold text-sm border-b border-slate-800 pb-3">
-            <Sliders className="w-4 h-4 text-amber-400" />
+        <div className="bg-[#111622] border border-[#1e283c] rounded-lg p-4 space-y-4">
+          <div className="flex items-center gap-2 text-slate-200 font-semibold text-xs border-b border-[#1e283c] pb-2.5 uppercase tracking-wider">
+            <Sliders className="w-3.5 h-3.5 text-amber-400" />
             <span>Image Source & Parameters</span>
           </div>
 
           {/* Upload or Generate Synthetic Image */}
-          <div className="space-y-3">
+          <div className="space-y-2">
             <input
               type="file"
               ref={fileInputRef}
@@ -115,15 +115,15 @@ export function CVLab() {
 
             <button
               onClick={() => fileInputRef.current?.click()}
-              className="w-full py-3 px-4 rounded-xl border border-dashed border-slate-700 hover:border-amber-500/60 bg-slate-900/60 hover:bg-slate-900 text-slate-300 text-xs flex flex-col items-center justify-center gap-2 transition"
+              className="w-full min-h-[44px] py-2.5 px-3 rounded-md border border-dashed border-[#253147] hover:border-amber-500/60 bg-[#0c1018] hover:bg-[#131926] text-slate-300 text-xs flex flex-col items-center justify-center gap-1 transition"
             >
-              <Upload className="w-5 h-5 text-amber-400" />
-              <span>{selectedFile ? selectedFile.name : 'Upload Sky Frame (JPEG / PNG)'}</span>
+              <Upload className="w-4 h-4 text-amber-400" />
+              <span className="truncate max-w-[240px]">{selectedFile ? selectedFile.name : 'Upload Sky Frame (JPEG / PNG)'}</span>
             </button>
 
             <button
               onClick={generateSyntheticSky}
-              className="w-full py-2 px-3 rounded-lg bg-slate-800/80 hover:bg-slate-800 text-slate-300 text-xs flex items-center justify-center gap-2 transition border border-slate-700/60"
+              className="w-full min-h-[36px] py-1.5 px-3 rounded-md bg-[#161d2c] hover:bg-[#1d273b] text-slate-300 text-xs flex items-center justify-center gap-2 transition border border-[#253147]"
             >
               <ImageIcon className="w-3.5 h-3.5 text-amber-400" />
               <span>Generate Synthetic Solar Frame</span>
@@ -131,10 +131,10 @@ export function CVLab() {
           </div>
 
           {/* Threshold Parameter Slider */}
-          <div className="space-y-2 pt-2 border-t border-slate-800/80">
+          <div className="space-y-1.5 pt-2 border-t border-[#1e283c]">
             <div className="flex justify-between items-center text-xs">
-              <span className="text-slate-300 font-semibold">Luminance Cutoff Threshold:</span>
-              <span className="font-mono text-amber-400 font-bold">{threshold} / 255</span>
+              <span className="text-slate-300 text-[11px] font-medium">Luminance Threshold Cutoff:</span>
+              <span className="font-mono tabular-nums text-amber-400 font-bold">{threshold} / 255</span>
             </div>
             <input
               type="range"
@@ -143,10 +143,10 @@ export function CVLab() {
               step="1"
               value={threshold}
               onChange={(e) => setThreshold(parseInt(e.target.value, 10))}
-              className="w-full accent-amber-500 bg-slate-800 rounded h-1.5 cursor-pointer"
+              className="w-full accent-amber-500 bg-[#0c1018] rounded h-1.5 cursor-pointer"
             />
-            <p className="text-[11px] text-slate-400">
-              Isolates the highest-intensity pixel regions where the camera CMOS sensor experiences optical saturation.
+            <p className="text-[10px] text-slate-400 leading-normal">
+              Isolates pixel clusters where the camera sensor experiences optical charge saturation (blooming).
             </p>
           </div>
 
@@ -154,18 +154,18 @@ export function CVLab() {
           <button
             onClick={runAnalysis}
             disabled={!selectedFile || loading}
-            className={`w-full py-2.5 rounded-xl text-xs sm:text-sm font-semibold flex items-center justify-center gap-2 transition shadow-lg ${
+            className={`w-full min-h-[40px] py-2 rounded-md text-xs font-semibold flex items-center justify-center gap-2 transition shadow ${
               !selectedFile || loading
-                ? 'bg-slate-800 text-slate-500 cursor-not-allowed'
-                : 'bg-amber-500 hover:bg-amber-400 text-slate-950 shadow-amber-500/20'
+                ? 'bg-[#161d2c] text-slate-500 cursor-not-allowed border border-[#253147]'
+                : 'bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold'
             }`}
           >
-            <Sparkles className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+            <Sparkles className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
             <span>{loading ? 'Processing via OpenCV...' : 'Run Vision Extraction'}</span>
           </button>
 
           {error && (
-            <div className="p-3 bg-rose-500/10 border border-rose-500/30 rounded-xl text-xs text-rose-300 flex items-start gap-2">
+            <div className="p-2.5 bg-rose-500/10 border border-rose-500/30 rounded-md text-xs text-rose-300 flex items-start gap-2">
               <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
               <span>{error}</span>
             </div>
@@ -173,21 +173,21 @@ export function CVLab() {
         </div>
 
         {/* Right Columns: Image Canvas Preview & Spatial Moment Metrics */}
-        <div className="lg:col-span-2 glass-panel p-5 rounded-2xl border border-slate-800 space-y-4">
-          <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-            <div className="flex items-center gap-2 text-slate-200 font-semibold text-sm">
-              <Layers className="w-4 h-4 text-amber-400" />
+        <div className="lg:col-span-2 bg-[#111622] border border-[#1e283c] rounded-lg p-4 space-y-3">
+          <div className="flex items-center justify-between border-b border-[#1e283c] pb-2.5">
+            <div className="flex items-center gap-2 text-slate-200 font-semibold text-xs uppercase tracking-wider">
+              <Layers className="w-3.5 h-3.5 text-amber-400" />
               <span>Optical Segmentation & Centroid Detection</span>
             </div>
             {result && (
-              <span className="text-[11px] font-mono text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-0.5 rounded-md">
+              <span className="text-[11px] font-mono tabular-nums text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded">
                 Latency: {result.processing_time_ms} ms
               </span>
             )}
           </div>
 
           {/* Preview Image with Overlaid Centroid Reticle */}
-          <div className="relative w-full h-[360px] bg-slate-950 rounded-xl overflow-hidden border border-slate-800/80 flex items-center justify-center">
+          <div className="relative w-full h-[360px] bg-[#06080d] rounded-md overflow-hidden border border-[#1e283c] flex items-center justify-center">
             {previewUrl ? (
               <div className="relative max-w-full max-h-full">
                 <img
@@ -206,11 +206,10 @@ export function CVLab() {
                     }}
                     className="absolute pointer-events-none flex flex-col items-center"
                   >
-                    <div className="w-10 h-10 rounded-full border-2 border-emerald-400 animate-ping absolute -top-1" />
-                    <div className="w-8 h-8 rounded-full border-2 border-emerald-400 bg-emerald-500/20 flex items-center justify-center">
-                      <div className="w-2 h-2 rounded-full bg-emerald-400" />
+                    <div className="w-8 h-8 rounded-full border border-sky-400 bg-sky-500/20 flex items-center justify-center">
+                      <div className="w-1.5 h-1.5 rounded-full bg-amber-400" />
                     </div>
-                    <span className="bg-slate-950/90 border border-emerald-500/40 text-emerald-300 text-[10px] font-mono px-1.5 py-0.5 rounded mt-1 shadow">
+                    <span className="bg-[#0c1018]/95 border border-[#1e283c] text-sky-300 text-[10px] font-mono tabular-nums px-1.5 py-0.5 rounded mt-1 shadow">
                       Centroid: ({result.primary_candidate.centroid_px[0]}, {result.primary_candidate.centroid_px[1]})
                     </span>
                   </div>
@@ -218,7 +217,7 @@ export function CVLab() {
               </div>
             ) : (
               <div className="text-center p-6 space-y-2 text-slate-500">
-                <ImageIcon className="w-10 h-10 mx-auto text-slate-700" />
+                <ImageIcon className="w-8 h-8 mx-auto text-slate-600" />
                 <p className="text-xs">No image loaded. Upload a frame or generate a synthetic sky above.</p>
               </div>
             )}
@@ -226,37 +225,37 @@ export function CVLab() {
 
           {/* Results Analysis Cards */}
           {result && (
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 text-xs">
-              <div className="bg-slate-900/60 p-3 rounded-xl border border-slate-800 space-y-1">
-                <span className="text-slate-400 block">Candidate Regions:</span>
-                <span className="font-mono text-base font-bold text-slate-100">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1 text-xs">
+              <div className="bg-[#0c1018] p-2.5 rounded-md border border-[#1e283c] space-y-0.5">
+                <span className="text-slate-400 text-[10px] block">Candidate Regions</span>
+                <span className="font-mono tabular-nums text-base font-bold text-slate-100">
                   {result.candidates_count}
                 </span>
-                <span className="text-[11px] text-slate-400 block">Connected bright contours</span>
+                <span className="text-[10px] text-slate-500 block">Connected bright contours</span>
               </div>
 
-              <div className="bg-slate-900/60 p-3 rounded-xl border border-slate-800 space-y-1">
-                <span className="text-slate-400 block">Primary Centroid Area:</span>
-                <span className="font-mono text-base font-bold text-amber-400">
+              <div className="bg-[#0c1018] p-2.5 rounded-md border border-[#1e283c] space-y-0.5">
+                <span className="text-slate-400 text-[10px] block">Primary Centroid Area</span>
+                <span className="font-mono tabular-nums text-base font-bold text-amber-400">
                   {result.primary_candidate?.area_px ?? 0} px²
                 </span>
-                <span className="text-[11px] text-slate-400 block">0th raw spatial moment (m00)</span>
+                <span className="text-[10px] text-slate-500 block">0th raw spatial moment (m00)</span>
               </div>
 
-              <div className="bg-slate-900/60 p-3 rounded-xl border border-slate-800 space-y-1">
-                <span className="text-slate-400 block">Isoperimetric Circularity:</span>
-                <span className="font-mono text-base font-bold text-emerald-400">
+              <div className="bg-[#0c1018] p-2.5 rounded-md border border-[#1e283c] space-y-0.5">
+                <span className="text-slate-400 text-[10px] block">Isoperimetric Circularity</span>
+                <span className="font-mono tabular-nums text-base font-bold text-sky-400">
                   {result.primary_candidate?.circularity ?? 0}
                 </span>
-                <span className="text-[11px] text-slate-400 block">4π·Area / Perimeter² (1.0 = circle)</span>
+                <span className="text-[10px] text-slate-500 block">4π·Area / Perimeter² (1.0 = circle)</span>
               </div>
             </div>
           )}
 
           {/* Educational Note */}
-          <div className="bg-slate-900/40 p-3 rounded-xl border border-slate-800/80 flex items-start gap-2.5 text-xs text-slate-400">
-            <Info className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
-            <p className="leading-relaxed">
+          <div className="bg-[#0c1018] p-3 rounded-md border border-[#1e283c] flex items-start gap-2.5 text-xs text-slate-400">
+            <Info className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
+            <p className="leading-relaxed text-[11px]">
               <strong>Image Processing Limitations:</strong> Pure luminance thresholding cannot distinguish the actual Sun from high-albedo cloud boundaries, lens flare, or specular reflections on vehicle windshields. SkyGazer AR uses OpenCV moment analysis as an experimental comparison metric alongside astronomical vectors, never as unverified ground truth.
             </p>
           </div>

@@ -1,5 +1,6 @@
 import { CelestialBodyId, CELESTIAL_BODY_LIST } from '../types/astronomy';
 import { CelestialCoordinates } from '../types/astronomy';
+import { getPlanetThumbnail } from '../services/planetTextures';
 
 interface CelestialBodySelectorProps {
   selectedBody: CelestialBodyId;
@@ -13,39 +14,55 @@ export function CelestialBodySelector({
   allPositions,
 }: CelestialBodySelectorProps) {
   return (
-    <div className="w-full overflow-x-auto pb-1 scrollbar-thin scrollbar-thumb-slate-800 scrollbar-track-transparent">
-      <div className="flex items-center gap-2 min-w-max">
+    <div className="w-full overflow-x-auto pb-1 scrollbar-thin">
+      <div className="flex items-center gap-1.5 min-w-max">
         {CELESTIAL_BODY_LIST.map((body) => {
           const isSelected = selectedBody === body.id;
           const pos = allPositions ? allPositions[body.id] : null;
           const isVisible = pos ? pos.isAboveHorizon : false;
+          const thumbnailSrc = getPlanetThumbnail(body.id, 64);
 
           return (
             <button
               key={body.id}
               onClick={() => onSelectBody(body.id)}
-              className={`px-3 py-2 rounded-xl text-xs font-medium flex items-center gap-2.5 transition-all duration-200 border ${
+              className={`min-h-[44px] px-2.5 py-1.5 rounded-md text-xs font-medium flex items-center gap-2.5 transition-colors border ${
                 isSelected
-                  ? 'bg-gradient-to-r from-slate-900 to-slate-850 border-amber-500/80 text-white shadow-lg shadow-amber-500/10 ring-1 ring-amber-500/40'
-                  : 'bg-slate-950/60 hover:bg-slate-900 border-slate-800/80 text-slate-300 hover:text-white'
+                  ? 'bg-[#151c2a] border-amber-500/70 text-slate-100 ring-1 ring-amber-500/30'
+                  : 'bg-[#0d121c] hover:bg-[#131926] border-[#1e283c] text-slate-300 hover:text-white'
+              }`}
+              title={`${body.name} (${body.category.replace('_', ' ')}): ${
+                isVisible ? 'Above Horizon' : 'Sub-Horizon'
               }`}
             >
-              <span className="text-base select-none leading-none">{body.symbol}</span>
-              <div className="flex flex-col text-left">
+              {/* Realistic Planet Miniature Disc */}
+              <div className="w-6 h-6 rounded-full overflow-hidden shrink-0 bg-black/40 flex items-center justify-center border border-white/10">
+                {thumbnailSrc ? (
+                  <img
+                    src={thumbnailSrc}
+                    alt={body.name}
+                    className="w-full h-full object-cover"
+                    loading="lazy"
+                  />
+                ) : (
+                  <span className="text-xs select-none">{body.symbol}</span>
+                )}
+              </div>
+
+              <div className="flex flex-col text-left leading-tight">
                 <div className="flex items-center gap-1.5">
-                  <span className="font-semibold">{body.name}</span>
-                  {/* Status dot: green if above horizon */}
+                  <span className="font-medium text-[11px] text-slate-200">{body.name}</span>
+                  {/* Status Indicator Icon: text and shape distinguished */}
                   <span
-                    className={`w-1.5 h-1.5 rounded-full ${
-                      isVisible ? 'bg-emerald-400 shadow-sm shadow-emerald-400/50' : 'bg-slate-600'
+                    className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                      isVisible ? 'bg-emerald-400' : 'bg-slate-600'
                     }`}
-                    title={isVisible ? 'Currently above horizon (visible in sky)' : 'Currently below horizon'}
                   />
                 </div>
                 {pos && (
                   <span
-                    className={`font-mono text-[10px] ${
-                      isVisible ? 'text-amber-300' : 'text-slate-500'
+                    className={`font-mono tabular-nums text-[10px] ${
+                      isVisible ? 'text-sky-300' : 'text-slate-500'
                     }`}
                   >
                     {pos.altitudeDeg >= 0 ? '+' : ''}

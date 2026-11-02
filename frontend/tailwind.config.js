@@ -8,16 +8,36 @@ export default {
   theme: {
     extend: {
       colors: {
+        obsidian: {
+          950: '#06080d',
+          900: '#090d14',
+          850: '#0d121c',
+          800: '#121824',
+          750: '#171f2f',
+          700: '#1d273b',
+          600: '#2a3750',
+          border: '#1f293d',
+        },
+        solar: {
+          gold: '#f59e0b',
+          amber: '#d97706',
+          light: '#fbbf24',
+          muted: '#92400e',
+        },
         astro: {
-          dark: '#0B0F19',
-          card: '#131B2E',
-          border: '#1E293B',
-          muted: '#64748B',
-          amber: '#F59E0B',
-          gold: '#FBBF24',
-          cyan: '#38BDF8',
-          blue: '#3B82F6',
+          cyan: '#38bdf8',
+          silver: '#94a3b8',
+          muted: '#64748b',
+          border: '#1e293b',
         }
+      },
+      borderRadius: {
+        'sm': '4px',
+        'DEFAULT': '6px',
+        'md': '6px',
+        'lg': '8px',
+        'xl': '10px',
+        '2xl': '12px',
       }
     },
   },

@@ -1272,12 +1272,12 @@ export function ThreeSkyExplorer({
   const isBelowHorizon = activeCoords.altitudeDeg < 0;
 
   return (
-    <div className="space-y-4 animate-fade-in">
+    <div className="space-y-4">
       {/* Planetary Carousel Selector Bar */}
-      <div className="glass-panel p-3 rounded-2xl border border-slate-800 space-y-2">
-        <div className="flex items-center justify-between text-xs px-1 text-slate-400">
-          <span className="font-semibold text-slate-200 flex items-center gap-1.5">
-            <Sparkles className="w-4 h-4 text-amber-400" />
+      <div className="bg-[#111622] border border-[#1e283c] rounded-lg p-3 space-y-2">
+        <div className="flex items-center justify-between text-xs px-0.5 text-slate-400">
+          <span className="font-semibold text-slate-300 text-[11px] uppercase tracking-wider flex items-center gap-1.5">
+            <Sparkles className="w-3.5 h-3.5 text-amber-400" />
             <span>Solar System Celestial Bodies</span>
           </span>
           <span className="text-[11px] text-slate-400 font-mono">
@@ -1293,137 +1293,253 @@ export function ThreeSkyExplorer({
 
       {/* Sub-Horizon Notice */}
       {isBelowHorizon && (
-        <div className="bg-indigo-950/60 border border-indigo-800/80 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-indigo-200">
+        <div className="bg-[#111622] border border-[#1e283c] rounded-lg p-3.5 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-300">
           <div className="flex items-center gap-3">
-            <div className="p-2 rounded-xl bg-indigo-900/60 text-indigo-300">
-              <AlertCircle className="w-5 h-5 text-indigo-400" />
+            <div className="p-2 rounded-md bg-[#161d2c] text-slate-400 border border-[#253147]">
+              <AlertCircle className="w-4 h-4 text-amber-400" />
             </div>
             <div>
-              <p className="font-semibold text-slate-100">
-                {activeBodyMeta.symbol} {activeBodyMeta.name} is currently below the horizon ({activeCoords.altitudeDeg.toFixed(1)}°)
+              <p className="font-medium text-slate-200">
+                {activeBodyMeta.name} is currently below the horizon ({activeCoords.altitudeDeg.toFixed(1)}°)
               </p>
-              <p className="text-indigo-300/80 text-[11px]">
-                {activeBodyMeta.name} is shining beneath the translucent ground disc. Jump to its peak culmination transit or scrub the slider below!
+              <p className="text-slate-400 text-[11px]">
+                {activeBodyMeta.name} is shining beneath the translucent ground disc. Jump to its peak culmination transit or scrub the slider below.
               </p>
             </div>
           </div>
           <button
             onClick={() => jumpToTime(bodyEvents.culminationUtc)}
             disabled={!bodyEvents.culminationUtc}
-            className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-semibold flex items-center gap-2 whitespace-nowrap transition shadow-lg shadow-amber-500/20 disabled:opacity-50"
+            className="min-h-[32px] px-3 py-1.5 rounded-md bg-amber-500 hover:bg-amber-400 text-slate-950 font-medium flex items-center gap-1.5 whitespace-nowrap transition disabled:opacity-50"
           >
             <span>Jump to {activeBodyMeta.name} Peak</span>
           </button>
         </div>
       )}
 
-      {/* 3D Viewport Card - Responsive Height & Edge-to-Edge Canvas */}
-      <div className="rounded-2xl sm:rounded-3xl overflow-hidden relative border border-slate-800 bg-[#030712] shadow-2xl h-[65vh] min-h-[440px] max-h-[720px]">
-        {/* Top Info Bar - Coordinates & Planet Scientific Dossier Toggle */}
-        <div className="absolute top-3 left-3 z-20 flex flex-col items-start gap-1.5 max-w-[280px] sm:max-w-xs">
-          <div className="bg-slate-950/90 backdrop-blur-md px-3 py-1.5 sm:px-3.5 sm:py-2.5 rounded-xl border border-slate-800 text-xs shadow-lg w-full">
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-1.5 text-slate-100 font-semibold truncate">
-                <Compass className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                <span className="truncate">
-                  {activeBodyMeta.symbol} {activeBodyMeta.name}
-                </span>
-                <span
-                  className={`px-1.5 py-0.2 rounded text-[9px] uppercase font-bold hidden sm:inline-block ${
-                    isBelowHorizon
-                      ? 'bg-indigo-950/80 text-indigo-300 border border-indigo-800'
-                      : 'bg-emerald-950/80 text-emerald-300 border border-emerald-800'
-                  }`}
-                >
-                  {isBelowHorizon ? 'Sub-Horizon' : 'Visible'}
-                </span>
-              </div>
-              <button
-                onClick={() => setShowDossier(!showDossier)}
-                className={`px-2 py-0.5 rounded-lg text-[10px] font-semibold flex items-center gap-1 transition ${
-                  showDossier
-                    ? 'bg-amber-500 text-slate-950 shadow-sm'
-                    : 'bg-slate-900 text-amber-400 border border-amber-500/30 hover:bg-slate-800'
-                }`}
-                title="Scientific Planet Dossier & Facts"
-              >
-                <BookOpen className="w-3 h-3" />
-                <span>{showDossier ? 'Hide Facts' : 'Planet Facts'}</span>
-              </button>
-            </div>
-            <div className="flex flex-wrap items-center gap-x-2.5 gap-y-0.5 text-slate-300 font-mono text-[10px] sm:text-[11px] pt-1">
-              <span>
-                Az: <strong className="text-amber-400">{activeCoords.azimuthDeg.toFixed(1)}°</strong>
-              </span>
-              <span>
-                Alt:{' '}
-                <strong className={isBelowHorizon ? 'text-indigo-400' : 'text-emerald-400'}>
-                  {activeCoords.altitudeDeg >= 0 ? '+' : ''}
-                  {activeCoords.altitudeDeg.toFixed(1)}°
-                </strong>
-              </span>
-              <span className="hidden md:inline">
-                Dist:{' '}
-                <strong className="text-slate-200">
-                  {activeCoords.distanceAu < 0.01
-                    ? `${(activeCoords.distanceKm || 0).toLocaleString()} km`
-                    : `${activeCoords.distanceAu.toFixed(3)} AU`}
-                </strong>
-              </span>
-            </div>
-          </div>
-
-          {/* Planet Dossier / Scientific Fact Card */}
-          {showDossier && activeBodyMeta.scientificInfo && (
-            <div className="bg-slate-950/95 backdrop-blur-xl p-3.5 rounded-2xl border border-amber-500/40 text-xs shadow-2xl w-full max-w-sm space-y-2.5 animate-fade-in text-slate-200">
-              <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-                <div className="flex items-center gap-2">
-                  <span className="text-lg leading-none">{activeBodyMeta.symbol}</span>
-                  <div>
-                    <h4 className="font-bold text-white text-xs">{activeBodyMeta.name} Dossier</h4>
-                    <span className="text-[10px] text-amber-400 font-medium">{activeBodyMeta.scientificInfo.type}</span>
-                  </div>
+      {/* 3D Viewport Card - Full-Bleed Digital Observatory Canvas */}
+      <div className="rounded-lg overflow-hidden relative border border-[#1e283c] bg-[#06080d] h-[65vh] min-h-[440px] max-h-[720px]">
+        {/* Top Info & Mode Controls Bar - Combined flex wrapper prevents any collision */}
+        <div className="absolute top-3 left-3 right-3 z-20 flex flex-wrap items-start justify-between gap-2 pointer-events-none">
+          {/* Top Left: Coordinates & Planet Scientific Dossier Toggle */}
+          <div className="pointer-events-auto flex flex-col items-start gap-1.5 max-w-[280px] sm:max-w-xs">
+            <div className="bg-[#0c1018]/95 px-3 py-2 rounded-md border border-[#1e283c] text-xs shadow-lg w-full">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-1.5 text-slate-100 font-semibold truncate">
+                  <Compass className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                  <span className="truncate">
+                    {activeBodyMeta.name}
+                  </span>
+                  <span
+                    className={`px-1.5 py-0.2 rounded text-[9px] uppercase font-bold hidden sm:inline-block ${
+                      isBelowHorizon
+                        ? 'bg-[#161d2c] text-slate-400 border border-[#253147]'
+                        : 'bg-emerald-950/40 text-emerald-300 border border-emerald-800/60'
+                    }`}
+                  >
+                    {isBelowHorizon ? 'Sub-Horizon' : 'Visible'}
+                  </span>
                 </div>
                 <button
-                  onClick={() => setShowDossier(false)}
-                  className="text-slate-400 hover:text-white p-0.5 rounded-md hover:bg-slate-800"
+                  onClick={() => setShowDossier(!showDossier)}
+                  className={`min-h-[26px] px-2 py-0.5 rounded text-[10px] font-medium flex items-center gap-1 transition ${
+                    showDossier
+                      ? 'bg-amber-500 text-slate-950 shadow-sm'
+                      : 'bg-[#161d2c] text-amber-400 border border-amber-500/30 hover:bg-[#1d273b]'
+                  }`}
+                  title="Scientific Planet Dossier & Facts"
                 >
-                  ✕
+                  <BookOpen className="w-3 h-3" />
+                  <span>{showDossier ? 'Hide Facts' : 'Planet Facts'}</span>
+                </button>
+              </div>
+              <div className="flex flex-wrap items-center gap-x-2.5 gap-y-0.5 text-slate-300 font-mono tabular-nums text-[10px] sm:text-[11px] pt-1">
+                <span>
+                  Az: <strong className="text-amber-400">{activeCoords.azimuthDeg.toFixed(1)}°</strong>
+                </span>
+                <span>
+                  Alt:{' '}
+                  <strong className={isBelowHorizon ? 'text-slate-400' : 'text-sky-300'}>
+                    {activeCoords.altitudeDeg >= 0 ? '+' : ''}
+                    {activeCoords.altitudeDeg.toFixed(1)}°
+                  </strong>
+                </span>
+                <span className="hidden md:inline">
+                  Dist:{' '}
+                  <strong className="text-slate-300">
+                    {activeCoords.distanceAu < 0.01
+                      ? `${(activeCoords.distanceKm || 0).toLocaleString()} km`
+                      : `${activeCoords.distanceAu.toFixed(3)} AU`}
+                  </strong>
+                </span>
+              </div>
+            </div>
+
+            {/* Planet Dossier / Scientific Fact Card */}
+            {showDossier && activeBodyMeta.scientificInfo && (
+              <div className="bg-[#0c1018]/98 p-3 rounded-md border border-[#1e283c] text-xs shadow-2xl w-full max-w-sm space-y-2 text-slate-200">
+                <div className="flex items-center justify-between border-b border-[#1e283c] pb-1.5">
+                  <div>
+                    <h4 className="font-semibold text-white text-xs">{activeBodyMeta.name} Science Dossier</h4>
+                    <span className="text-[10px] text-amber-400 font-mono">{activeBodyMeta.scientificInfo.type}</span>
+                  </div>
+                  <button
+                    onClick={() => setShowDossier(false)}
+                    className="text-slate-400 hover:text-white p-0.5 rounded hover:bg-[#161d2c]"
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-2 gap-1.5 text-[10px]">
+                  <div className="bg-[#111622] p-1.5 rounded border border-[#1e283c]">
+                    <span className="text-[9px] uppercase tracking-wider text-slate-400 block font-medium">Diameter</span>
+                    <span className="text-white font-mono tabular-nums">{activeBodyMeta.scientificInfo.diameterKm.toLocaleString()} km</span>
+                  </div>
+                  <div className="bg-[#111622] p-1.5 rounded border border-[#1e283c]">
+                    <span className="text-[9px] uppercase tracking-wider text-slate-400 block font-medium">Distance from Sun</span>
+                    <span className="text-white font-mono tabular-nums">{activeBodyMeta.scientificInfo.distanceFromSunKm}</span>
+                  </div>
+                  <div className="bg-[#111622] p-1.5 rounded border border-[#1e283c]">
+                    <span className="text-[9px] uppercase tracking-wider text-slate-400 block font-medium">Rotation (Day)</span>
+                    <span className="text-white font-mono tabular-nums">{activeBodyMeta.scientificInfo.dayLength}</span>
+                  </div>
+                  <div className="bg-[#111622] p-1.5 rounded border border-[#1e283c]">
+                    <span className="text-[9px] uppercase tracking-wider text-slate-400 block font-medium">Orbital Period (Year)</span>
+                    <span className="text-white font-mono tabular-nums">{activeBodyMeta.scientificInfo.yearLength}</span>
+                  </div>
+                  <div className="bg-[#111622] p-1.5 rounded border border-[#1e283c]">
+                    <span className="text-[9px] uppercase tracking-wider text-slate-400 block font-medium">Temperature</span>
+                    <span className="text-amber-300 font-mono tabular-nums">{activeBodyMeta.scientificInfo.temperature}</span>
+                  </div>
+                  <div className="bg-[#111622] p-1.5 rounded border border-[#1e283c]">
+                    <span className="text-[9px] uppercase tracking-wider text-slate-400 block font-medium">Moons & Tilt</span>
+                    <span className="text-sky-300 font-mono tabular-nums">
+                      {activeBodyMeta.scientificInfo.moons} moons &bull; {activeBodyMeta.axialTiltDeg}°
+                    </span>
+                  </div>
+                </div>
+
+                <div className="bg-amber-500/10 border border-amber-500/20 p-2 rounded text-[10px] text-amber-200/90 leading-relaxed">
+                  💡 <strong className="text-amber-300">NASA Fact:</strong> {activeBodyMeta.scientificInfo.specialFact}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Top Right: Mode Switcher & Quick Camera Controls */}
+          {perspectiveMode === 'map' && (
+            <div className="pointer-events-auto bg-[#0c1018]/95 p-1 rounded-md border border-[#1e283c] flex items-center gap-1 shadow-lg max-w-full overflow-x-auto scrollbar-none">
+              {/* Perspective Mode Switcher */}
+              <div className="flex items-center bg-[#111622] rounded p-0.5 border border-[#1e283c] mr-1 shrink-0">
+                <button
+                  onClick={() => setPerspectiveMode('map')}
+                  className="min-h-[28px] px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-500 text-slate-950 flex items-center gap-1 transition whitespace-nowrap"
+                  title="Whole 3D Celestial Map"
+                >
+                  <Globe className="w-3 h-3" />
+                  <span>3D Map</span>
+                </button>
+                <button
+                  onClick={() => setPerspectiveMode('human')}
+                  className="min-h-[28px] px-2 py-0.5 rounded text-[10px] font-medium text-slate-400 hover:text-white flex items-center gap-1 transition whitespace-nowrap"
+                  title="Switch to Human POV (Stargazer)"
+                >
+                  <User className="w-3 h-3" />
+                  <span>Human POV</span>
                 </button>
               </div>
 
-              <div className="grid grid-cols-2 gap-2 text-[11px]">
-                <div className="bg-slate-900/80 p-2 rounded-xl border border-slate-800/80">
-                  <span className="text-[9px] uppercase tracking-wider text-slate-400 block font-semibold">Diameter</span>
-                  <span className="text-white font-mono font-medium">{activeBodyMeta.scientificInfo.diameterKm.toLocaleString()} km</span>
-                </div>
-                <div className="bg-slate-900/80 p-2 rounded-xl border border-slate-800/80">
-                  <span className="text-[9px] uppercase tracking-wider text-slate-400 block font-semibold">Distance from Sun</span>
-                  <span className="text-white font-mono font-medium">{activeBodyMeta.scientificInfo.distanceFromSunKm}</span>
-                </div>
-                <div className="bg-slate-900/80 p-2 rounded-xl border border-slate-800/80">
-                  <span className="text-[9px] uppercase tracking-wider text-slate-400 block font-semibold">Rotation (Day)</span>
-                  <span className="text-white font-mono font-medium">{activeBodyMeta.scientificInfo.dayLength}</span>
-                </div>
-                <div className="bg-slate-900/80 p-2 rounded-xl border border-slate-800/80">
-                  <span className="text-[9px] uppercase tracking-wider text-slate-400 block font-semibold">Orbital Period (Year)</span>
-                  <span className="text-white font-mono font-medium">{activeBodyMeta.scientificInfo.yearLength}</span>
-                </div>
-                <div className="bg-slate-900/80 p-2 rounded-xl border border-slate-800/80">
-                  <span className="text-[9px] uppercase tracking-wider text-slate-400 block font-semibold">Temperature</span>
-                  <span className="text-amber-300 font-mono font-medium">{activeBodyMeta.scientificInfo.temperature}</span>
-                </div>
-                <div className="bg-slate-900/80 p-2 rounded-xl border border-slate-800/80">
-                  <span className="text-[9px] uppercase tracking-wider text-slate-400 block font-semibold">Moons & Axial Tilt</span>
-                  <span className="text-sky-300 font-mono font-medium">
-                    {activeBodyMeta.scientificInfo.moons} moons · {activeBodyMeta.axialTiltDeg}° tilt
-                  </span>
-                </div>
+              {/* Scale Mode Selector */}
+              <div className="flex items-center bg-[#111622] rounded p-0.5 border border-[#1e283c] mr-1">
+                <button
+                  onClick={() => setScaleMode('dome')}
+                  className={`min-h-[28px] px-2 py-0.5 rounded text-[10px] font-medium transition whitespace-nowrap ${
+                    scaleMode === 'dome'
+                      ? 'bg-amber-500 text-slate-950 font-semibold'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                  title="Dome View: Projects all bodies onto 80-unit celestial sky sphere"
+                >
+                  Dome View
+                </button>
+                <button
+                  onClick={() => setScaleMode('depth')}
+                  className={`min-h-[28px] px-2 py-0.5 rounded text-[10px] font-medium transition whitespace-nowrap ${
+                    scaleMode === 'depth'
+                      ? 'bg-amber-500 text-slate-950 font-semibold'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                  title="3D Depth: Arranges bodies radially by astronomical distance (AU) to eliminate overlap"
+                >
+                  3D Depth
+                </button>
               </div>
 
-              <div className="bg-amber-500/10 border border-amber-500/20 p-2 rounded-xl text-[10px] text-amber-200/90 leading-relaxed">
-                💡 <strong className="text-amber-300">NASA Science Fact:</strong> {activeBodyMeta.scientificInfo.specialFact}
-              </div>
+              <button
+                onClick={() => setCameraView('default')}
+                className="min-h-[28px] px-2 py-0.5 rounded text-[10px] font-medium text-slate-300 hover:bg-[#161d2c] hover:text-white transition whitespace-nowrap"
+              >
+                45° Orbit
+              </button>
+              <button
+                onClick={() => setCameraView('avatarCenter')}
+                className="min-h-[28px] px-2 py-0.5 rounded text-[10px] font-medium text-sky-300 hover:bg-[#161d2c] border border-sky-500/30 transition whitespace-nowrap flex items-center gap-1"
+                title="Focus on Stargazer Person"
+              >
+                <User className="w-3 h-3 text-sky-400" />
+                <span>Observer</span>
+              </button>
+              <button
+                onClick={() => setCameraView('focusBody')}
+                className="min-h-[28px] px-2 py-0.5 rounded text-[10px] font-medium text-amber-300 hover:bg-[#161d2c] border border-amber-500/30 transition whitespace-nowrap"
+              >
+                Focus
+              </button>
+              <button
+                onClick={() => setCameraView('closeUp')}
+                className={`min-h-[28px] px-2 py-0.5 rounded text-[10px] font-medium transition flex items-center gap-1 whitespace-nowrap ${
+                  isCloseUp
+                    ? 'bg-amber-500 text-slate-950 font-semibold'
+                    : 'text-amber-400 hover:bg-[#161d2c] border border-amber-500/30'
+                }`}
+                title="Inspect 3D Surface"
+              >
+                <ZoomIn className="w-3 h-3" />
+                <span className="hidden sm:inline">Inspect</span>
+              </button>
+              <button
+                onClick={() => setShowConstellations(!showConstellations)}
+                className={`min-h-[28px] px-2 py-0.5 rounded text-[10px] font-medium transition whitespace-nowrap ${
+                  showConstellations
+                    ? 'bg-sky-500/20 text-sky-300 border border-sky-500/40'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                {showConstellations ? 'Stars ON' : 'Stars OFF'}
+              </button>
+              <button
+                onClick={() => setShowAllBodies(!showAllBodies)}
+                className={`min-h-[28px] px-2 py-0.5 rounded text-[10px] font-medium transition whitespace-nowrap ${
+                  showAllBodies
+                    ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                {showAllBodies ? 'All' : 'Solo'}
+              </button>
+              <button
+                onClick={() => setShowSpatialGuide(!showSpatialGuide)}
+                className={`min-h-[28px] px-2 py-0.5 rounded text-[10px] font-medium transition flex items-center gap-1 whitespace-nowrap ${
+                  showSpatialGuide
+                    ? 'bg-sky-500 text-slate-950 font-semibold'
+                    : 'text-sky-300 hover:bg-[#161d2c] border border-sky-500/30'
+                }`}
+                title="How to Read Spatial 3D Map"
+              >
+                <HelpCircle className="w-3 h-3" />
+                <span className="hidden sm:inline">Guide</span>
+              </button>
             </div>
           )}
         </div>
@@ -1521,170 +1637,54 @@ export function ThreeSkyExplorer({
           </>
         )}
 
-        {/* Camera Preset & Scale Quick Bar (Map Mode) */}
-        {perspectiveMode === 'map' && (
-          <div className="absolute top-3 right-3 z-10 bg-slate-950/90 backdrop-blur-md p-1 rounded-xl border border-slate-800 flex items-center gap-1 shadow-lg max-w-[65vw] sm:max-w-none overflow-x-auto scrollbar-none">
-            {/* Perspective Mode Switcher */}
-            <div className="flex items-center bg-slate-900/90 rounded-lg p-0.5 border border-slate-700 mr-1 shrink-0">
-              <button
-                onClick={() => setPerspectiveMode('map')}
-                className="px-2 py-1 rounded text-[10px] sm:text-xs font-semibold bg-amber-500 text-slate-950 shadow-sm flex items-center gap-1 transition whitespace-nowrap"
-                title="Whole 3D Celestial Map"
-              >
-                <Globe className="w-3 h-3" />
-                <span>3D Map</span>
-              </button>
-              <button
-                onClick={() => setPerspectiveMode('human')}
-                className="px-2 py-1 rounded text-[10px] sm:text-xs font-semibold text-slate-400 hover:text-white flex items-center gap-1 transition whitespace-nowrap"
-                title="Switch to Human POV (Stargazer)"
-              >
-                <User className="w-3 h-3" />
-                <span>Human POV</span>
-              </button>
-            </div>
-
-            {/* Scale Mode Selector */}
-            <div className="flex items-center bg-slate-900/90 rounded-lg p-0.5 border border-slate-800 mr-1">
-              <button
-                onClick={() => setScaleMode('dome')}
-                className={`px-2 py-0.5 rounded text-[10px] font-semibold transition whitespace-nowrap ${
-                  scaleMode === 'dome'
-                    ? 'bg-amber-500 text-slate-950 shadow-sm'
-                    : 'text-slate-400 hover:text-slate-200'
-                }`}
-                title="Dome View: Projects all bodies onto 80-unit celestial sky sphere"
-              >
-                Dome View
-              </button>
-              <button
-                onClick={() => setScaleMode('depth')}
-                className={`px-2 py-0.5 rounded text-[10px] font-semibold transition whitespace-nowrap ${
-                  scaleMode === 'depth'
-                    ? 'bg-amber-500 text-slate-950 shadow-sm'
-                    : 'text-slate-400 hover:text-slate-200'
-                }`}
-                title="3D Depth: Arranges bodies radially by astronomical distance (AU) to eliminate overlap"
-              >
-                3D Depth
-              </button>
-            </div>
-
-            <button
-              onClick={() => setCameraView('default')}
-              className="px-2 py-1 rounded-lg text-[10px] sm:text-[11px] font-medium text-slate-300 hover:bg-slate-800 hover:text-white transition whitespace-nowrap"
-            >
-              45° Orbit
-            </button>
-            <button
-              onClick={() => setCameraView('avatarCenter')}
-              className="px-2 py-1 rounded-lg text-[10px] sm:text-[11px] font-medium text-sky-300 hover:bg-sky-950/60 border border-sky-500/30 transition whitespace-nowrap flex items-center gap-1"
-              title="Focus on Stargazer Person"
-            >
-              <User className="w-3 h-3 text-sky-400" />
-              <span>Person</span>
-            </button>
-            <button
-              onClick={() => setCameraView('focusBody')}
-              className="px-2 py-1 rounded-lg text-[10px] sm:text-[11px] font-medium text-amber-300 hover:bg-amber-950/60 border border-amber-500/30 transition whitespace-nowrap"
-            >
-              Focus
-            </button>
-            <button
-              onClick={() => setCameraView('closeUp')}
-              className={`px-2 py-1 rounded-lg text-[10px] sm:text-[11px] font-medium transition flex items-center gap-1 whitespace-nowrap ${
-                isCloseUp
-                  ? 'bg-amber-500 text-slate-950 font-bold'
-                  : 'text-amber-400 hover:bg-slate-800 border border-amber-500/30'
-              }`}
-              title="Inspect 3D Surface"
-            >
-              <ZoomIn className="w-3 h-3" />
-              <span className="hidden sm:inline">Inspect</span>
-            </button>
-            <button
-              onClick={() => setShowConstellations(!showConstellations)}
-              className={`px-2 py-1 rounded-lg text-[10px] sm:text-[11px] font-medium transition whitespace-nowrap ${
-                showConstellations
-                  ? 'bg-sky-500/20 text-sky-300 border border-sky-500/40'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              {showConstellations ? '✨ Stars ON' : 'Stars OFF'}
-            </button>
-            <button
-              onClick={() => setShowAllBodies(!showAllBodies)}
-              className={`px-2 py-1 rounded-lg text-[10px] sm:text-[11px] font-medium transition whitespace-nowrap ${
-                showAllBodies
-                  ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              {showAllBodies ? 'All' : 'Solo'}
-            </button>
-            <button
-              onClick={() => setShowSpatialGuide(!showSpatialGuide)}
-              className={`px-2 py-1 rounded-lg text-[10px] sm:text-[11px] font-medium transition flex items-center gap-1 whitespace-nowrap ${
-                showSpatialGuide
-                  ? 'bg-sky-500 text-slate-950 font-bold'
-                  : 'text-sky-300 hover:bg-slate-800 border border-sky-500/30'
-              }`}
-              title="How to Read Spatial 3D Map"
-            >
-              <HelpCircle className="w-3 h-3" />
-              <span className="hidden sm:inline">Guide</span>
-            </button>
-          </div>
-        )}
-
         {/* Spatial Guide Overlay Card */}
         {showSpatialGuide && (
-          <div className="absolute top-16 right-3 z-30 bg-slate-950/95 backdrop-blur-xl p-3.5 rounded-2xl border border-sky-500/40 text-xs shadow-2xl max-w-xs space-y-2.5 animate-fade-in text-slate-200">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-              <span className="font-semibold text-sky-300 flex items-center gap-1.5 text-xs">
-                <Info className="w-4 h-4 text-sky-400" />
-                <span>How to Read 3D Sky Map</span>
+          <div className="absolute top-16 right-3 z-30 bg-[#0c1018]/98 p-3.5 rounded-md border border-[#1e283c] text-xs shadow-2xl max-w-xs space-y-2 text-slate-200">
+            <div className="flex items-center justify-between border-b border-[#1e283c] pb-1.5">
+              <span className="font-semibold text-slate-200 flex items-center gap-1.5 text-xs">
+                <Info className="w-3.5 h-3.5 text-amber-400" />
+                <span>3D Celestial Map Guide</span>
               </span>
               <button
                 onClick={() => setShowSpatialGuide(false)}
-                className="text-slate-400 hover:text-white p-0.5 rounded-md hover:bg-slate-800"
+                className="text-slate-400 hover:text-white p-0.5 rounded hover:bg-[#161d2c]"
               >
                 ✕
               </button>
             </div>
             <div className="space-y-2 text-[11px] leading-relaxed text-slate-300">
               <div className="flex items-start gap-2">
-                <span className="text-base leading-none">👤</span>
+                <span className="text-sm select-none">👤</span>
                 <div>
-                  <strong className="text-white">Center Stargazer:</strong> The 3D person in the middle represents YOU standing at your real GPS coordinates, with their telescope dynamically aiming at the active planet.
+                  <strong className="text-white">Observer Station:</strong> The 3D avatar marks your exact GPS coordinates with dynamic polar telescope aiming.
                 </div>
               </div>
               <div className="flex items-start gap-2">
-                <span className="text-base leading-none">👀</span>
+                <span className="text-sm select-none">👀</span>
                 <div>
-                  <strong className="text-sky-300">Human POV:</strong> Switch to First-Person view to see through the stargazer's eyes! Drag around 360° to scan the horizon and look up at the stars.
+                  <strong className="text-sky-300">Human POV:</strong> Switch to First-Person Stargazer view to look through the observer's eyes with 360° pan.
                 </div>
               </div>
               <div className="flex items-start gap-2">
-                <span className="text-base leading-none">🧭</span>
+                <span className="text-sm select-none">🧭</span>
                 <div>
-                  <strong className="text-sky-300">Cyan Disc (Horizon):</strong> The local ground plane. Everything <span className="text-emerald-400 font-semibold">above</span> is visible in your sky right now; everything <span className="text-indigo-400 font-semibold">below</span> is under the horizon.
+                  <strong className="text-sky-300">Horizon Disc:</strong> Local tangential plane. Above is visible tonight; below is subterranean.
                 </div>
               </div>
               <div className="flex items-start gap-2">
-                <span className="text-base leading-none">☀️</span>
+                <span className="text-sm select-none">☀️</span>
                 <div>
-                  <strong className="text-amber-300">Golden Arc:</strong> 24-hour diurnal trajectory of the active celestial body across the sky.
+                  <strong className="text-amber-300">Diurnal Trajectory:</strong> Full 24-hour apparent diurnal path across the sky dome.
                 </div>
               </div>
               <div className="flex items-start gap-2">
-                <span className="text-base leading-none">📏</span>
+                <span className="text-sm select-none">📏</span>
                 <div>
                   <strong className="text-white">Scale Modes:</strong>
-                  <ul className="list-disc list-inside text-slate-400 pl-1 pt-0.5 space-y-0.5">
-                    <li><strong className="text-amber-400">Dome View:</strong> Projects all bodies onto equal celestial sky sphere.</li>
-                    <li><strong className="text-amber-400">3D Depth:</strong> Spaces planets radially by true astronomical distance (AU).</li>
-                  </ul>
+                  <p className="text-slate-400 text-[10px] mt-0.5">
+                    <strong>Dome View:</strong> Illustrative uniform projection.<br/>
+                    <strong>3D Depth:</strong> Arranges planets by astronomical distance (AU).
+                  </p>
                 </div>
               </div>
             </div>
@@ -1692,23 +1692,23 @@ export function ThreeSkyExplorer({
         )}
 
         {/* Orbit Control Hint */}
-        <div className="absolute bottom-3 left-3 z-10 bg-slate-950/80 backdrop-blur-md px-2.5 py-1 rounded-lg border border-slate-800/80 text-[10px] text-slate-300 flex items-center gap-1.5 shadow-md">
+        <div className="absolute bottom-3 left-3 z-10 bg-[#0c1018]/90 px-2.5 py-1 rounded border border-[#1e283c] text-[10px] text-slate-300 flex items-center gap-1.5 shadow">
           <Eye className="w-3 h-3 text-amber-400" />
-          <span className="hidden sm:inline">Drag to Orbit 360° · Scroll to Zoom · Click Planet to Target</span>
+          <span className="hidden sm:inline">Drag to Orbit 360° &bull; Scroll to Zoom &bull; Click Planet to Target</span>
           <span className="sm:hidden">Touch & Drag to Orbit 360°</span>
         </div>
 
         {/* Ground Mode Toggle */}
-        <div className="absolute bottom-4 right-4 z-10 bg-slate-950/85 backdrop-blur-md px-2.5 py-1.5 rounded-xl border border-slate-800 flex items-center gap-2 text-[11px] text-slate-400">
-          <Layers className="w-3.5 h-3.5 text-sky-400" />
-          <span>Ground Disc:</span>
+        <div className="absolute bottom-3 right-3 z-10 bg-[#0c1018]/90 px-2 py-1 rounded border border-[#1e283c] flex items-center gap-1.5 text-[11px] text-slate-400 shadow">
+          <Layers className="w-3 h-3 text-sky-400" />
+          <span className="text-[10px]">Ground:</span>
           {(['translucent', 'solid', 'wireframe'] as const).map((mode) => (
             <button
               key={mode}
               onClick={() => setGroundMode(mode)}
-              className={`px-2 py-0.5 rounded capitalize text-[10px] transition ${
+              className={`px-1.5 py-0.5 rounded capitalize text-[10px] transition ${
                 groundMode === mode
-                  ? 'bg-sky-500/20 text-sky-300 border border-sky-500/40 font-semibold'
+                  ? 'bg-amber-500 text-slate-950 font-semibold'
                   : 'text-slate-400 hover:text-slate-200'
               }`}
             >
@@ -1726,15 +1726,15 @@ export function ThreeSkyExplorer({
       </div>
 
       {/* Interactive 24-Hour Time Slider & Motion Controls */}
-      <div className="glass-panel p-4 rounded-2xl border border-slate-800 space-y-3">
+      <div className="bg-[#111622] border border-[#1e283c] rounded-lg p-3.5 space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2.5">
             <button
               onClick={() => setIsPlaying(!isPlaying)}
-              className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-2 transition ${
+              className={`min-h-[32px] px-3 py-1 rounded-md text-xs font-medium flex items-center gap-1.5 transition ${
                 isPlaying
-                  ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20'
-                  : 'bg-slate-800 text-slate-200 hover:bg-slate-700'
+                  ? 'bg-amber-500 text-slate-950 font-semibold shadow-sm'
+                  : 'bg-[#161d2c] text-slate-200 hover:bg-[#1d273b] border border-[#253147]'
               }`}
             >
               {isPlaying ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5 fill-current" />}
@@ -1742,13 +1742,13 @@ export function ThreeSkyExplorer({
             </button>
 
             {isPlaying && (
-              <div className="flex items-center gap-1.5 text-xs text-slate-400">
+              <div className="flex items-center gap-1.5 text-xs text-slate-400 font-mono">
                 <span>Speed:</span>
                 {[5, 15, 60].map((s) => (
                   <button
                     key={s}
                     onClick={() => setPlaybackSpeed(s)}
-                    className={`px-2 py-0.5 rounded text-[11px] ${
+                    className={`px-1.5 py-0.5 rounded text-[10px] ${
                       playbackSpeed === s ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40' : 'text-slate-400 hover:text-slate-200'
                     }`}
                   >
@@ -1764,23 +1764,23 @@ export function ThreeSkyExplorer({
                 setIsPlaying(false);
                 if (setCurrentDate) setCurrentDate(new Date());
               }}
-              className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-2 transition ${
+              className={`min-h-[32px] px-2.5 py-1 rounded-md text-xs font-medium flex items-center gap-1.5 transition ${
                 isLive
-                  ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
-                  : 'bg-slate-800/80 text-slate-400 hover:text-slate-200'
+                  ? 'bg-emerald-950/40 text-emerald-300 border border-emerald-800/60'
+                  : 'bg-[#161d2c] text-slate-400 hover:text-slate-200 border border-[#253147]'
               }`}
             >
-              <span className={`w-2 h-2 rounded-full ${isLive ? 'bg-emerald-400 animate-ping' : 'bg-slate-500'}`} />
-              <span>{isLive ? 'Live Clock Synced' : 'Sync Real-Time'}</span>
+              <span className={`w-2 h-2 rounded-full ${isLive ? 'bg-emerald-400' : 'bg-slate-500'}`} />
+              <span>{isLive ? 'Real-Time Sync' : 'Sync Real-Time'}</span>
             </button>
           </div>
 
           {/* Quick Body Event Jump Presets */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
             <button
               onClick={() => jumpToTime(bodyEvents.riseUtc)}
               disabled={!bodyEvents.riseUtc}
-              className="px-2.5 py-1.5 rounded-lg text-xs bg-slate-900 border border-slate-800 hover:border-amber-500/40 text-slate-300 hover:text-amber-300 flex items-center gap-1.5 transition disabled:opacity-50"
+              className="min-h-[32px] px-2.5 py-1 rounded-md text-xs bg-[#161d2c] border border-[#253147] hover:border-amber-500/40 text-slate-300 hover:text-amber-300 flex items-center gap-1.5 transition disabled:opacity-40"
             >
               <Sunrise className="w-3.5 h-3.5 text-amber-400" />
               <span>{activeBodyMeta.name} Rise</span>
@@ -1789,7 +1789,7 @@ export function ThreeSkyExplorer({
             <button
               onClick={() => jumpToTime(bodyEvents.culminationUtc)}
               disabled={!bodyEvents.culminationUtc}
-              className="px-3 py-1.5 rounded-lg text-xs bg-amber-500/10 border border-amber-500/40 text-amber-300 hover:bg-amber-500/20 flex items-center gap-1.5 transition font-semibold disabled:opacity-50"
+              className="min-h-[32px] px-2.5 py-1 rounded-md text-xs bg-amber-500/10 border border-amber-500/40 text-amber-300 hover:bg-amber-500/20 flex items-center gap-1.5 transition font-medium disabled:opacity-40"
             >
               <Sparkles className="w-3.5 h-3.5 text-amber-400" />
               <span>Peak Transit</span>
@@ -1798,9 +1798,9 @@ export function ThreeSkyExplorer({
             <button
               onClick={() => jumpToTime(bodyEvents.setUtc)}
               disabled={!bodyEvents.setUtc}
-              className="px-2.5 py-1.5 rounded-lg text-xs bg-slate-900 border border-slate-800 hover:border-amber-500/40 text-slate-300 hover:text-amber-300 flex items-center gap-1.5 transition disabled:opacity-50"
+              className="min-h-[32px] px-2.5 py-1 rounded-md text-xs bg-[#161d2c] border border-[#253147] hover:border-amber-500/40 text-slate-300 hover:text-amber-300 flex items-center gap-1.5 transition disabled:opacity-40"
             >
-              <Sunset className="w-3.5 h-3.5 text-orange-400" />
+              <Sunset className="w-3.5 h-3.5 text-amber-500" />
               <span>{activeBodyMeta.name} Set</span>
             </button>
           </div>
@@ -1808,7 +1808,7 @@ export function ThreeSkyExplorer({
 
         {/* 24-Hour Timeline Slider */}
         <div className="space-y-1.5 pt-1">
-          <div className="flex items-center justify-between text-xs font-mono">
+          <div className="flex items-center justify-between text-xs font-mono tabular-nums">
             <span className="text-slate-400 flex items-center gap-1.5">
               <Clock className="w-3.5 h-3.5 text-amber-400" />
               <span>Simulation Time:</span>
@@ -1827,14 +1827,14 @@ export function ThreeSkyExplorer({
               step={1}
               value={Math.round(currentMinutes)}
               onChange={(e) => handleSliderChange(Number(e.target.value))}
-              className="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-amber-500 focus:outline-none"
+              className="w-full h-1.5 bg-[#0c1018] rounded appearance-none cursor-pointer accent-amber-500 focus:outline-none"
             />
           </div>
 
-          <div className="flex justify-between text-[10px] text-slate-400 font-mono px-1">
+          <div className="flex justify-between text-[10px] text-slate-400 font-mono tabular-nums px-0.5">
             <span>00:00 (Midnight)</span>
             <span>06:00 (Dawn)</span>
-            <span className="text-amber-400 font-bold">12:00 (Noon)</span>
+            <span className="text-amber-400 font-semibold">12:00 (Noon)</span>
             <span>18:00 (Dusk)</span>
             <span>23:59</span>
           </div>
