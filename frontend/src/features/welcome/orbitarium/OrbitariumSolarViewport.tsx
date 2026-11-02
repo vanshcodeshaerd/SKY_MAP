@@ -196,6 +196,8 @@ export interface OrbitariumSolarViewportProps {
   onSpeedChange: (speed: number) => void;
   layout: WelcomeViewportLayout;
   fullBleed?: boolean;
+  /** Fills a flex middle band on phone/tablet (rounded frame). */
+  embedded?: boolean;
 }
 
 function SolarSystemScene({
@@ -223,6 +225,7 @@ export function OrbitariumSolarViewport({
   onSpeedChange: _onSpeedChange,
   layout,
   fullBleed = true,
+  embedded = false,
 }: OrbitariumSolarViewportProps) {
   const controlsRef = useRef<OrbitControlsImpl>(null);
   const coarse = useCoarsePointer();
@@ -230,8 +233,14 @@ export function OrbitariumSolarViewport({
 
   return (
     <div
-      className={fullBleed ? 'absolute inset-0 touch-none select-none' : 'relative h-full w-full touch-none select-none'}
-      style={{ background: 'transparent' }}
+      className={
+        embedded
+          ? 'absolute inset-2 sm:inset-3 touch-none select-none rounded-2xl overflow-hidden border border-orbit-border/40'
+          : fullBleed
+            ? 'absolute inset-0 touch-none select-none'
+            : 'relative h-full w-full touch-none select-none'
+      }
+      style={{ background: embedded ? 'var(--orbit-card)' : 'transparent' }}
     >
       <Canvas
         gl={{ alpha: true, antialias: true }}
@@ -255,15 +264,19 @@ export function OrbitariumSolarViewport({
           ref={controlsRef}
           target={[0, 0, 0]}
           enablePan={false}
-          enableZoom={true}
+          enableZoom={!coarse}
           minDistance={minDist}
           maxDistance={maxDist}
-          rotateSpeed={coarse ? 0.45 : 0.65}
+          rotateSpeed={coarse ? 0.5 : 0.65}
         />
       </Canvas>
 
       {coarse && (
-        <div className="absolute top-2 right-2 z-20 flex flex-col gap-1 pointer-events-auto safe-top">
+        <div
+          className={`absolute z-20 flex flex-col gap-1.5 pointer-events-auto ${
+            embedded ? 'bottom-3 right-3' : 'top-2 right-2 safe-top'
+          }`}
+        >
           <button
             type="button"
             aria-label="Zoom in"
