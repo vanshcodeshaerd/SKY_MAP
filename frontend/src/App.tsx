@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Navbar } from './components/Navbar';
 import { SafetyBanner } from './components/SafetyBanner';
 import { CalibrationDrawer } from './components/CalibrationDrawer';
+import { WelcomeView } from './features/welcome/WelcomeView';
 import { SolarDashboard } from './features/dashboard/SolarDashboard';
 import { ThreeSkyExplorer } from './features/sky-explorer/ThreeSkyExplorer';
 import { ARSkyView } from './features/ar-view/ARSkyView';
@@ -12,7 +13,7 @@ import { ManualCalibration, CelestialBodyId } from './types/astronomy';
 import { fetchServerHealth } from './services/api';
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'sky3d' | 'ar' | 'cvlab'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'welcome' | 'dashboard' | 'sky3d' | 'ar' | 'cvlab'>('welcome');
   const [isCalibrationOpen, setIsCalibrationOpen] = useState(false);
   const [serverOnline, setServerOnline] = useState<boolean>(false);
   const [selectedBody, setSelectedBody] = useState<CelestialBodyId>('Sun');
@@ -80,56 +81,62 @@ export default function App() {
       />
 
       {/* Primary Application Content */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        {activeTab === 'dashboard' && (
-          <SolarDashboard
-            location={location}
-            currentDate={currentDate}
-            setCurrentDate={setCurrentDate}
-            isLive={isLive}
-            setIsLive={setIsLive}
-            selectedBody={selectedBody}
-            onSelectBody={setSelectedBody}
-          />
-        )}
+      {activeTab === 'welcome' ? (
+        <main className="flex-1 w-full">
+          <WelcomeView onNavigate={setActiveTab} />
+        </main>
+      ) : (
+        <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+          {activeTab === 'dashboard' && (
+            <SolarDashboard
+              location={location}
+              currentDate={currentDate}
+              setCurrentDate={setCurrentDate}
+              isLive={isLive}
+              setIsLive={setIsLive}
+              selectedBody={selectedBody}
+              onSelectBody={setSelectedBody}
+            />
+          )}
 
-        {activeTab === 'sky3d' && (
-          <ThreeSkyExplorer
-            location={location}
-            currentDate={currentDate}
-            setCurrentDate={setCurrentDate}
-            isLive={isLive}
-            setIsLive={setIsLive}
-            selectedBody={selectedBody}
-            onSelectBody={setSelectedBody}
-          />
-        )}
+          {activeTab === 'sky3d' && (
+            <ThreeSkyExplorer
+              location={location}
+              currentDate={currentDate}
+              setCurrentDate={setCurrentDate}
+              isLive={isLive}
+              setIsLive={setIsLive}
+              selectedBody={selectedBody}
+              onSelectBody={setSelectedBody}
+            />
+          )}
 
-        {activeTab === 'ar' && (
-          <ARSkyView
-            location={location}
-            currentDate={currentDate}
-            orientation={orientation}
-            needsOrientationPermission={needsPermission}
-            onRequestOrientationPermission={requestPermission}
-            calibration={calibration}
-            onOpenCalibration={() => setIsCalibrationOpen(true)}
-            manualYaw={manualYaw}
-            manualPitch={manualPitch}
-            manualRoll={manualRoll}
-            selectedBody={selectedBody}
-            onSelectBody={setSelectedBody}
-            onRequestGps={requestGpsLocation}
-            gpsLoading={gpsLoading}
-            onNavigateTo3DExplorer={(id) => {
-              setSelectedBody(id);
-              setActiveTab('sky3d');
-            }}
-          />
-        )}
+          {activeTab === 'ar' && (
+            <ARSkyView
+              location={location}
+              currentDate={currentDate}
+              orientation={orientation}
+              needsOrientationPermission={needsPermission}
+              onRequestOrientationPermission={requestPermission}
+              calibration={calibration}
+              onOpenCalibration={() => setIsCalibrationOpen(true)}
+              manualYaw={manualYaw}
+              manualPitch={manualPitch}
+              manualRoll={manualRoll}
+              selectedBody={selectedBody}
+              onSelectBody={setSelectedBody}
+              onRequestGps={requestGpsLocation}
+              gpsLoading={gpsLoading}
+              onNavigateTo3DExplorer={(id) => {
+                setSelectedBody(id);
+                setActiveTab('sky3d');
+              }}
+            />
+          )}
 
-        {activeTab === 'cvlab' && <CVLab />}
-      </main>
+          {activeTab === 'cvlab' && <CVLab />}
+        </main>
+      )}
 
       {/* Sensor Calibration Drawer */}
       <CalibrationDrawer
@@ -152,7 +159,7 @@ export default function App() {
       {/* Footer */}
       <footer className="border-t border-slate-800/80 bg-slate-950/80 py-4 px-4 text-center text-xs text-slate-400">
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2">
-          <span>SkyGazer AR — Computer Graphics & Image Processing (CGIP) University Project</span>
+          <span>SkyMap AR — Interactive Astronomy for Young Explorers</span>
           <div className="flex items-center gap-3 text-[11px] font-mono text-slate-400">
             <span>React 18</span>
             <span>•</span>

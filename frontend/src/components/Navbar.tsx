@@ -1,9 +1,9 @@
-import { Sun, Compass, Camera, Sparkles, Sliders, MapPin, RefreshCw } from 'lucide-react';
+import { Sun, Compass, Camera, Sparkles, Home, Sliders, MapPin, RefreshCw } from 'lucide-react';
 import { GeodeticLocation } from '../types/astronomy';
 
 interface NavbarProps {
-  activeTab: 'dashboard' | 'sky3d' | 'ar' | 'cvlab';
-  setActiveTab: (tab: 'dashboard' | 'sky3d' | 'ar' | 'cvlab') => void;
+  activeTab: 'welcome' | 'dashboard' | 'sky3d' | 'ar' | 'cvlab';
+  setActiveTab: (tab: 'welcome' | 'dashboard' | 'sky3d' | 'ar' | 'cvlab') => void;
   location: GeodeticLocation;
   onOpenCalibration: () => void;
   serverOnline: boolean;
@@ -23,6 +23,7 @@ export function Navbar({
   isLiveGps,
 }: NavbarProps) {
   const tabs = [
+    { id: 'welcome', label: 'Welcome', icon: Home },
     { id: 'dashboard', label: 'Dashboard', icon: Sun },
     { id: 'sky3d', label: '3D Explorer', icon: Compass },
     { id: 'ar', label: 'AR Sky View', icon: Camera },
@@ -33,18 +34,22 @@ export function Navbar({
     <header className="sticky top-0 z-30 bg-[#090d14] border-b border-[#1e283c]">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
         {/* Brand & Observatory Identity */}
-        <div className="flex items-center gap-3 shrink-0">
-          <div className="w-8 h-8 rounded-md bg-[#161d2c] border border-[#253147] flex items-center justify-center">
-            <Sun className="w-4 h-4 text-amber-400 stroke-[2.2]" />
+        <div 
+          onClick={() => setActiveTab('welcome')}
+          className="flex items-center gap-3 shrink-0 cursor-pointer group"
+          title="Go to SkyMap AR Welcome Page"
+        >
+          <div className="w-8 h-8 rounded-md bg-[#161d2c] border border-[#253147] group-hover:border-amber-500/50 flex items-center justify-center transition-colors">
+            <Sun className="w-4 h-4 text-amber-400 stroke-[2.2] group-hover:rotate-45 transition-transform" />
           </div>
           <div>
             <div className="flex items-center gap-1.5">
-              <span className="font-semibold text-sm tracking-tight text-slate-100">SkyGazer</span>
+              <span className="font-semibold text-sm tracking-tight text-slate-100 group-hover:text-amber-300 transition-colors">SkyMap</span>
               <span className="text-[10px] font-mono uppercase px-1.5 py-0.2 rounded bg-amber-500/10 text-amber-400 border border-amber-500/30">
                 AR
               </span>
             </div>
-            <span className="text-[10px] text-slate-400 block tracking-normal">Digital Observatory &bull; CG&IP</span>
+            <span className="text-[10px] text-slate-400 block tracking-normal">Solar System Explorer &bull; Astronomy for Kids</span>
           </div>
         </div>
 

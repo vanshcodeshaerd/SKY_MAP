@@ -256,7 +256,7 @@ export function CVLab() {
           <div className="bg-[#0c1018] p-3 rounded-md border border-[#1e283c] flex items-start gap-2.5 text-xs text-slate-400">
             <Info className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
             <p className="leading-relaxed text-[11px]">
-              <strong>Image Processing Limitations:</strong> Pure luminance thresholding cannot distinguish the actual Sun from high-albedo cloud boundaries, lens flare, or specular reflections on vehicle windshields. SkyGazer AR uses OpenCV moment analysis as an experimental comparison metric alongside astronomical vectors, never as unverified ground truth.
+              <strong>Image Processing Limitations:</strong> Pure luminance thresholding cannot distinguish the actual Sun from high-albedo cloud boundaries, lens flare, or specular reflections on vehicle windshields. SkyMap AR uses OpenCV moment analysis as an experimental comparison metric alongside astronomical vectors, never as unverified ground truth.
             </p>
           </div>
         </div>
