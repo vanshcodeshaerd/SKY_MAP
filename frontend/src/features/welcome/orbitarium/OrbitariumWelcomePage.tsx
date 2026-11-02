@@ -32,10 +32,7 @@ interface OrbitariumWelcomePageProps {
   onStartQuestAr: (bodyId: CelestialBodyId) => void;
 }
 
-/**
- * Placement like reference: copy left (vertically centered), solar system fixed on the right.
- * One shared background — no borders or column panels.
- */
+/** One canvas + starfield behind the whole page; copy floats left, solar system on the right. */
 export function OrbitariumWelcomePage({
   onNavigate,
   onOpenBodyInAr,
@@ -48,10 +45,23 @@ export function OrbitariumWelcomePage({
 
   return (
     <>
-      <div className="orbitarium-root flex h-[100dvh] w-full flex-col overflow-hidden bg-orbit-background text-orbit-foreground lg:flex-row">
-        {/* Left — welcome + planet facts (your copy slot) */}
-        <div className="flex max-h-[46dvh] shrink-0 flex-col justify-center overflow-y-auto overscroll-y-contain px-6 py-8 sm:px-10 lg:max-h-none lg:w-[min(100%,44rem)] lg:flex-1 lg:basis-[42%] lg:py-10 lg:pl-12 xl:pl-[clamp(2rem,8vw,5rem)]">
-          <div className="welcome-copy-slot mx-auto w-full max-w-lg lg:mx-0 space-y-6">
+      <div className="orbitarium-root relative h-[100dvh] w-full overflow-hidden bg-orbit-background text-orbit-foreground">
+        <OrbitariumSolarViewport
+          selected={selected}
+          onSelect={setSelected}
+          speed={speed}
+          onSpeedChange={setSpeed}
+          compact
+          fullBleed
+          sceneShiftX={22}
+          controlsAnchor="right"
+        />
+
+        <div
+          className="absolute inset-x-0 top-0 z-10 max-h-[52dvh] overflow-y-auto overscroll-y-contain touch-pan-y pointer-events-auto lg:inset-y-0 lg:max-h-none lg:flex lg:w-[46%] lg:max-w-2xl lg:items-center lg:overflow-y-auto"
+          style={{ background: 'transparent' }}
+        >
+          <div className="welcome-copy-slot space-y-6 px-6 py-8 sm:px-10 lg:py-10 lg:pl-12 xl:pl-[clamp(2rem,8vw,5rem)]">
             <header className="space-y-3">
               <p className="text-xs uppercase tracking-[0.35em] text-orbit-primary">SkyMap AR</p>
               <h1 className="font-orbitarium-display text-3xl leading-[1.15] sm:text-4xl lg:text-[2.75rem]">
@@ -112,17 +122,6 @@ export function OrbitariumWelcomePage({
               </section>
             ) : null}
           </div>
-        </div>
-
-        {/* Right — fixed solar system (reference hero placement) */}
-        <div className="relative min-h-0 flex-1 lg:basis-[58%]">
-          <OrbitariumSolarViewport
-            selected={selected}
-            onSelect={setSelected}
-            speed={speed}
-            onSpeedChange={setSpeed}
-            compact
-          />
         </div>
       </div>
 
