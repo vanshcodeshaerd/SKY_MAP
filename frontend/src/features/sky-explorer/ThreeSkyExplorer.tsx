@@ -768,7 +768,19 @@ export function ThreeSkyExplorer({
     let animId: number;
     const animate = (time: number) => {
       animId = requestAnimationFrame(animate);
-      controls.update();
+
+      // Only run OrbitControls when in 3D Map mode to prevent it overriding First-Person camera look
+      if (perspectiveModeRef.current === 'map') {
+        controls.update();
+      } else {
+        // Human POV: Keep camera pinned to observer eye level (y = 1.85) looking in human direction
+        const { yaw, pitch } = humanAnglesRef.current;
+        camera.position.set(0, 1.85, 0);
+        const lookX = Math.sin(yaw) * Math.cos(pitch);
+        const lookY = Math.sin(pitch);
+        const lookZ = -Math.cos(yaw) * Math.cos(pitch);
+        camera.lookAt(new THREE.Vector3(lookX, 1.85 + lookY, lookZ));
+      }
 
       // Slow axial rotation for planets to reveal photorealistic surface details
       CELESTIAL_BODY_LIST.forEach((body) => {
@@ -811,6 +823,7 @@ export function ThreeSkyExplorer({
     let isDragging = false;
     let lastPointer = { x: 0, y: 0 };
     const domEl = renderer.domElement;
+    domEl.style.touchAction = 'none';
 
     const onPointerDown = (e: PointerEvent) => {
       if (perspectiveModeRef.current !== 'human') return;
@@ -824,8 +837,9 @@ export function ThreeSkyExplorer({
       const dy = e.clientY - lastPointer.y;
       lastPointer = { x: e.clientX, y: e.clientY };
 
+      // Invert dy so dragging UP tilts the camera UP towards Zenith
       humanAnglesRef.current.yaw -= dx * 0.0035;
-      humanAnglesRef.current.pitch += dy * 0.0035;
+      humanAnglesRef.current.pitch -= dy * 0.0035;
       // Clamp pitch from looking at horizon to straight up at Zenith
       humanAnglesRef.current.pitch = Math.max(-0.25, Math.min(Math.PI / 2 - 0.02, humanAnglesRef.current.pitch));
 
@@ -1099,7 +1113,7 @@ export function ThreeSkyExplorer({
       controls.target.set(0, 0, 0);
       controls.update();
     }
-  }, [perspectiveMode, activeCoords.azimuthDeg, activeCoords.altitudeDeg]);
+  }, [perspectiveMode]);
 
   // Turn First-Person Stargazer View directly to look at selected target
   const snapHumanToBody = () => {
@@ -1561,7 +1575,8 @@ export function ThreeSkyExplorer({
         {/* Three.js Canvas Container */}
         <div
           ref={mountRef}
-          className="w-full h-[560px] cursor-grab active:cursor-grabbing select-none"
+          style={{ touchAction: 'none' }}
+          className="w-full h-[560px] cursor-grab active:cursor-grabbing select-none touch-none"
         />
       </div>
 
