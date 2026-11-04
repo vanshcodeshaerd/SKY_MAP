@@ -23,12 +23,20 @@ import {
   CELESTIAL_BODIES,
   CELESTIAL_BODY_LIST,
 } from '../../types/astronomy';
-import { getClientCelestialPosition, getAllCelestialPositions } from '../../services/astronomyEngine';
+import { getAllCelestialPositions, getEclipticPathEnuPoints, CELESTIAL_DETECTION_PRIORITY } from '../../services/astronomyEngine';
 import { azAltToEnuVector, projectEnuToScreen } from '../../services/coordinateTransforms';
 import { useCameraStream } from '../../hooks/useCameraStream';
 import { calculateStarPositions, CONSTELLATION_DEFS } from '../../services/starCatalog';
 import { getPlanetThumbnail } from '../../services/planetTextures';
 import { CelestialBodySelector } from '../../components/CelestialBodySelector';
+import {
+  buildSubHorizonCatalog,
+  classifyArBodyVisibility,
+  isInArViewport,
+  subHorizonGuidanceText,
+  AR_SUB_HORIZON_BOTTOM_EXTRA_PX,
+  AR_VIEWPORT_MARGIN_PX,
+} from './arSubHorizon';
 import { PlanetDiscoveryModal } from './PlanetDiscoveryModal';
 import { useMissionProgressContext } from '../../hooks/useMissionProgress';
 import * as THREE from 'three';
@@ -92,7 +100,14 @@ export function ARSkyView({
   // Modern UI states: clean popover menus to eliminate screen clutter
   const [isLayersOpen, setIsLayersOpen] = useState<boolean>(false);
   const [isTrimOpen, setIsTrimOpen] = useState<boolean>(false);
-  const [showSubHorizonPlanets, setShowSubHorizonPlanets] = useState<boolean>(false);
+  const [showSubHorizonPlanets, setShowSubHorizonPlanets] = useState<boolean>(() => {
+    try {
+      const stored = localStorage.getItem('skygazer_sub_horizon');
+      return stored !== null ? stored === 'true' : true;
+    } catch {
+      return true;
+    }
+  });
   const [invertPitch, setInvertPitch] = useState<boolean>(false);
 
   // Quick compass & altitude tilt trim for real-life magnetic/attitude alignment (+/- degrees on the fly)
@@ -111,55 +126,30 @@ export function ARSkyView({
 
   const activeMeta = CELESTIAL_BODIES[selectedBody] || CELESTIAL_BODIES.Sun;
 
-  // Real-time planetary positions (VSOP87)
-  const activeCoords = useMemo(() => {
-    return getClientCelestialPosition(selectedBody, location, currentDate);
-  }, [selectedBody, location, currentDate]);
-
-  const allPositions = useMemo(() => {
-    return getAllCelestialPositions(location, currentDate);
+  // Single ephemeris pass for all 9 bodies + pre-computed ENU vectors (no duplicate Sun calculation)
+  const { allPositions, bodyEnuVectors } = useMemo(() => {
+    const positions = getAllCelestialPositions(location, currentDate);
+    const vectors = {} as Record<CelestialBodyId, THREE.Vector3>;
+    for (const info of CELESTIAL_BODY_LIST) {
+      const pos = positions[info.id];
+      vectors[info.id] = azAltToEnuVector(pos.azimuthDeg, pos.altitudeDeg);
+    }
+    return { allPositions: positions, bodyEnuVectors: vectors };
   }, [location, currentDate]);
+
+  const subHorizonCatalog = useMemo(
+    () => buildSubHorizonCatalog(allPositions),
+    [allPositions]
+  );
 
   // Pre-calculate topocentric Star Catalog positions only when location/time changes
   const starsMap = useMemo(() => {
     return calculateStarPositions(location, currentDate, 80);
   }, [location, currentDate]);
 
-  // Pre-calculate topocentric Ecliptic Orbit path (golden planetary highway across sky)
+  // Ecliptic path uses the same Horizon pipeline as planet positions (consistent refraction)
   const eclipticEnuPoints = useMemo(() => {
-    const points: THREE.Vector3[] = [];
-    const eps = (23.43928 * Math.PI) / 180;
-    const sinEps = Math.sin(eps);
-    const cosEps = Math.cos(eps);
-
-    for (let deg = 0; deg < 360; deg += 10) {
-      const lambda = (deg * Math.PI) / 180;
-      const sinLambda = Math.sin(lambda);
-      const cosLambda = Math.cos(lambda);
-
-      const ra = Math.atan2(cosEps * sinLambda, cosLambda);
-      const dec = Math.asin(sinEps * sinLambda);
-
-      const d = (currentDate.getTime() / 86400000) - 10957.5;
-      const gmstHours = (18.697374558 + 24.06570982441908 * d) % 24;
-      const lstRad = ((gmstHours + location.longitude / 15) * 15 * Math.PI) / 180;
-      const ha = lstRad - ra;
-
-      const latRad = (location.latitude * Math.PI) / 180;
-      const sinAlt = Math.sin(latRad) * Math.sin(dec) + Math.cos(latRad) * Math.cos(dec) * Math.cos(ha);
-      const altRad = Math.asin(Math.max(-1, Math.min(1, sinAlt)));
-
-      const cosAlt = Math.cos(altRad);
-      const cosAz = (Math.sin(dec) - Math.sin(latRad) * sinAlt) / (cosAlt * Math.cos(latRad) || 1e-5);
-      let azRad = Math.acos(Math.max(-1, Math.min(1, cosAz)));
-      if (Math.sin(ha) > 0) azRad = 2 * Math.PI - azRad;
-
-      const azDeg = (azRad * 180) / Math.PI;
-      const altDeg = (altRad * 180) / Math.PI;
-
-      points.push(azAltToEnuVector(azDeg, altDeg));
-    }
-    return points;
+    return getEclipticPathEnuPoints(location, currentDate, 10);
   }, [location, currentDate]);
 
   // Cardinal Horizon Directions (N, NE, E, SE, S, SW, W, NW) at Alt = 0
@@ -226,8 +216,14 @@ export function ARSkyView({
   // Projected Continuous 360-Degree Horizon Line
   const [projectedHorizonLine, setProjectedHorizonLine] = useState<{ x: number; y: number; inFront: boolean }[]>([]);
 
+  // Azimuth beacons on the horizon arc for sub-horizon bodies (sky-view underground layer)
+  const [projectedSubHorizonBeacons, setProjectedSubHorizonBeacons] = useState<
+    Record<CelestialBodyId, { u: number; v: number; isInFront: boolean; azimuthOffsetDeg: number }>
+  >({} as Record<CelestialBodyId, { u: number; v: number; isInFront: boolean; azimuthOffsetDeg: number }>);
+
   // Gyro Smoothing State for jitter-free 60 FPS motion
   const smoothedAnglesRef = useRef({ heading: 180, pitch: 30, roll: 0 });
+  const renderFrameRef = useRef(0);
   const [hudHeading, setHudHeading] = useState<number>(180);
   const [hudPitch, setHudPitch] = useState<number>(30);
 
@@ -294,12 +290,11 @@ export function ARSkyView({
       setHudHeading(effectiveHeading);
       setHudPitch(effectivePitch);
 
-      // Project all 9 Solar System bodies using Orthonormal Camera Matrix
+      // Project all 9 Solar System bodies using pre-computed ENU vectors
       const bodyProjs: Record<CelestialBodyId, any> = {} as any;
       CELESTIAL_BODY_LIST.forEach((body) => {
-        const pos = allPositions[body.id];
-        if (pos) {
-          const enu = azAltToEnuVector(pos.azimuthDeg, pos.altitudeDeg);
+        const enu = bodyEnuVectors[body.id];
+        if (enu) {
           bodyProjs[body.id] = projectEnuToScreen(
             enu,
             effectiveHeading,
@@ -313,8 +308,38 @@ export function ARSkyView({
       });
       setProjectedBodies(bodyProjs);
 
-      // Project Ecliptic golden arc
-      if (showEcliptic) {
+      if (showSubHorizonPlanets && subHorizonCatalog.length > 0) {
+        const beacons = {} as Record<
+          CelestialBodyId,
+          { u: number; v: number; isInFront: boolean; azimuthOffsetDeg: number }
+        >;
+        subHorizonCatalog.forEach(({ bodyId, horizonEnu }) => {
+          const bp = projectEnuToScreen(
+            horizonEnu,
+            effectiveHeading,
+            effectivePitch,
+            effectiveRoll,
+            viewport.width,
+            viewport.height,
+            calibration.fieldOfViewDeg
+          );
+          beacons[bodyId] = {
+            u: bp.u,
+            v: bp.v,
+            isInFront: bp.isInFront,
+            azimuthOffsetDeg: bp.azimuthOffsetDeg,
+          };
+        });
+        setProjectedSubHorizonBeacons(beacons);
+      } else if (renderFrameRef.current % 12 === 0) {
+        setProjectedSubHorizonBeacons({} as typeof projectedSubHorizonBeacons);
+      }
+
+      renderFrameRef.current += 1;
+      const refreshDecorLayers = renderFrameRef.current % 3 === 0;
+
+      // Project Ecliptic golden arc (every 3rd frame — static relative to slow ephemeris drift)
+      if (showEcliptic && refreshDecorLayers) {
         const eclipticCoords = eclipticEnuPoints.map((vec) => {
           const p = projectEnuToScreen(
             vec,
@@ -331,37 +356,38 @@ export function ARSkyView({
       }
 
       // Project Horizon Cardinal Points (N, E, S, W)
-      const cardinalCoords = cardinalEnuPoints.map((c) => {
-        const p = projectEnuToScreen(
-          c.enu,
-          effectiveHeading,
-          effectivePitch,
-          effectiveRoll,
-          viewport.width,
-          viewport.height,
-          calibration.fieldOfViewDeg
-        );
-        return { label: c.label, x: p.u, y: p.v, inFront: p.isInFront };
-      });
-      setProjectedCardinals(cardinalCoords);
+      if (refreshDecorLayers) {
+        const cardinalCoords = cardinalEnuPoints.map((c) => {
+          const p = projectEnuToScreen(
+            c.enu,
+            effectiveHeading,
+            effectivePitch,
+            effectiveRoll,
+            viewport.width,
+            viewport.height,
+            calibration.fieldOfViewDeg
+          );
+          return { label: c.label, x: p.u, y: p.v, inFront: p.isInFront };
+        });
+        setProjectedCardinals(cardinalCoords);
 
-      // Project Continuous 360-Degree Horizon Line (Alt = 0 deg)
-      const horizonCoords = horizonEnuPoints.map((vec) => {
-        const p = projectEnuToScreen(
-          vec,
-          effectiveHeading,
-          effectivePitch,
-          effectiveRoll,
-          viewport.width,
-          viewport.height,
-          calibration.fieldOfViewDeg
-        );
-        return { x: p.u, y: p.v, inFront: p.isInFront };
-      });
-      setProjectedHorizonLine(horizonCoords);
+        const horizonCoords = horizonEnuPoints.map((vec) => {
+          const p = projectEnuToScreen(
+            vec,
+            effectiveHeading,
+            effectivePitch,
+            effectiveRoll,
+            viewport.width,
+            viewport.height,
+            calibration.fieldOfViewDeg
+          );
+          return { x: p.u, y: p.v, inFront: p.isInFront };
+        });
+        setProjectedHorizonLine(horizonCoords);
+      }
 
-      // Project stars and constellation lines
-      if (showConstellations) {
+      // Project stars and constellation lines (every 3rd frame)
+      if (showConstellations && refreshDecorLayers) {
         const projectedStarCoords = new Map<string, { u: number; v: number; inFront: boolean }>();
         const starList: any[] = [];
 
@@ -419,6 +445,7 @@ export function ARSkyView({
     manualPitch,
     manualRoll,
     allPositions,
+    bodyEnuVectors,
     calibration,
     quickAzimuthNudge,
     quickAltitudeNudge,
@@ -430,6 +457,8 @@ export function ARSkyView({
     showConstellations,
     showEcliptic,
     invertPitch,
+    showSubHorizonPlanets,
+    subHorizonCatalog,
   ]);
 
   // Auto-start camera when entering AR Mode
@@ -468,81 +497,144 @@ export function ARSkyView({
     isDraggingRef.current = false;
   };
 
+  // Angular-first detection: crosshair lock uses verified ephemeris + priority disambiguation
+  const LOCK_ANGULAR_DEG = 5.5;
+  const LOCK_PIXEL_PX = 68;
+  const NEAR_ANGULAR_DEG = 18;
+  const HYSTERESIS_ANGULAR_DEG = 1.0;
+  const HYSTERESIS_PIXEL_PX = 22;
+
+  const scoreCandidate = (angularSeparationDeg: number, distPx: number) =>
+    angularSeparationDeg + (distPx / Math.max(viewport.width, 1)) * 6;
+
+  const isCandidateLocked = (onScreen: boolean, angularSeparationDeg: number, distPx: number) =>
+    onScreen && angularSeparationDeg < LOCK_ANGULAR_DEG && distPx < LOCK_PIXEL_PX;
+
   // Find the closest on-screen body to the optical crosshairs (Auto-Detection vs Manual Pin)
   const detectedTarget = useMemo(() => {
     const cx = viewport.width / 2;
     const cy = viewport.height / 2;
 
     if (!autoScanMode && selectedBody) {
+      const pos = allPositions[selectedBody];
       const proj = projectedBodies[selectedBody];
-      if (!proj) return null;
+      if (!proj || !pos) return null;
+
+      const vis = classifyArBodyVisibility(pos.altitudeDeg, proj, viewport, showSubHorizonPlanets);
+      if (vis === 'hidden') return null;
+
       const onScreen =
-        proj.isInFront &&
-        proj.u >= 15 &&
-        proj.u <= viewport.width - 15 &&
-        proj.v >= 15 &&
-        proj.v <= viewport.height - 15;
+        vis === 'sub-surface'
+          ? proj.isInFront &&
+            isInArViewport(
+              proj.u,
+              proj.v,
+              viewport,
+              AR_VIEWPORT_MARGIN_PX,
+              AR_SUB_HORIZON_BOTTOM_EXTRA_PX
+            )
+          : proj.isInFront && isInArViewport(proj.u, proj.v, viewport);
+
       const distPx = Math.hypot(proj.u - cx, proj.v - cy);
-      const isLocked = onScreen && (proj.angularSeparationDeg < 9.5 || distPx < 90);
+      const isLocked =
+        onScreen && isCandidateLocked(onScreen, proj.angularSeparationDeg, distPx);
+
       return {
         bodyId: selectedBody,
         proj,
         isOnScreen: onScreen,
         isLocked,
+        isSubHorizon: pos.altitudeDeg < 0,
       };
     }
 
-    // Auto-Scan Mode: Evaluate all 9 celestial bodies with priority to ON-SCREEN bodies
     const candidates: {
       bodyId: CelestialBodyId;
-      proj: any;
+      proj: (typeof projectedBodies)[CelestialBodyId];
       isOnScreen: boolean;
       isLocked: boolean;
+      isSubHorizon: boolean;
       distFromCenterPx: number;
+      score: number;
     }[] = [];
 
     CELESTIAL_BODY_LIST.forEach((b) => {
       const pos = allPositions[b.id];
-      // In AR Camera mode or when sub-horizon planets are off, NEVER auto-lock subterranean planets
-      if (!showSubHorizonPlanets && pos && pos.altitudeDeg < 0) {
-        return;
-      }
+      if (!pos) return;
 
       const p = projectedBodies[b.id];
-      if (p && p.isInFront) {
+      const vis = classifyArBodyVisibility(pos.altitudeDeg, p, viewport, showSubHorizonPlanets);
+
+      if (vis === 'above' || vis === 'sub-surface') {
+        if (!p || !p.isInFront) return;
+
         const onScreen =
-          p.u >= 15 &&
-          p.u <= viewport.width - 15 &&
-          p.v >= 15 &&
-          p.v <= viewport.height - 15;
+          vis === 'sub-surface'
+            ? isInArViewport(
+                p.u,
+                p.v,
+                viewport,
+                AR_VIEWPORT_MARGIN_PX,
+                AR_SUB_HORIZON_BOTTOM_EXTRA_PX
+              )
+            : isInArViewport(p.u, p.v, viewport);
+
         const distPx = Math.hypot(p.u - cx, p.v - cy);
-        const isLocked = onScreen && (p.angularSeparationDeg < 9.5 || distPx < 90);
+        const isLocked = isCandidateLocked(onScreen, p.angularSeparationDeg, distPx);
 
         candidates.push({
           bodyId: b.id,
           proj: p,
           isOnScreen: onScreen,
           isLocked,
+          isSubHorizon: pos.altitudeDeg < 0,
           distFromCenterPx: distPx,
+          score: scoreCandidate(p.angularSeparationDeg, distPx),
+        });
+        return;
+      }
+
+      if (vis === 'sub-beacon') {
+        const beacon = projectedSubHorizonBeacons[b.id];
+        if (!beacon || !beacon.isInFront || !p) return;
+        if (Math.abs(beacon.azimuthOffsetDeg) > 24) return;
+
+        const distPx = Math.hypot(beacon.u - cx, beacon.v - cy);
+        candidates.push({
+          bodyId: b.id,
+          proj: p,
+          isOnScreen: false,
+          isLocked: false,
+          isSubHorizon: true,
+          distFromCenterPx: distPx,
+          score:
+            Math.abs(beacon.azimuthOffsetDeg) +
+            Math.abs(pos.altitudeDeg) * 0.12 +
+            p.angularSeparationDeg * 0.35,
         });
       }
     });
 
-    // Priority 1: Pick the ON-SCREEN body closest to the center crosshairs with HYSTERESIS
+    const rankCandidates = (list: typeof candidates) =>
+      [...list].sort((a, b) => {
+        if (a.isOnScreen !== b.isOnScreen) return a.isOnScreen ? -1 : 1;
+        const scoreDiff = a.score - b.score;
+        if (Math.abs(scoreDiff) > 0.15) return scoreDiff;
+        return CELESTIAL_DETECTION_PRIORITY[a.bodyId] - CELESTIAL_DETECTION_PRIORITY[b.bodyId];
+      });
+
     const onScreenCandidates = candidates.filter((c) => c.isOnScreen);
     if (onScreenCandidates.length > 0) {
-      onScreenCandidates.sort((a, b) => a.distFromCenterPx - b.distFromCenterPx);
-
-      const best = onScreenCandidates[0];
+      const ranked = rankCandidates(onScreenCandidates);
+      const best = ranked[0];
       const currentlyFocused = lastLockedBodyRef.current;
 
-      // Hysteresis: If we already have a focused target on screen, require a 35px buffer to switch away
-      // This prevents rapid flickering and timer resets between close planets (e.g. Sun and Mercury)
       if (currentlyFocused && currentlyFocused !== best.bodyId) {
-        const currentCandidate = onScreenCandidates.find((c) => c.bodyId === currentlyFocused);
+        const currentCandidate = ranked.find((c) => c.bodyId === currentlyFocused);
         if (currentCandidate) {
-          const hysteresisBufferPx = 35;
-          if (best.distFromCenterPx + hysteresisBufferPx > currentCandidate.distFromCenterPx) {
+          const angularGap = best.proj.angularSeparationDeg - currentCandidate.proj.angularSeparationDeg;
+          const pixelGap = best.distFromCenterPx - currentCandidate.distFromCenterPx;
+          if (angularGap + HYSTERESIS_ANGULAR_DEG > 0 && pixelGap + HYSTERESIS_PIXEL_PX > 0) {
             return currentCandidate;
           }
         }
@@ -554,14 +646,21 @@ export function ARSkyView({
 
     lastLockedBodyRef.current = null;
 
-    // Priority 2: If none on screen, pick the forward body with smallest angular separation to guide user
-    if (candidates.length > 0) {
-      candidates.sort((a, b) => a.proj.angularSeparationDeg - b.proj.angularSeparationDeg);
-      return candidates[0];
+    const guidanceCandidates = candidates.filter((c) => c.isSubHorizon || c.proj.isInFront);
+    if (guidanceCandidates.length > 0) {
+      return rankCandidates(guidanceCandidates)[0];
     }
 
     return null;
-  }, [autoScanMode, selectedBody, projectedBodies, viewport, allPositions, showSubHorizonPlanets]);
+  }, [
+    autoScanMode,
+    selectedBody,
+    projectedBodies,
+    projectedSubHorizonBeacons,
+    viewport,
+    allPositions,
+    showSubHorizonPlanets,
+  ]);
 
   // Conjunction / Close Cluster Detection (when 2+ planets are within close proximity on screen)
   const nearbyClusterBodies = useMemo(() => {
@@ -570,7 +669,9 @@ export function ARSkyView({
     return CELESTIAL_BODY_LIST.filter((b) => {
       if (b.id === detectedTarget.bodyId) return false;
       const pos = allPositions[b.id];
-      if (!showSubHorizonPlanets && pos && pos.altitudeDeg < 0) return false;
+      if (!pos) return false;
+      const vis = classifyArBodyVisibility(pos.altitudeDeg, projectedBodies[b.id], viewport, showSubHorizonPlanets);
+      if (vis === 'hidden') return false;
       const p = projectedBodies[b.id];
       if (!p || !p.isInFront) return false;
       const dist = Math.hypot(p.u - targetProj.u, p.v - targetProj.v);
@@ -580,12 +681,12 @@ export function ARSkyView({
       proj: projectedBodies[b.id],
       coords: allPositions[b.id],
     }));
-  }, [detectedTarget, projectedBodies, allPositions, showSubHorizonPlanets]);
+  }, [detectedTarget, projectedBodies, viewport, allPositions, showSubHorizonPlanets]);
 
   // Current active body metadata and coordinates for HUD
   const currentTargetBodyId = detectedTarget?.bodyId || selectedBody;
   const currentMeta = CELESTIAL_BODIES[currentTargetBodyId] || CELESTIAL_BODIES.Sun;
-  const currentCoords = allPositions[currentTargetBodyId] || activeCoords;
+  const currentCoords = allPositions[currentTargetBodyId] || allPositions[selectedBody] || allPositions.Sun;
   const currentProj = detectedTarget?.proj || (projectedBodies[currentTargetBodyId] || {
     u: -1000,
     v: -1000,
@@ -595,9 +696,22 @@ export function ARSkyView({
     elevationOffsetDeg: 0,
   });
 
-  const isCurrentOnScreen = detectedTarget?.isOnScreen ?? false;
+  const currentVisibility = classifyArBodyVisibility(
+    currentCoords.altitudeDeg,
+    currentProj,
+    viewport,
+    showSubHorizonPlanets
+  );
+  const isCurrentPlacedOnSky =
+    currentVisibility === 'above' || currentVisibility === 'sub-surface';
+  const isCurrentSubBeacon = currentVisibility === 'sub-beacon';
   const isCurrentLocked = detectedTarget?.isLocked ?? false;
-  const isCurrentNear = detectedTarget && (detectedTarget.proj.angularSeparationDeg < 22 || detectedTarget.isOnScreen);
+  const isCurrentSubHorizon = currentCoords.altitudeDeg < 0;
+  const isCurrentNear =
+    detectedTarget &&
+    (detectedTarget.proj.angularSeparationDeg < NEAR_ANGULAR_DEG ||
+      detectedTarget.isOnScreen ||
+      isCurrentSubBeacon);
 
   // Auto Lock-On Countdown & Pop-Up Trigger
   useEffect(() => {
@@ -637,7 +751,7 @@ export function ARSkyView({
 
   // Screen perimeter guidance beacon calculation
   const edgeRadar = useMemo(() => {
-    if (isCurrentOnScreen) return null;
+    if (isCurrentPlacedOnSky) return null;
 
     const cx = viewport.width / 2;
     const cy = viewport.height / 2;
@@ -668,12 +782,17 @@ export function ARSkyView({
       separation: currentProj.angularSeparationDeg || 90,
       bodyName: currentMeta.name,
       bodyColor: currentMeta.color,
+      isSubHorizon: isCurrentSubHorizon,
     };
-  }, [currentProj, isCurrentOnScreen, viewport, currentMeta]);
+  }, [currentProj, isCurrentPlacedOnSky, viewport, currentMeta, isCurrentSubHorizon]);
 
   // Turn guidance instructions
   const guidanceInstruction = useMemo(() => {
     if (isCurrentLocked) return 'TARGET LOCKED';
+
+    if (isCurrentSubHorizon && !isCurrentPlacedOnSky) {
+      return subHorizonGuidanceText(currentCoords.altitudeDeg, currentCoords.azimuthDeg);
+    }
 
     const azDiff = currentProj.azimuthOffsetDeg;
     const elDiff = currentProj.elevationOffsetDeg;
@@ -691,7 +810,7 @@ export function ARSkyView({
 
     if (parts.length === 0) return 'Centering...';
     return parts.join(' · ');
-  }, [currentProj, isCurrentLocked]);
+  }, [currentProj, isCurrentLocked, isCurrentSubHorizon, isCurrentPlacedOnSky, currentCoords]);
 
   const guidanceArrowAngle = useMemo(() => {
     return (Math.atan2(-currentProj.elevationOffsetDeg, currentProj.azimuthOffsetDeg) * 180) / Math.PI;
@@ -828,6 +947,18 @@ export function ARSkyView({
               : 'radial-gradient(ellipse at 50% 60%, #0f172a 0%, #020617 75%, #000000 100%)',
           }}
         />
+
+        {/* Sub-horizon underground sky band (matches 3D sky explorer ground disc) */}
+        {showSubHorizonPlanets && subHorizonCatalog.length > 0 && (
+          <div
+            className="absolute inset-x-0 bottom-0 pointer-events-none z-[4] border-t border-purple-500/25"
+            style={{
+              height: '36%',
+              background:
+                'linear-gradient(to top, rgba(46, 16, 101, 0.55) 0%, rgba(30, 27, 75, 0.28) 45%, transparent 100%)',
+            }}
+          />
+        )}
 
         {/* Layer 3: SVG Celestial Vector Canvas */}
         <svg className="absolute inset-0 w-full h-full pointer-events-none z-5">
@@ -1029,13 +1160,11 @@ export function ARSkyView({
                 )}
                 <span className="text-[10px] text-emerald-400/80 hidden xs:inline">(Tap for 3D)</span>
               </>
-            ) : currentCoords.altitudeDeg < 0 && viewMode === 'ar' ? (
+            ) : isCurrentSubHorizon && !isCurrentPlacedOnSky ? (
               <>
-                <span className="w-2 h-2 rounded-full bg-rose-500 shrink-0" />
-                <span className="font-semibold text-rose-300">
-                  {currentMeta.name} is Sub-Horizon ({currentCoords.altitudeDeg.toFixed(0)}°)
-                </span>
-                <span className="text-[10px] text-rose-400/80 hidden sm:inline">(Underground)</span>
+                <span className="w-2 h-2 rounded-full bg-violet-500 shrink-0 animate-pulse" />
+                <span className="font-semibold text-violet-200 truncate">{guidanceInstruction}</span>
+                <span className="text-[10px] text-violet-400/80 hidden sm:inline shrink-0">(Sub-sky)</span>
               </>
             ) : isCurrentNear ? (
               <>
@@ -1193,15 +1322,27 @@ export function ARSkyView({
               </button>
 
               <button
-                onClick={() => setShowSubHorizonPlanets(!showSubHorizonPlanets)}
+                onClick={() => {
+                  const next = !showSubHorizonPlanets;
+                  setShowSubHorizonPlanets(next);
+                  try {
+                    localStorage.setItem('skygazer_sub_horizon', String(next));
+                  } catch {
+                    /* ignore */
+                  }
+                }}
                 className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-xl border transition ${
                   showSubHorizonPlanets
                     ? 'bg-purple-500/20 text-purple-200 border-purple-500/40'
                     : 'bg-slate-900/60 text-slate-400 border-slate-800'
                 }`}
               >
-                <span>🌍 Sub-Horizon (Underground)</span>
-                <span className="text-[10px] font-mono">{showSubHorizonPlanets ? 'VISIBLE' : 'HIDDEN'}</span>
+                <span>🌍 Sub-Horizon Sky Layer</span>
+                <span className="text-[10px] font-mono">
+                  {showSubHorizonPlanets
+                    ? `${subHorizonCatalog.length} BELOW`
+                    : 'HIDDEN'}
+                </span>
               </button>
 
               <button
@@ -1330,14 +1471,29 @@ export function ARSkyView({
         {/* Render ALL Visible Solar System Planets with Photorealistic 3D Appearance */}
         {showAllPlanetsInAR &&
           CELESTIAL_BODY_LIST.map((b) => {
-            if (b.id === currentTargetBodyId && isCurrentOnScreen) return null;
-            const isPlanetAboveHorizon = (allPositions[b.id]?.altitudeDeg || 0) > 0;
-            if (!showSubHorizonPlanets && !isPlanetAboveHorizon && viewMode === 'ar') return null;
+            if (b.id === currentTargetBodyId) return null;
 
+            const pos = allPositions[b.id];
             const proj = projectedBodies[b.id];
-            if (!proj || !proj.isInFront) return null;
-            if (proj.u < 15 || proj.u > viewport.width - 15 || proj.v < 15 || proj.v > viewport.height - 15) return null;
+            if (!pos || !proj) return null;
 
+            const vis = classifyArBodyVisibility(pos.altitudeDeg, proj, viewport, showSubHorizonPlanets);
+            if (vis !== 'above' && vis !== 'sub-surface') return null;
+            if (!proj.isInFront) return null;
+
+            const inView =
+              vis === 'sub-surface'
+                ? isInArViewport(
+                    proj.u,
+                    proj.v,
+                    viewport,
+                    AR_VIEWPORT_MARGIN_PX,
+                    AR_SUB_HORIZON_BOTTOM_EXTRA_PX
+                  )
+                : isInArViewport(proj.u, proj.v, viewport);
+            if (!inView) return null;
+
+            const isSubSurface = vis === 'sub-surface';
             const thumbUrl = getPlanetThumbnail(b.id, 96);
 
             return (
@@ -1348,42 +1504,115 @@ export function ARSkyView({
                   setDiscoveredBodyId(b.id);
                   setIsModalOpen(true);
                 }}
-                className="absolute pointer-events-auto cursor-pointer transform -translate-x-1/2 -translate-y-1/2 z-15 flex flex-col items-center hover:scale-125 transition-transform group"
+                className={`absolute pointer-events-auto cursor-pointer transform -translate-x-1/2 -translate-y-1/2 z-15 flex flex-col items-center transition-transform group ${
+                  isSubSurface ? 'opacity-75 hover:opacity-100 hover:scale-110' : 'hover:scale-125'
+                }`}
                 style={{ left: `${proj.u}px`, top: `${proj.v}px` }}
               >
                 <div className="relative flex items-center justify-center">
                   <div
-                    className="absolute -inset-1 rounded-full blur-sm opacity-60 group-hover:opacity-100 transition-opacity"
+                    className={`absolute -inset-1 rounded-full blur-sm transition-opacity ${
+                      isSubSurface ? 'opacity-40 group-hover:opacity-70' : 'opacity-60 group-hover:opacity-100'
+                    }`}
                     style={{ backgroundColor: b.color }}
                   />
                   <img
                     src={thumbUrl}
                     alt={b.name}
-                    className="relative w-8 h-8 object-contain drop-shadow-[0_0_8px_rgba(0,0,0,0.8)]"
+                    className={`relative w-8 h-8 object-contain drop-shadow-[0_0_8px_rgba(0,0,0,0.8)] ${
+                      isSubSurface ? 'grayscale-[35%]' : ''
+                    }`}
                     loading="lazy"
                   />
                 </div>
 
-                <div className="mt-0.5 flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-slate-950/90 border border-slate-800 text-[9px] font-mono shadow-md backdrop-blur-sm">
+                <div
+                  className={`mt-0.5 flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9px] font-mono shadow-md backdrop-blur-sm border ${
+                    isSubSurface
+                      ? 'bg-purple-950/90 border-purple-800/80'
+                      : 'bg-slate-950/90 border-slate-800'
+                  }`}
+                >
                   <span
                     className={`w-1.5 h-1.5 rounded-full ${
-                      isPlanetAboveHorizon ? 'bg-emerald-400 animate-pulse' : 'bg-slate-600'
+                      isSubSurface ? 'bg-violet-400' : 'bg-emerald-400 animate-pulse'
                     }`}
                   />
                   <span className="text-slate-200 font-semibold">{b.name}</span>
+                  {isSubSurface && (
+                    <span className="text-violet-300">{pos.altitudeDeg.toFixed(0)}°</span>
+                  )}
                 </div>
               </div>
             );
           })}
 
+        {/* Sub-horizon azimuth beacons on the horizon arc (when body is below ground) */}
+        {showSubHorizonPlanets &&
+          showAllPlanetsInAR &&
+          subHorizonCatalog.map(({ bodyId, coords }) => {
+            if (bodyId === currentTargetBodyId) return null;
+            const vis = classifyArBodyVisibility(
+              coords.altitudeDeg,
+              projectedBodies[bodyId],
+              viewport,
+              true
+            );
+            if (vis !== 'sub-beacon') return null;
+
+            const beacon = projectedSubHorizonBeacons[bodyId];
+            if (!beacon || !beacon.isInFront) return null;
+            if (
+              beacon.u < -20 ||
+              beacon.u > viewport.width + 20 ||
+              beacon.v < -20 ||
+              beacon.v > viewport.height + 20
+            ) {
+              return null;
+            }
+
+            const meta = CELESTIAL_BODIES[bodyId];
+
+            return (
+              <button
+                key={`beacon-${bodyId}`}
+                type="button"
+                onClick={() => {
+                  if (onSelectBody) onSelectBody(bodyId);
+                  setDiscoveredBodyId(bodyId);
+                  setIsModalOpen(true);
+                }}
+                className="absolute pointer-events-auto z-14 flex flex-col items-center -translate-x-1/2 -translate-y-1/2 opacity-80 hover:opacity-100 transition-opacity"
+                style={{ left: `${beacon.u}px`, top: `${beacon.v}px` }}
+                title={subHorizonGuidanceText(coords.altitudeDeg, coords.azimuthDeg)}
+              >
+                <div className="flex flex-col items-center">
+                  <span className="text-[8px] font-mono text-violet-300 mb-0.5">↓</span>
+                  <div className="w-7 h-7 rounded-full border border-dashed border-violet-400/70 bg-purple-950/80 flex items-center justify-center overflow-hidden">
+                    <img
+                      src={getPlanetThumbnail(bodyId, 48)}
+                      alt={meta.name}
+                      className="w-5 h-5 object-contain opacity-70"
+                    />
+                  </div>
+                  <span className="mt-0.5 text-[8px] font-mono text-violet-200 bg-purple-950/90 px-1 rounded border border-purple-800/60">
+                    {meta.name} {coords.altitudeDeg.toFixed(0)}°
+                  </span>
+                </div>
+              </button>
+            );
+          })}
+
         {/* Primary Selected Target AR Reticle */}
-        {isCurrentOnScreen && (
+        {isCurrentPlacedOnSky && (
           <div
             onClick={() => {
               setDiscoveredBodyId(currentMeta.id);
               setIsModalOpen(true);
             }}
-            className="absolute pointer-events-auto cursor-pointer transform -translate-x-1/2 -translate-y-1/2 transition-transform duration-75 ease-out z-25 flex flex-col items-center group"
+            className={`absolute pointer-events-auto cursor-pointer transform -translate-x-1/2 -translate-y-1/2 transition-transform duration-75 ease-out z-25 flex flex-col items-center group ${
+              isCurrentSubHorizon ? 'opacity-90' : ''
+            }`}
             style={{ left: `${currentProj.u}px`, top: `${currentProj.v}px` }}
           >
             <div className="relative flex items-center justify-center">
@@ -1436,13 +1665,29 @@ export function ARSkyView({
                   </span>
                 )}
               </div>
-              <div className="text-amber-300 flex items-center justify-center gap-1">
-                <span>Az: {currentCoords.azimuthDeg.toFixed(1)}° | Alt: {currentCoords.altitudeDeg.toFixed(1)}°</span>
-                {currentCoords.altitudeDeg < 0 && (
-                  <span className="text-[8px] bg-red-950/90 text-red-300 px-1 py-0.5 rounded border border-red-800 font-bold">
-                    SUB-HORIZON
-                  </span>
-                )}
+              <div className="text-amber-300 flex flex-col items-center justify-center gap-0.5">
+                <span>
+                  Az: {currentCoords.azimuthDeg.toFixed(1)}° | Alt: {currentCoords.altitudeDeg.toFixed(1)}°
+                  {currentCoords.altitudeDeg < 0 && (
+                    <span className="text-[8px] bg-red-950/90 text-red-300 px-1 py-0.5 rounded border border-red-800 font-bold ml-1">
+                      SUB-HORIZON
+                    </span>
+                  )}
+                  {currentCoords.rightAscensionDeg !== undefined && currentCoords.declinationDeg !== undefined && (
+                    <span className="text-sky-300/90">
+                      {' '}
+                      · RA: {currentCoords.rightAscensionDeg.toFixed(1)}° Dec:{' '}
+                      {currentCoords.declinationDeg >= 0 ? '+' : ''}
+                      {currentCoords.declinationDeg.toFixed(1)}°
+                    </span>
+                  )}
+                </span>
+                <span className="text-[8px] text-slate-400">
+                  Crosshair offset: {currentProj.azimuthOffsetDeg.toFixed(1)}° az ·{' '}
+                  {currentProj.elevationOffsetDeg >= 0 ? '+' : ''}
+                  {currentProj.elevationOffsetDeg.toFixed(1)}° el
+                  {currentCoords.positionVerified ? ' · ✓ verified' : ''}
+                </span>
               </div>
             </div>
           </div>
@@ -1456,14 +1701,24 @@ export function ARSkyView({
             onClick={() => {
               if (onSelectBody) onSelectBody(currentMeta.id);
             }}
-            title={`Pan towards ${currentMeta.name} (${edgeRadar.separation.toFixed(0)}°)`}
+            title={
+              edgeRadar.isSubHorizon
+                ? `${subHorizonGuidanceText(currentCoords.altitudeDeg, currentCoords.azimuthDeg)} (${edgeRadar.separation.toFixed(0)}°)`
+                : `Pan towards ${currentMeta.name} (${edgeRadar.separation.toFixed(0)}°)`
+            }
           >
-            <div className="flex items-center gap-1.5 bg-slate-950/95 border border-amber-400 px-2 py-1 rounded-full shadow-xl backdrop-blur-md text-slate-100">
+            <div
+              className={`flex items-center gap-1.5 px-2 py-1 rounded-full shadow-xl backdrop-blur-md text-slate-100 border ${
+                edgeRadar.isSubHorizon
+                  ? 'bg-purple-950/95 border-violet-400/70'
+                  : 'bg-slate-950/95 border-amber-400'
+              }`}
+            >
               <div
-                className="text-amber-400 text-xs font-bold"
+                className={`text-xs font-bold ${edgeRadar.isSubHorizon ? 'text-violet-300' : 'text-amber-400'}`}
                 style={{ transform: `rotate(${edgeRadar.angleDeg}deg)` }}
               >
-                ➔
+                {edgeRadar.isSubHorizon ? '↓' : '➔'}
               </div>
               <img
                 src={getPlanetThumbnail(currentMeta.id, 64)}

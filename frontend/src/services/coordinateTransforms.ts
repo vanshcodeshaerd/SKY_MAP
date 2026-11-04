@@ -21,6 +21,15 @@ export function azAltToEnuVector(azimuthDeg: number, altitudeDeg: number): THREE
   return new THREE.Vector3(x, y, z).normalize();
 }
 
+/** Inverse of azAltToEnuVector — used to verify coordinate round-trip accuracy. */
+export function enuToAzAlt(enu: THREE.Vector3): { azimuthDeg: number; altitudeDeg: number } {
+  const u = enu.clone().normalize();
+  const altitudeDeg = THREE.MathUtils.radToDeg(Math.asin(Math.max(-1, Math.min(1, u.z))));
+  let azimuthDeg = THREE.MathUtils.radToDeg(Math.atan2(u.x, u.y));
+  if (azimuthDeg < 0) azimuthDeg += 360;
+  return { azimuthDeg, altitudeDeg };
+}
+
 /**
  * Converts an ENU vector to Three.js world space coordinates.
  * In Three.js: +X = Right (East), +Y = Up (Zenith), +Z = South (-North)

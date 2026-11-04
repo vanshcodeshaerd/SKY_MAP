@@ -393,6 +393,10 @@ export interface SolarCoordinates {
   distanceAu: number;
   isAboveHorizon: boolean;
   timestampUtc: string;
+  rightAscensionDeg?: number;
+  declinationDeg?: number;
+  /** True when az/alt round-trip verification error is below 0.05° */
+  positionVerified?: boolean;
 }
 
 export interface CelestialCoordinates extends SolarCoordinates {
