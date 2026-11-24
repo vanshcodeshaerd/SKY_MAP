@@ -3,60 +3,10 @@
  */
 
 import { SolarCoordinates, DiurnalWaypoint, SolarEvents, VisionProcessResult } from '../types/astronomy';
+import { apiFetch } from './apiCore';
 
-const rawBase = import.meta.env.VITE_API_BASE_URL || '';
-const PRIMARY = rawBase ? `${rawBase.replace(/\/$/, '')}/api` : '/api';
-const FALLBACKS = ['http://127.0.0.1:8000/api', 'http://localhost:8000/api'];
-
-function candidateBases(): string[] {
-  const out = [PRIMARY];
-  for (const f of FALLBACKS) {
-    if (!out.includes(f)) out.push(f);
-  }
-  return out;
-}
-
-function fetchWithTimeout(url: string, init: RequestInit | undefined, ms: number): Promise<Response> {
-  const ctrl = new AbortController();
-  const timer = window.setTimeout(() => ctrl.abort(), ms);
-  return fetch(url, { ...init, signal: ctrl.signal }).finally(() => window.clearTimeout(timer));
-}
-
-async function apiFetch(path: string, init?: RequestInit): Promise<Response> {
-  const bases = candidateBases();
-  let lastError: Error = new Error(
-    'Backend offline. From the backend folder run: py -3 -m uvicorn app.main:app --port 8000'
-  );
-
-  for (const base of bases) {
-    try {
-      const res = await fetchWithTimeout(`${base}${path}`, init, 4000);
-      if (res.ok) return res;
-      const payload = await res.json().catch(() => ({}));
-      const detail = (payload as { detail?: string }).detail;
-      lastError = new Error(
-        typeof detail === 'string' && detail ? detail : `Backend request failed (${res.status})`
-      );
-      if (res.status >= 400 && res.status < 500 && res.status !== 404) {
-        throw lastError;
-      }
-    } catch (err) {
-      const name = err instanceof Error ? err.name : '';
-      const msg = err instanceof Error ? err.message : '';
-      if (name === 'AbortError') {
-        lastError = new Error(
-          'Backend offline. From the backend folder run: py -3 -m uvicorn app.main:app --port 8000'
-        );
-        continue;
-      }
-      if (err instanceof Error && !/Failed to fetch|NetworkError|Load failed/i.test(msg)) {
-        lastError = err;
-        if (!/offline/i.test(msg)) throw err;
-      }
-    }
-  }
-  throw lastError;
-}
+export { apiFetch, probeServerHealth, fetchMagneticDeclination } from './apiCore';
+export type { ServerHealthState } from './apiCore';
 
 export async function fetchServerHealth(): Promise<{
   status: string;
@@ -113,11 +63,11 @@ export async function fetchServerSolarPath(
 
   const res = await apiFetch(`/solar/path?${params.toString()}`);
   const data = await res.json();
-  const waypoints: DiurnalWaypoint[] = data.waypoints.map((w: any) => ({
+  const waypoints: DiurnalWaypoint[] = data.waypoints.map((w: { time_utc: string; azimuth_degrees: number; altitude_degrees: number; vector_enu: [number, number, number]; is_visible: boolean }) => ({
     timeUtc: w.time_utc,
     azimuthDeg: w.azimuth_degrees,
     altitudeDeg: w.altitude_degrees,
-    vectorEnu: w.vector_enu as [number, number, number],
+    vectorEnu: w.vector_enu,
     isVisible: w.is_visible,
   }));
 

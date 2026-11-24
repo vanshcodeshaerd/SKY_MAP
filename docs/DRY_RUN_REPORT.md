@@ -24,8 +24,11 @@
 | Piece | Configuration |
 |--------|----------------|
 | React app (`frontend/`) | Vite dev server **:5173**, proxy `/api` → `http://localhost:8000` |
-| Health poll | `App.tsx` calls `fetchServerHealth()` every **10 s** (green indicator in navbar) |
-| `skymap-web/` | **Standalone** — uses local JSON catalog + **astronomy-engine** (does **not** require backend for AR) |
+| Health poll | `App.tsx` uses `probeServerHealth()` every **10 s** (navbar shows **DE421 API** vs **Local AR**) |
+| Vercel proxy | Root `vercel.json` rewrites `/api/*` → Render; optional `VITE_API_BASE_URL` |
+| Render CORS | Default regex includes `https://.*\.vercel\.app` |
+| Constellation Play | Same Vercel deploy at `/constellations/` (skymap-web build) |
+| `skymap-web/` | **Standalone** AR + optional API chip (`/api/health`) |
 
 **Live HTTP dry run** from the agent sandbox could not always reach `127.0.0.1:8000` across processes; **in-process `TestClient`** confirms all routes.
 

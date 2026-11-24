@@ -25,6 +25,7 @@ import {
   CELESTIAL_BODY_LIST,
 } from '../../types/astronomy';
 import { getAllCelestialPositions, getEclipticPathEnuPoints, CELESTIAL_DETECTION_PRIORITY } from '../../services/astronomyEngine';
+import { getBodyEnuVectorsHybrid, getLastEphemerisSource } from '../../services/serverEphemeris';
 import { azAltToEnuVector, projectEnuToScreen } from '../../services/coordinateTransforms';
 import { useCameraStream } from '../../hooks/useCameraStream';
 import { calculateStarPositions, CONSTELLATION_DEFS } from '../../services/starCatalog';
@@ -45,6 +46,7 @@ import * as THREE from 'three';
 interface ARSkyViewProps {
   location: GeodeticLocation;
   currentDate: Date;
+  serverOnline?: boolean;
   orientation: DeviceOrientationState;
   needsOrientationPermission: boolean;
   onRequestOrientationPermission: () => Promise<boolean>;
@@ -63,6 +65,7 @@ interface ARSkyViewProps {
 export function ARSkyView({
   location,
   currentDate,
+  serverOnline = false,
   orientation,
   needsOrientationPermission,
   onRequestOrientationPermission,
@@ -145,16 +148,40 @@ export function ARSkyView({
 
   const activeMeta = CELESTIAL_BODIES[selectedBody] || CELESTIAL_BODIES.Sun;
 
-  // Single ephemeris pass for all 9 bodies + pre-computed ENU vectors (no duplicate Sun calculation)
-  const { allPositions, bodyEnuVectors } = useMemo(() => {
-    const positions = getAllCelestialPositions(location, currentDate);
+  const allPositions = useMemo(
+    () => getAllCelestialPositions(location, currentDate),
+    [location, currentDate]
+  );
+
+  const clientBodyEnuVectors = useMemo(() => {
     const vectors = {} as Record<CelestialBodyId, THREE.Vector3>;
     for (const info of CELESTIAL_BODY_LIST) {
-      const pos = positions[info.id];
+      const pos = allPositions[info.id];
       vectors[info.id] = azAltToEnuVector(pos.azimuthDeg, pos.altitudeDeg);
     }
-    return { allPositions: positions, bodyEnuVectors: vectors };
-  }, [location, currentDate]);
+    return vectors;
+  }, [allPositions]);
+
+  const [bodyEnuVectors, setBodyEnuVectors] = useState<Record<CelestialBodyId, THREE.Vector3>>(
+    clientBodyEnuVectors
+  );
+  const [ephemerisSource, setEphemerisSource] = useState<'de421' | 'client'>('client');
+
+  const activeBodyEnuVectors =
+    Object.keys(bodyEnuVectors).length >= 8 ? bodyEnuVectors : clientBodyEnuVectors;
+
+  useEffect(() => {
+    let cancelled = false;
+    getBodyEnuVectorsHybrid(location, currentDate, serverOnline).then((vectors) => {
+      if (!cancelled) {
+        setBodyEnuVectors(vectors);
+        setEphemerisSource(getLastEphemerisSource());
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [location, currentDate, serverOnline]);
 
   const subHorizonCatalog = useMemo(
     () => buildSubHorizonCatalog(allPositions),
@@ -286,11 +313,13 @@ export function ARSkyView({
 
       const motionSpeed = Math.abs(dHeading) + Math.abs(dPitch);
       const adaptiveFactor = hasSensor
-        ? motionSpeed > 4.0
-          ? 0.82
-          : motionSpeed > 1.0
-            ? 0.52
-            : 0.24
+        ? motionSpeed > 8
+          ? 0.78
+          : motionSpeed > 2.5
+            ? 0.5
+            : motionSpeed > 0.45
+              ? 0.22
+              : 0.07
         : 0.55;
 
       smoothedAnglesRef.current.heading = (smoothedAnglesRef.current.heading + dHeading * adaptiveFactor + 360) % 360;
@@ -316,7 +345,7 @@ export function ARSkyView({
       // Project all 9 Solar System bodies using pre-computed ENU vectors
       const bodyProjs: Record<CelestialBodyId, any> = {} as any;
       CELESTIAL_BODY_LIST.forEach((body) => {
-        const enu = bodyEnuVectors[body.id];
+        const enu = activeBodyEnuVectors[body.id];
         if (enu) {
           bodyProjs[body.id] = projectEnuToScreen(
             enu,
@@ -468,7 +497,7 @@ export function ARSkyView({
     manualPitch,
     manualRoll,
     allPositions,
-    bodyEnuVectors,
+    activeBodyEnuVectors,
     calibration,
     quickAzimuthNudge,
     quickAltitudeNudge,
@@ -1780,7 +1809,10 @@ export function ARSkyView({
           <div className="flex items-center gap-1.5 bg-slate-950/90 backdrop-blur-md px-2.5 py-1 rounded-xl border border-slate-800 text-[10px] text-slate-300 shadow-md">
             <Eye className="w-3 h-3 text-amber-400" />
             <span className="font-mono">
-              {hudHeading.toFixed(0)}° Az · {hudPitch.toFixed(0)}° Alt
+              {hudHeading.toFixed(0)}° Az · {hudPitch.toFixed(0)}° Alt ·{' '}
+              <span className={ephemerisSource === 'de421' ? 'text-emerald-400' : 'text-slate-500'}>
+                {ephemerisSource === 'de421' ? 'DE421' : 'VSOP87'}
+              </span>
             </span>
           </div>
 

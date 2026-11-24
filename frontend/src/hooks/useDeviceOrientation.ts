@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { DeviceOrientationState } from '../types/astronomy';
+import { pushAttitudeSample } from '../services/deviceAttitude';
 
 export interface EnuOrientationState extends DeviceOrientationState {
   compassHeading: number | null; // 0 to 360 clockwise from North
@@ -116,15 +117,22 @@ export function useDeviceOrientation() {
       }
 
       const effectiveCompassHeading = (opticalHeading + compassBiasRef.current + 360) % 360;
+      const roll = Math.abs(pitchDeg) > 78 ? 0 : gamma;
+      const smoothed = pushAttitudeSample({
+        heading: effectiveCompassHeading,
+        pitch: pitchDeg,
+        roll,
+        timestamp: performance.now(),
+      });
 
       setOrientation((prev) => ({
         ...prev,
         alpha: event.alpha !== null ? Number(event.alpha.toFixed(2)) : null,
         beta: event.beta !== null ? Number(event.beta.toFixed(2)) : null,
         gamma: event.gamma !== null ? Number(event.gamma.toFixed(2)) : null,
-        compassHeading: Number(effectiveCompassHeading.toFixed(2)),
-        cameraPitch: Number(pitchDeg.toFixed(2)),
-        cameraRoll: Number(gamma.toFixed(2)),
+        compassHeading: Number(smoothed.heading.toFixed(2)),
+        cameraPitch: Number(smoothed.pitch.toFixed(2)),
+        cameraRoll: Number(smoothed.roll.toFixed(2)),
         absolute: isAbsoluteEvent || event.absolute || usedWebkitHeading,
         compassAccuracy: webkitAccuracy,
       }));

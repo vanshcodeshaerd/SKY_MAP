@@ -14,7 +14,7 @@ import { useGeolocation } from './hooks/useGeolocation';
 import { useDeviceOrientation } from './hooks/useDeviceOrientation';
 import { MissionProgressProvider, useMissionProgressContext } from './hooks/useMissionProgress';
 import { GeodeticLocation, ManualCalibration, CelestialBodyId } from './types/astronomy';
-import { fetchServerHealth } from './services/api';
+import { fetchMagneticDeclination, probeServerHealth, type ServerHealthState } from './services/api';
 
 type TabId = 'welcome' | 'dashboard' | 'sky3d' | 'ar' | 'cvlab';
 
@@ -76,7 +76,12 @@ function AppMain({
   } = geolocation;
 
   const [isCalibrationOpen, setIsCalibrationOpen] = useState(false);
-  const [serverOnline, setServerOnline] = useState<boolean>(false);
+  const [serverHealth, setServerHealth] = useState<ServerHealthState>({
+    online: false,
+    lastError: null,
+    lastOkAt: null,
+    coldStartHint: false,
+  });
   const [selectedBody, setSelectedBody] = useState<CelestialBodyId>('Sun');
 
   const { orientation, needsPermission, requestPermission } = useDeviceOrientation();
@@ -111,15 +116,30 @@ function AppMain({
   }, [isLiveGps, markLocationConfigured]);
 
   useEffect(() => {
-    const checkHealth = () => {
-      fetchServerHealth()
-        .then(() => setServerOnline(true))
-        .catch(() => setServerOnline(false));
+    let first = true;
+    const checkHealth = async () => {
+      const state = await probeServerHealth(first);
+      first = false;
+      setServerHealth(state);
     };
     checkHealth();
     const interval = setInterval(checkHealth, 10000);
     return () => clearInterval(interval);
   }, []);
+
+  useEffect(() => {
+    if (!isLiveGps) return;
+    let cancelled = false;
+    fetchMagneticDeclination(location.latitude, location.longitude).then((dec) => {
+      if (cancelled || dec === null) return;
+      setCalibration((c) =>
+        Math.abs(c.declinationDeg - dec) < 0.05 ? c : { ...c, declinationDeg: dec }
+      );
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [isLiveGps, location.latitude, location.longitude]);
 
   useEffect(() => {
     if (activeTab === 'sky3d') markVisitedSky3d();
@@ -138,7 +158,7 @@ function AppMain({
             setActiveTab={setActiveTab}
             location={location}
             onOpenCalibration={() => setIsCalibrationOpen(true)}
-            serverOnline={serverOnline}
+            serverHealth={serverHealth}
             onRequestGps={requestGpsLocation}
             gpsLoading={gpsLoading}
             isLiveGps={isLiveGps}
@@ -192,6 +212,7 @@ function AppMain({
             <ARSkyView
               location={location}
               currentDate={currentDate}
+              serverOnline={serverHealth.online}
               orientation={orientation}
               needsOrientationPermission={needsPermission}
               onRequestOrientationPermission={requestPermission}

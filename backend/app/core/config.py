@@ -1,6 +1,11 @@
 """Application metadata and CORS settings."""
 
-from typing import List
+import os
+from typing import List, Optional
+
+
+def _split_csv(value: str) -> List[str]:
+    return [x.strip() for x in value.split(",") if x.strip()]
 
 
 class Settings:
@@ -14,7 +19,17 @@ class Settings:
         "http://127.0.0.1:4173",
         "http://localhost:5174",
         "http://127.0.0.1:5174",
+        *_split_csv(os.getenv("CORS_ORIGINS", "")),
     ]
+    cors_origin_regex: Optional[str] = os.getenv(
+        "CORS_ORIGIN_REGEX",
+        r"https?://(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+)(:\d+)?|https://.*\.vercel\.app",
+    )
+    cors_allow_credentials: bool = os.getenv("CORS_ALLOW_CREDENTIALS", "false").lower() in (
+        "1",
+        "true",
+        "yes",
+    )
     max_upload_bytes: int = 10 * 1024 * 1024
     allowed_image_types: frozenset[str] = frozenset(
         {"image/jpeg", "image/jpg", "image/png"}

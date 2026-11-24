@@ -24,7 +24,7 @@ If you want your web application accessible at a **Vercel domain** (`https://you
 ### Architecture
 - **Frontend**: Hosted on **Vercel** Edge CDN (lightning-fast React + Three.js + AR client).
 - **Backend**: Hosted on **Render.com**, **Railway.app**, or **Koyeb** (Python FastAPI + NASA JPL DE421 ephemeris).
-- **Integration**: Vercel talks to the backend via `VITE_API_BASE_URL` with zero CORS issues (CORS is pre-configured to allow all origins).
+- **Integration**: Prefer **same-origin** `/api` rewrites on Vercel → Render (see root `vercel.json`). Optionally set `VITE_API_BASE_URL` for direct cross-origin calls; backend allows `*.vercel.app` via `CORS_ORIGIN_REGEX`.
 
 ---
 
@@ -34,7 +34,12 @@ If you want your web application accessible at a **Vercel domain** (`https://you
 3. Choose **Docker** environment (or set Root Directory to `backend` and run `uvicorn app.main:app --host 0.0.0.0 --port $PORT`).
 4. Click **Create Web Service**.
 5. Once deployed, copy your backend URL (e.g. `https://skygazer-api.onrender.com`).
-   *Test it in your browser: `https://skygazer-api.onrender.com/api/health` should return `{"status":"healthy"}`.*
+   *Test it in your browser: `https://skygazer-api.onrender.com/api/health` should return `{"status":"online"}`.*
+   
+   Optional Render env vars:
+   - `CORS_ORIGINS` — comma-separated exact origins (e.g. `https://sky-map-ar.vercel.app`)
+   - `CORS_ORIGIN_REGEX` — defaults include `https://.*\.vercel\.app`
+   - `CORS_ALLOW_CREDENTIALS` — default `false`
 
 ---
 
@@ -46,10 +51,10 @@ If you want your web application accessible at a **Vercel domain** (`https://you
    - **Root Directory**: `frontend` (or leave default `./` as the repository has root `vercel.json` preconfigured)
    - **Build Command**: `npm run build`
    - **Output Directory**: `dist`
-4. Expand **Environment Variables** and add:
-   - **Key**: `VITE_API_BASE_URL`
-   - **Value**: `https://skygazer-api.onrender.com` *(your backend URL from Step 1)*
-5. Click **Deploy**!
+4. Use root **`vercel.json`** (builds `frontend` + copies `skymap-web` to `/constellations/`). Update the `/api` rewrite destination to your Render hostname.
+5. Optional **Environment Variables**:
+   - `VITE_API_BASE_URL` — leave **empty** to use `/api` proxy only, or set Render URL for direct calls
+6. Click **Deploy**! Constellation Play: `https://your-project.vercel.app/constellations/`
 6. Your app is now live at `https://your-project.vercel.app` with instant global SSL, mobile AR camera access, and live NASA planetary telemetry!
 
 ---

@@ -57,6 +57,32 @@ class SolarPathResponse(BaseModel):
     solar_events: SolarEvents
 
 
+class BatchPositionItem(BaseModel):
+    body: str
+    timestamp_utc: str
+    azimuth_degrees: float
+    altitude_degrees: float
+    is_above_horizon: bool
+    atmospheric_refraction_deg: float
+    distance_au: float
+    vector_enu: List[float] = Field(min_length=3, max_length=3)
+
+
+class SolarPositionsBatchResponse(BaseModel):
+    latitude: float
+    longitude: float
+    elevation_m: float
+    timestamp_utc: str
+    positions: dict[str, BatchPositionItem]
+
+
+class MagneticDeclinationResponse(BaseModel):
+    latitude: float
+    longitude: float
+    declination_deg: float
+    note: str
+
+
 class HealthResponse(BaseModel):
     status: str
     version: str

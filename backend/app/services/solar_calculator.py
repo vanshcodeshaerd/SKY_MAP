@@ -91,7 +91,37 @@ def calculate_solar_position(
         "atmospheric_refraction_deg": refraction,
         "distance_au": float(distance.au),
         "body": body.lower(),
+        "vector_enu": enu_unit_vector(azimuth, altitude),
     }
+
+
+def calculate_solar_positions_batch(
+    lat: float,
+    lon: float,
+    elevation_m: float,
+    dt_utc: datetime,
+    bodies: Optional[List[str]] = None,
+) -> Dict[str, Dict[str, Any]]:
+    """Compute DE421 topocentric positions for multiple bodies at one instant."""
+    if bodies is None:
+        bodies = [k for k in DE421_TARGET_MAP if k != "pluto"]
+    out: Dict[str, Dict[str, Any]] = {}
+    for body in bodies:
+        key = body.lower().strip()
+        if key not in DE421_TARGET_MAP or key == "pluto":
+            continue
+        pos = calculate_solar_position(lat, lon, elevation_m, dt_utc, body=key)
+        out[key] = {
+            "body": key,
+            "timestamp_utc": pos["timestamp_utc"],
+            "azimuth_degrees": pos["azimuth_degrees"],
+            "altitude_degrees": pos["altitude_degrees"],
+            "is_above_horizon": pos["is_above_horizon"],
+            "atmospheric_refraction_deg": pos["atmospheric_refraction_deg"],
+            "distance_au": pos["distance_au"],
+            "vector_enu": pos["vector_enu"],
+        }
+    return out
 
 
 def calculate_diurnal_path(

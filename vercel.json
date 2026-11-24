@@ -1,8 +1,12 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "cd frontend && npm install && npm run build",
+  "buildCommand": "cd skymap-web && npm install && npm run build && cd ../frontend && npm install && npm run build && node -e \"const fs=require('fs');const p=require('path');const src=p.join('..','skymap-web','dist');const dst=p.join('dist','constellations');fs.cpSync(src,dst,{recursive:true});\"",
   "outputDirectory": "frontend/dist",
   "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "https://skygazer-apii.onrender.com/api/:path*"
+    },
     {
       "source": "/(.*)",
       "destination": "/index.html"

@@ -52,6 +52,27 @@ def test_solar_position_invalid_body():
     assert response.status_code == 422
 
 
+def test_solar_positions_batch():
+    response = client.get(
+        "/api/solar/positions/batch",
+        params={"latitude": 34.05, "longitude": -118.24, "elevation_m": 0},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["positions"]["sun"]["azimuth_degrees"] >= 0
+    assert len(data["positions"]) >= 9
+
+
+def test_geo_declination():
+    response = client.get(
+        "/api/geo/declination",
+        params={"latitude": 34.05, "longitude": -118.24},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert -30 <= data["declination_deg"] <= 30
+
+
 def test_solar_path_valid():
     response = client.get(
         "/api/solar/path",

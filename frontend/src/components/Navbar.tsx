@@ -1,5 +1,6 @@
 import { Sun, Compass, Camera, Sparkles, Home, Sliders, MapPin, RefreshCw, Award } from 'lucide-react';
 import { GeodeticLocation } from '../types/astronomy';
+import type { ServerHealthState } from '../services/api';
 import { useMissionProgressContext } from '../hooks/useMissionProgress';
 
 interface NavbarProps {
@@ -7,7 +8,7 @@ interface NavbarProps {
   setActiveTab: (tab: 'welcome' | 'dashboard' | 'sky3d' | 'ar' | 'cvlab') => void;
   location: GeodeticLocation;
   onOpenCalibration: () => void;
-  serverOnline: boolean;
+  serverHealth: ServerHealthState;
   onRequestGps?: () => void;
   gpsLoading?: boolean;
   isLiveGps?: boolean;
@@ -18,7 +19,7 @@ export function Navbar({
   setActiveTab,
   location,
   onOpenCalibration,
-  serverOnline,
+  serverHealth,
   onRequestGps,
   gpsLoading,
   isLiveGps,
@@ -130,16 +131,28 @@ export function Navbar({
           <div
             className={`min-h-[38px] flex items-center gap-1.5 text-[11px] px-2.5 py-1.5 rounded-md border font-mono bg-orbit-card text-orbit-muted-foreground border-orbit-border`}
             title={
-              serverOnline
-                ? 'Backend API (NASA JPL DE421) Connected'
-                : 'Local VSOP87 Engine active (Backend verification offline)'
+              serverHealth.online
+                ? 'DE421 API online (AR uses client ephemeris unless batch sync is active)'
+                : serverHealth.coldStartHint
+                  ? `API waking up: ${serverHealth.lastError ?? 'retrying…'}`
+                  : `AR ephemeris: local VSOP87. API: ${serverHealth.lastError ?? 'offline'}`
             }
           >
-            <span className={`w-2 h-2 rounded-full shrink-0 ${serverOnline ? 'bg-emerald-400' : 'bg-orbit-muted-foreground'}`} />
+            <span
+              className={`w-2 h-2 rounded-full shrink-0 ${serverHealth.online ? 'bg-emerald-400' : serverHealth.coldStartHint ? 'bg-amber-400 animate-pulse' : 'bg-orbit-muted-foreground'}`}
+            />
             <span className="hidden xl:inline text-[10px]">
-              {serverOnline ? 'JPL DE421' : 'Local VSOP87'}
+              {serverHealth.online ? 'DE421 API' : 'Local AR'}
             </span>
           </div>
+
+          <a
+            href="/constellations/"
+            className="hidden md:flex min-h-[38px] items-center gap-1.5 text-[11px] px-2.5 py-1.5 rounded-md border font-medium bg-orbit-card text-orbit-foreground border-orbit-border hover:border-orbit-primary/40 transition"
+            title="Constellation Play (connect-the-dots AR)"
+          >
+            Play
+          </a>
 
           <button
             onClick={onOpenCalibration}

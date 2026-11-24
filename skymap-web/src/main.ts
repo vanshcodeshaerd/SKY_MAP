@@ -57,8 +57,11 @@ import { getPlanetDetails, type PlanetName } from './planets.ts';
 import { initPlanetariumControls, drawPlanetariumDome } from './planetarium.ts';
 import { WebXRRenderer } from './render/WebXRRenderer.ts';
 import { norm360 } from './astronomy.ts';
+import { startApiHealthChip } from './apiHealth.ts';
 
 const catalog = loadCatalog('advanced');
+const apiChip = document.getElementById('api-health-chip');
+if (apiChip) startApiHealthChip(apiChip);
 const sky = new SkyState(catalog.stars);
 const starIndex = indexStars(catalog.stars);
 const constellationCenters = computeConstellationCenters(catalog.stars, catalog.constellations);

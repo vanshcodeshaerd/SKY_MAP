@@ -4,11 +4,18 @@ from datetime import date, datetime, timezone
 from typing import Optional
 from fastapi import APIRouter, HTTPException, Query, status
 
-from app.schemas.solar import SolarPathResponse, SolarPositionResponse
+from app.schemas.solar import (
+    BatchPositionItem,
+    SolarPathResponse,
+    SolarPositionResponse,
+    SolarPositionsBatchResponse,
+    format_utc_z,
+)
 from app.services.solar_calculator import (
     DE421_TARGET_MAP,
     calculate_diurnal_path,
     calculate_solar_position,
+    calculate_solar_positions_batch,
 )
 
 router = APIRouter(prefix="/solar", tags=["Solar Ephemeris"])
@@ -78,6 +85,57 @@ def get_solar_position(
         body=body_key,
     )
     return SolarPositionResponse(**result)
+
+
+@router.get("/positions/batch", response_model=SolarPositionsBatchResponse)
+def get_solar_positions_batch(
+    latitude: float = Query(..., ge=-90.0, le=90.0),
+    longitude: float = Query(..., ge=-180.0, le=180.0),
+    elevation_m: float = Query(0.0, ge=-500.0, le=9000.0),
+    timestamp: Optional[str] = Query(None, description="ISO-8601 UTC"),
+    bodies: Optional[str] = Query(
+        None,
+        description="Comma-separated body keys (default: all planets + sun/moon)",
+    ),
+) -> SolarPositionsBatchResponse:
+    if timestamp:
+        try:
+            iso_str = timestamp.replace("Z", "+00:00") if timestamp.endswith("Z") else timestamp
+            dt_utc = datetime.fromisoformat(iso_str)
+            if dt_utc.tzinfo is None:
+                dt_utc = dt_utc.replace(tzinfo=timezone.utc)
+            else:
+                dt_utc = dt_utc.astimezone(timezone.utc)
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Invalid ISO-8601 timestamp string",
+            )
+    else:
+        dt_utc = datetime.now(timezone.utc)
+
+    body_list = None
+    if bodies:
+        body_list = [b.strip().lower() for b in bodies.split(",") if b.strip()]
+        invalid = [b for b in body_list if b not in _VALID_BODIES]
+        if invalid:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"Invalid bodies: {invalid}",
+            )
+
+    raw = calculate_solar_positions_batch(
+        latitude, longitude, elevation_m, dt_utc, bodies=body_list
+    )
+    positions = {k: BatchPositionItem(**v) for k, v in raw.items()}
+    ts = format_utc_z(dt_utc)
+    return SolarPositionsBatchResponse(
+        latitude=latitude,
+        longitude=longitude,
+        elevation_m=elevation_m,
+        timestamp_utc=ts,
+        positions=positions,
+    )
 
 
 @router.get("/path", response_model=SolarPathResponse)
