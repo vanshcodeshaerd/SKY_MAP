@@ -1,0 +1,8 @@
+[
+  {"id":"m31","messier":"M31","name":"Andromeda Galaxy","ra":10.6847,"dec":41.2690,"magnitude":3.4,"type":"galaxy","constellationId":"AND"},
+  {"id":"m42","messier":"M42","name":"Orion Nebula","ra":83.8221,"dec":-5.3911,"magnitude":4.0,"type":"nebula","constellationId":"ORI"},
+  {"id":"m45","messier":"M45","name":"Pleiades","ra":56.75,"dec":24.1167,"magnitude":1.6,"type":"cluster","constellationId":"TAU"},
+  {"id":"m13","messier":"M13","name":"Hercules Globular Cluster","ra":250.423,"dec":36.461,"magnitude":5.8,"type":"cluster","constellationId":"HER"},
+  {"id":"m44","messier":"M44","name":"Beehive Cluster","ra":130.1,"dec":19.67,"magnitude":3.7,"type":"cluster","constellationId":"CNC"},
+  {"id":"m8","messier":"M8","name":"Lagoon Nebula","ra":270.62,"dec":-24.383,"magnitude":5.0,"type":"nebula","constellationId":"SGR"}
+]

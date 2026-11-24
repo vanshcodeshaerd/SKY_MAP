@@ -1,0 +1,11 @@
+**/node_modules/
+**/dist/
+**/.venv/
+**/*.local
+**/.DS_Store
+**/.vscode/
+**/.idea/
+*.log
+skymap-web/node_modules/
+skymap-web/dist/
+CGIP LAB/.venv/

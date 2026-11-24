@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html class="dark" lang="en">
+<head>
+    <meta charset="utf-8"/>
+    <meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" name="viewport"/>
+    <title>Sky Map AR - 3D HUD</title>
+    
+    <!-- Tailwind and Fonts -->
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+    
+    <script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              colors: {
+                "surface": "#10131a",
+                "surface-container": "#1d2026",
+                "primary-container": "#00f2ff",
+                "on-surface": "#e1e2eb",
+                "on-surface-variant": "#b9cacb"
+              },
+              fontFamily: {
+                "data-sm": ["Space Mono"],
+                "data-lg": ["Space Mono"],
+                "label-caps": ["Space Mono"]
+              }
+            }
+          }
+        }
+    </script>
+    
+    <!-- Link to our original custom styles (for camera-feed and ar-canvas) -->
+    <link rel="stylesheet" href="./style.css">
+
+    <style>
+        body {
+            background-color: transparent;
+            overflow: hidden;
+            overscroll-behavior: none;
+        }
+        
+        .scanline {
+            width: 100%;
+            height: 100px;
+            background: linear-gradient(0deg, rgba(0,242,255,0) 0%, rgba(0,242,255,0.1) 50%, rgba(0,242,255,0) 100%);
+            opacity: 0.1;
+            position: absolute;
+            bottom: 100%;
+            animation: scanline 8s linear infinite;
+            pointer-events: none;
+            z-index: 40;
+        }
+        @keyframes scanline {
+            0% { bottom: 100%; }
+            100% { bottom: -100px; }
+        }
+        
+        .hud-glass {
+            background: linear-gradient(135deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.01) 100%);
+            border: 0.5px solid rgba(0,242,255,0.3);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            box-shadow: 0 0 15px rgba(0,242,255,0.05) inset;
+        }
+        
+        .pulse-ring {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 200px;
+            height: 200px;
+            border: 1px solid rgba(0,242,255,0.5);
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+            pointer-events: none;
+        }
+
+        @keyframes pulse {
+            0% { transform: translate(-50%, -50%) scale(0.8); opacity: 0; }
+            50% { opacity: 1; }
+            100% { transform: translate(-50%, -50%) scale(1.2); opacity: 0; }
+        }
+
+        /* Hide UI initially until started */
+        #ui-container {
+            transition: opacity 0.5s ease;
+        }
+        #ui-container.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+        body.night-red video { filter: sepia(1) hue-rotate(-50deg) saturate(3) !important; }
+        #sobel-overlay { position: absolute; inset: 0; z-index: 5; pointer-events: none; opacity: 0.6; }
+        #planetarium-screen { z-index: 8; }
+    </style>
+</head>
+<body class="text-on-surface h-screen w-screen relative">
+
+    <!-- AR Core Elements (Video + Canvas) -->
+    <video id="camera-feed" autoplay playsinline muted></video>
+    <canvas id="ar-canvas"></canvas>
+    <canvas id="sobel-overlay"></canvas>
+    <div id="planetarium-screen" class="hidden absolute inset-0 pointer-events-auto">
+        <canvas id="planetarium-canvas" class="absolute inset-0"></canvas>
+    </div>
+
+    <!-- Start Screen (Overlay) -->
+    <div id="start-screen" class="absolute inset-0 z-50 flex flex-col items-center justify-center bg-surface/90 backdrop-blur-md transition-opacity duration-500">
+        <h1 class="text-5xl font-bold text-primary-container mb-4 tracking-wider">ASTRO_HUD</h1>
+        <p class="text-on-surface-variant mb-8 text-lg">Initialize sensors to begin tracking.</p>
+        <button id="start-btn" class="px-8 py-3 bg-primary-container/20 border border-primary-container text-primary-container rounded-lg hover:bg-primary-container/40 transition-colors shadow-[0_0_15px_rgba(0,242,255,0.5)]">
+            ENGAGE AR
+        </button>
+    </div>
+
+    <!-- UI Overlay (Stitch Generated) -->
+    <div id="ui-container" class="hidden absolute inset-0 z-20 pointer-events-none">
+        
+        <div class="scanline"></div>
+
+        <!-- 3D Reticle Element (Three.js) -->
+        <div class="absolute inset-0 flex items-center justify-center z-10 pointer-events-none">
+            <div class="pulse-ring"></div>
+            <!-- Crosshairs -->
+            <div class="absolute top-0 bottom-0 left-1/2 w-[1px] bg-primary-container/30 -translate-x-1/2"></div>
+            <div class="absolute left-0 right-0 top-1/2 h-[1px] bg-primary-container/30 -translate-y-1/2"></div>
+            <!-- Reticle Corners -->
+            <div class="absolute top-1/4 left-1/4 w-4 h-4 border-t border-l border-primary-container/80"></div>
+            <div class="absolute top-1/4 right-1/4 w-4 h-4 border-t border-r border-primary-container/80"></div>
+            <div class="absolute bottom-1/4 left-1/4 w-4 h-4 border-b border-l border-primary-container/80"></div>
+            <div class="absolute bottom-1/4 right-1/4 w-4 h-4 border-b border-r border-primary-container/80"></div>
+            
+            <!-- We can inject ThreeJS here later if we want -->
+        </div>
+
+        <!-- TopAppBar -->
+        <header class="fixed top-0 left-0 w-full bg-surface/60 backdrop-blur-xl shadow-[0_0_15px_rgba(0,242,255,0.2)] z-50 flex justify-between items-center px-6 py-4 border-b-0 pointer-events-auto">
+            <div class="flex items-center gap-2 pointer-events-auto">
+                <button type="button" id="btn-mode-ar" class="px-2 py-1 text-xs text-primary-container border border-primary-container/40 rounded">AR</button>
+                <button type="button" id="btn-mode-sky" class="px-2 py-1 text-xs text-on-surface-variant border border-outline/30 rounded">SKY</button>
+                <button type="button" id="btn-vr" class="px-2 py-1 text-xs text-on-surface-variant border border-outline/30 rounded">VR</button>
+            </div>
+            <h1 class="font-data-lg text-lg text-primary-container uppercase tracking-widest font-bold">ASTRO_HUD v2.0</h1>
+            <div class="flex items-center gap-4 text-on-surface-variant hover:bg-primary-container/10 transition-colors p-2 rounded cursor-pointer pointer-events-auto" id="btn-settings">
+                <span class="material-symbols-outlined">settings</span>
+            </div>
+        </header>
+
+        <!-- Side Panels -->
+        <div class="absolute inset-0 pointer-events-none flex items-center justify-between px-6 z-20">
+            <!-- Left Panel: Target Toggle -->
+            <div class="hud-glass rounded-xl p-6 flex flex-col items-center gap-4 pointer-events-auto">
+                <span class="font-label-caps text-xs text-primary-container/70 mb-2">TARGET LOCK</span>
+                <div class="flex flex-col gap-2">
+                    <button id="btn-sun" class="w-12 h-12 flex items-center justify-center rounded-lg bg-primary-container/20 border border-primary-container text-primary-container shadow-[0_0_8px_rgba(0,242,255,0.4)] transition-all">
+                        <span class="text-xl">☀️</span>
+                    </button>
+                    <button id="btn-moon" class="w-12 h-12 flex items-center justify-center rounded-lg bg-surface-container/50 border border-outline/30 text-on-surface-variant hover:bg-surface-variant transition-all">
+                        <span class="text-xl">🌙</span>
+                    </button>
+                </div>
+                <div class="w-full h-[1px] bg-gradient-to-r from-transparent via-primary-container/50 to-transparent my-2"></div>
+                <div class="flex flex-col items-center">
+                    <span class="font-data-sm text-xs text-primary-container">DIST</span>
+                    <span id="target-dist" class="font-data-sm text-xs text-on-surface">1AU</span>
+                </div>
+            </div>
+
+            <!-- Right Panel: FOV Slider -->
+            <div class="hud-glass rounded-xl p-6 flex flex-col items-center h-64 pointer-events-auto">
+                <span class="font-label-caps text-xs text-primary-container/70 mb-4">FOV CAL</span>
+                <div class="relative h-full flex items-center justify-center">
+                    <input type="range" id="fov-slider" min="30" max="120" value="65" 
+                           class="w-32 -rotate-90 accent-primary-container bg-surface-container appearance-none h-1 rounded outline-none" />
+                </div>
+                <div class="mt-4 flex flex-col items-center">
+                    <span id="fov-val" class="font-data-sm text-xs text-primary-container">65°</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bottom Dashboard -->
+        <div class="absolute bottom-10 left-6 right-6 md:left-1/4 md:right-1/4 z-30 pointer-events-auto">
+            <div class="hud-glass rounded-2xl p-6 flex flex-row justify-between items-center relative overflow-hidden">
+                <div class="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-primary-container/80 to-transparent"></div>
+                
+                <div class="flex flex-col items-center flex-1">
+                    <span class="font-label-caps text-[10px] text-on-surface-variant mb-1">ALTITUDE</span>
+                    <div class="bg-surface-container/50 px-3 py-1 rounded-full border border-primary-container/20">
+                        <span id="hud-alt" class="font-data-sm text-sm text-primary-container">Waiting...</span>
+                    </div>
+                </div>
+                
+                <div class="w-[1px] h-10 bg-gradient-to-b from-transparent via-primary-container/30 to-transparent"></div>
+                
+                <div class="flex flex-col items-center flex-1">
+                    <span class="font-label-caps text-[10px] text-on-surface-variant mb-1">AZIMUTH</span>
+                    <div class="bg-surface-container/50 px-3 py-1 rounded-full border border-primary-container/20">
+                        <span id="hud-az" class="font-data-sm text-sm text-primary-container">Waiting...</span>
+                    </div>
+                </div>
+                
+                <div class="w-[1px] h-10 bg-gradient-to-b from-transparent via-primary-container/30 to-transparent hidden md:block"></div>
+                
+                <div class="flex flex-col items-center flex-1">
+                    <span class="font-label-caps text-[10px] text-on-surface-variant mb-1">BORESIGHT</span>
+                    <div class="bg-surface-container/50 px-3 py-1 rounded-full border border-primary-container/20">
+                        <span id="hud-boresight" class="font-data-sm text-xs text-primary-container">—</span>
+                    </div>
+                </div>
+                <div class="w-[1px] h-10 bg-gradient-to-b from-transparent via-primary-container/30 to-transparent hidden md:block"></div>
+                <div class="flex flex-col items-center flex-1 hidden md:flex">
+                    <span class="font-label-caps text-[10px] text-on-surface-variant mb-1">MOON PHASE</span>
+                    <div class="bg-surface-container/50 px-3 py-1 rounded-full border border-primary-container/20 flex items-center gap-2">
+                        <span class="material-symbols-outlined text-[14px] text-primary-container">brightness_4</span>
+                        <span id="hud-phase" class="font-data-sm text-sm text-primary-container">Waiting...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="time-slider-panel" class="absolute bottom-28 left-6 right-6 md:left-1/4 md:right-1/4 z-30 pointer-events-auto hud-glass rounded-xl p-4 hidden md:block">
+            <span class="font-label-caps text-[10px] text-primary-container">TIME MACHINE</span>
+            <input type="range" id="time-slider" min="-24" max="168" value="0" step="1" class="w-full mt-2 accent-primary-container"/>
+            <span id="time-label" class="font-data-sm text-xs text-on-surface-variant">now</span>
+        </div>
+    </div>
+
+  <div id="calibration-modal" class="hidden fixed inset-0 z-[60] flex items-center justify-center bg-surface/95 pointer-events-auto">
+    <div class="hud-glass rounded-2xl p-8 max-w-sm text-center">
+      <h2 class="text-primary-container font-bold mb-4">COMPASS CALIBRATION</h2>
+      <p class="text-sm text-on-surface-variant mb-4">Rotate device in a figure-8. Adjust azimuth if needed (±10°).</p>
+      <input type="range" id="azimuth-nudge" min="-10" max="10" value="0" step="0.5" class="w-full accent-primary-container mb-6"/>
+      <div class="flex gap-4 justify-center">
+        <button id="cal-continue" class="px-4 py-2 bg-primary-container/20 border border-primary-container text-primary-container rounded">CONTINUE</button>
+        <button id="cal-skip" class="px-4 py-2 border border-outline/40 text-on-surface-variant rounded">SKIP</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="constellation-card" class="hidden fixed top-24 right-6 z-[55] w-64 hud-glass rounded-xl p-4 pointer-events-auto">
+    <h3 id="constellation-title" class="text-primary-container font-bold text-sm"></h3>
+    <p id="constellation-body" class="text-xs text-on-surface-variant mt-2 whitespace-pre-line"></p>
+  </div>
+
+  <div id="layer-drawer" class="hidden fixed top-20 right-6 z-[55] w-72 hud-glass rounded-xl p-4 pointer-events-auto text-sm">
+    <h3 class="text-primary-container font-label-caps text-xs mb-3">LAYERS</h3>
+    <label class="flex gap-2 items-center mb-2"><input type="checkbox" id="layer-stars" checked/> Stars</label>
+    <label class="flex gap-2 items-center mb-2"><input type="checkbox" id="layer-lines" checked/> Constellation lines</label>
+    <label class="flex gap-2 items-center mb-2"><input type="checkbox" id="layer-labels" checked/> Bright labels</label>
+    <label class="flex gap-2 items-center mb-2"><input type="checkbox" id="layer-sobel"/> Sobel horizon</label>
+    <label class="flex gap-2 items-center mb-2"><input type="checkbox" id="layer-measure"/> Measure arc tool</label>
+    <label class="flex gap-2 items-center mb-2"><input type="checkbox" id="layer-webgl"/> WebGL stars</label>
+    <label class="flex gap-2 items-center mb-4"><input type="checkbox" id="layer-night-red"/> Night red mode</label>
+    <span class="text-xs text-primary-container/70">Bortle scale</span>
+    <input type="range" id="bortle-slider" min="1" max="9" value="5" class="w-full accent-primary-container"/>
+    <span class="text-xs text-primary-container/70 mt-2 block">Contrast</span>
+    <input type="range" id="contrast-slider" min="0.5" max="2" step="0.05" value="1" class="w-full accent-primary-container"/>
+    <span class="text-xs text-primary-container/70 mt-2 block">Brightness</span>
+    <input type="range" id="brightness-slider" min="0.5" max="2" step="0.05" value="1" class="w-full accent-primary-container"/>
+  </div>
+
+    <!-- Main Logic -->
+    <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

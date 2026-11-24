@@ -1,0 +1,132 @@
+Sky Map AR — Web Edition
+Staged Development Documentation — browser build, with a start-to-finish timeline
+Companion to: CG_IP Project Proposal (CMP513 + CMP514) and the native-app Implementation Guide · Team: Nidhi Patel, Vansh Shah, Keya Patel
+This document is the browser-based counterpart to the Android implementation guide. The astronomy math and the overall AR pipeline (world vector → rotate into camera frame → project to screen) carry over unchanged. What's different is how the browser gives you sensors: no fused rotation-vector sensor, no camera-intrinsics API, and permission flows that differ between Android Chrome and iOS Safari. Every stage below names the exact Web API, includes working reference code, and states what “done” looks like before you move to the next stage.
+0. Recommended Stack
+Layer
+Choice
+Why
+Build tool
+Vite + TypeScript
+Fast dev server with HTTPS, zero-config bundling
+Rendering
+HTML5 Canvas 2D over a <video> element
+No WebGL needed for 2D sprites/text; simplest to debug
+Astronomy math
+Hand-written TS module (ported from the native guide)
+No opaque dependency; same formulas you already verified
+Hosting
+Vercel / Netlify / GitHub Pages
+Free HTTPS — required for camera, geolocation, and orientation APIs
+UI (optional)
+Plain DOM or a light framework (React/Svelte)
+Only needed for info panels/search; not required for the AR core
+Web-specific gotcha: Every API used below — getUserMedia, Geolocation, DeviceOrientationEvent — is blocked by the browser on plain http://, except on localhost. Deploy to an HTTPS URL (or use `vite --https` locally) before testing sensors on a real phone; a large fraction of “it doesn't work” reports for this kind of app turn out to be this.
+1. Pipeline Overview
+GPS (lat, lon)                Device clock (date, time)        \                            /         \                          /        [ Astronomy Engine (TS): Alt/Az of Sun & Moon ]                        |        [ Alt/Az -> ENU unit vector (world frame) ]                        |DeviceOrientationEvent   |(alpha, beta, gamma)     |        \                |         [ W3C rotation matrix -> rotate vector into camera frame ]                        |        [ Pinhole projection (calibrated FOV) -> canvas (x, y) ]                        |        [ Draw overlay on <canvas> above <video> ]
+2. Stage 0 — Project Setup & HTTPS Deployment
+Goal: an empty page, served over HTTPS, reachable from your phone.
+Scaffold with Vite: npm create vite@latest skymap-web -- --template vanilla-ts.
+Push to GitHub and connect the repo to Vercel or Netlify (both auto-provision HTTPS) — or run vite dev --https for local testing over your LAN.
+Open the deployed URL on your actual phone before writing any sensor code, just to confirm the page loads over HTTPS on the device you'll be testing with all along.
+Exit criteria: the deployed URL opens on your phone's browser and shows a blank page with no console errors.
+3. Stage 1 — Camera Feed
+const video = document.querySelector("video")!;const stream = await navigator.mediaDevices.getUserMedia({  video: { facingMode: { ideal: "environment" } },  audio: false,});video.srcObject = stream;await video.play();
+Style the <video> to fill the viewport (position: fixed; object-fit: cover) and stack a same-sized, transparent <canvas> exactly on top of it (position: fixed; same top/left/width/height) — the canvas is where every icon, arrow, and label will be drawn.
+Exit criteria: opening the page on your phone shows a full-screen live rear-camera feed.
+4. Stage 2 — Geolocation
+let here = { lat: 0, lon: 0 };navigator.geolocation.watchPosition(  (pos) => { here = { lat: pos.coords.latitude, lon: pos.coords.longitude }; },  (err) => console.error(err),  { enableHighAccuracy: true, maximumAge: 5000, timeout: 10000 });
+Use watchPosition, not a one-off getCurrentPosition — the first GPS fix indoors or right after permission is granted is often inaccurate and improves over a few seconds.
+Exit criteria: logging `here` shows your real latitude/longitude within a few seconds outdoors.
+5. Stage 3 — Device Orientation (the part that differs most from Android)
+There is no equivalent of Android's fused TYPE_ROTATION_VECTOR here — you read raw alpha (compass heading), beta (front-back tilt), gamma (left-right tilt) and handle two incompatible browser behaviors yourself.
+async function startOrientation(onUpdate: (h: number, b: number, g: number) => void) {  // iOS 13+ requires a permission request fired from a user gesture (a click)  const AnyDOE = DeviceOrientationEvent as any;  if (typeof AnyDOE.requestPermission === "function") {    const result = await AnyDOE.requestPermission();    if (result !== "granted") throw new Error("Orientation permission denied");  }   const handler = (e: DeviceOrientationEvent) => {    const iosHeading = (e as any).webkitCompassHeading; // iOS Safari only    const heading = iosHeading != null      ? iosHeading                 // already true-north-referenced on iOS      : 360 - (e.alpha ?? 0);      // Android: alpha is magnetic north, counter-clockwise    onUpdate(heading, e.beta ?? 0, e.gamma ?? 0);  };   // Chrome/Android: prefer the absolute event when available  if ("ondeviceorientationabsolute" in window) {    window.addEventListener("deviceorientationabsolute", handler as any);  } else {    window.addEventListener("deviceorientation", handler);  }} // Call only from inside a click handler, e.g.:startButton.addEventListener("click", () => startOrientation(onOrientation));
+Web-specific gotcha: Calling requestPermission() on page load (not inside a click handler) silently fails on iOS — always gate sensor start behind an explicit “Start AR” button, which also gives you a natural place to request camera + geolocation permission at the same time.
+Web-specific gotcha: iOS's webkitCompassHeading already corrects for magnetic declination; Android's alpha does not. Do not apply a declination correction to the iOS value, or you'll double-correct it.
+Smooth the incoming heading/pitch/roll with a simple exponential filter (alpha ≈ 0.15–0.2, same constant used in the native guide) before using it for rendering, to remove jitter without adding noticeable lag:
+let smoothed = { h: 0, b: 0, g: 0 };function lowPass(next: {h:number,b:number,g:number}, a = 0.18) {  smoothed.h += a * angleDiff(next.h, smoothed.h); // wrap-aware diff near 0/360  smoothed.b += a * (next.b - smoothed.b);  smoothed.g += a * (next.g - smoothed.g);}
+Exit criteria: rotating the phone through 360° on a table shows a heading value that tracks smoothly and matches a real compass at a few sanity-check headings (e.g. pointed at a known landmark).
+6. Stage 4 — Astronomy Engine (ported to TypeScript)
+These are the same Meeus low-precision formulas from the native guide, just expressed in JS. Write this as a pure module with no DOM dependencies so you can unit-test it in a Node script or the browser console before wiring it to sensors.
+6.1 Sun position
+function toRad(d: number) { return (d * Math.PI) / 180; }function toDeg(r: number) { return (r * 180) / Math.PI; }function norm360(d: number) { return ((d % 360) + 360) % 360; } function julianDate(date: Date) { return date.getTime() / 86400000 + 2440587.5; } function sunAltAz(date: Date, lat: number, lon: number) {  const JD = julianDate(date);  const T = (JD - 2451545.0) / 36525;   const L0 = norm360(280.46646 + T * (36000.76983 + 0.0003032 * T));      // mean longitude  const M  = norm360(357.52911 + T * (35999.05029 - 0.0001537 * T));      // mean anomaly  const Mr = toRad(M);  const C = (1.914602 - T * (0.004817 + 0.000014 * T)) * Math.sin(Mr)          + (0.019993 - 0.000101 * T) * Math.sin(2 * Mr)          + 0.000289 * Math.sin(3 * Mr);                                  // equation of center  const trueLong = L0 + C;  const omega = 125.04 - 1934.136 * T;  const appLong = trueLong - 0.00569 - 0.00478 * Math.sin(toRad(omega));  // apparent longitude   const eps0 = 23 + (26 + (21.448 - T * (46.815 + T * (0.00059 - 0.001813 * T))) / 60) / 60;  const eps = eps0 + 0.00256 * Math.cos(toRad(omega));                   // corrected obliquity   const lam = toRad(appLong), epsR = toRad(eps);  const ra  = toDeg(Math.atan2(Math.cos(epsR) * Math.sin(lam), Math.cos(lam)));  const dec = toDeg(Math.asin(Math.sin(epsR) * Math.sin(lam)));   const gmst = norm360(280.46061837 + 360.98564736629 * (JD - 2451545.0)             + T * T * (0.000387933 - T / 38710000));  const lst = norm360(gmst + lon);  const ha  = norm360(lst - ra);   const latR = toRad(lat), decR = toRad(dec), haR = toRad(ha);  const alt = toDeg(Math.asin(Math.sin(latR) * Math.sin(decR) + Math.cos(latR) * Math.cos(decR) * Math.cos(haR)));  const az  = norm360(toDeg(Math.atan2(-Math.sin(haR), Math.tan(decR) * Math.cos(latR) - Math.sin(latR) * Math.cos(haR))));   return { altitude: alt, azimuth: az };}
+Why this matters: Verify this before touching sensors: sunAltAz(new Date(), yourLat, yourLon).altitude should cross 0° at your city's sunrise/sunset times from timeanddate.com.
+6.2 Moon position (truncated periodic series — accurate to a few arcminutes, plenty for an AR overlay)
+function moonAltAz(date: Date, lat: number, lon: number) {  const JD = julianDate(date);  const T = (JD - 2451545.0) / 36525;   const Lp = norm360(218.3164477 + 481267.88123421 * T);   // mean longitude  const D  = norm360(297.8501921 + 445267.1114034 * T);    // mean elongation from Sun  const M  = norm360(357.5291092 + 35999.0502909 * T);     // Sun mean anomaly  const Mp = norm360(134.9633964 + 477198.8675055 * T);    // Moon mean anomaly  const F  = norm360(93.2720950 + 483202.0175233 * T);     // argument of latitude  const [Dr, Mr, Mpr, Fr] = [D, M, Mp, F].map(toRad);   // leading terms only (Meeus Ch. 47, truncated) — degrees  const dL = 6.289 * Math.sin(Mpr) - 1.274 * Math.sin(2 * Dr - Mpr) + 0.658 * Math.sin(2 * Dr)           - 0.186 * Math.sin(Mr) - 0.059 * Math.sin(2 * Dr - 2 * Mpr) - 0.057 * Math.sin(2 * Dr - Mr - Mpr)           + 0.053 * Math.sin(2 * Dr + Mpr) + 0.046 * Math.sin(2 * Dr - Mr) + 0.041 * Math.sin(Mpr - Mr)           - 0.035 * Math.sin(Dr) - 0.031 * Math.sin(Mpr + Mr);  const dB = 5.128 * Math.sin(Fr) + 0.281 * Math.sin(Mpr + Fr) + 0.278 * Math.sin(Mpr - Fr)           + 0.173 * Math.sin(2 * Dr - Fr) + 0.055 * Math.sin(2 * Dr + Fr - Mpr) + 0.046 * Math.sin(2 * Dr - Fr - Mr)           + 0.033 * Math.sin(Fr + 2 * Mpr) + 0.017 * Math.sin(2 * Dr + Fr);   const lambda = toRad(Lp + dL), beta = toRad(dB);  const eps = toRad(23.4393 - 0.0000004 * T); // mean obliquity (fine at this precision)   const ra  = toDeg(Math.atan2(Math.sin(lambda) * Math.cos(eps) - Math.tan(beta) * Math.sin(eps), Math.cos(lambda)));  const dec = toDeg(Math.asin(Math.sin(beta) * Math.cos(eps) + Math.cos(beta) * Math.sin(eps) * Math.sin(lambda)));   const gmst = norm360(280.46061837 + 360.98564736629 * (JD - 2451545.0));  const lst = norm360(gmst + lon);  const ha  = norm360(lst - ra);   const latR = toRad(lat), decR = toRad(dec), haR = toRad(ha);  const alt = toDeg(Math.asin(Math.sin(latR) * Math.sin(decR) + Math.cos(latR) * Math.cos(decR) * Math.cos(haR)));  const az  = norm360(toDeg(Math.atan2(-Math.sin(haR), Math.tan(decR) * Math.cos(latR) - Math.sin(latR) * Math.cos(haR))));   // illuminated fraction, for the moon-phase feature  const elongation = Math.acos(Math.cos(toRad(D)));  const illumFraction = (1 + Math.cos(Math.PI - elongation)) / 2;   return { altitude: alt, azimuth: az, illumFraction };}
+Exit criteria: at night, altitude/azimuth roughly matches a known reference (e.g. a stargazing app on the same phone), and illumFraction tracks the actual moon phase across a week of manual spot-checks.
+7. Stage 5 — World Vector and the Orientation Rotation Matrix
+Same ENU conversion as the native guide:
+function toENU(altDeg: number, azDeg: number) {  const alt = toRad(altDeg), az = toRad(azDeg);  return {    x: Math.cos(alt) * Math.sin(az), // east    y: Math.cos(alt) * Math.cos(az), // north    z: Math.sin(alt),                // up  };}
+The W3C Device Orientation spec defines a specific rotation matrix built from alpha/beta/gamma (in that composition order — getting this order wrong is the most common bug in web compass-AR code). Implement it exactly as specified rather than composing your own Euler rotations:
+function orientationMatrix(alphaDeg: number, betaDeg: number, gammaDeg: number) {  const a = toRad(alphaDeg), b = toRad(betaDeg), g = toRad(gammaDeg);  const [ca, sa] = [Math.cos(a), Math.sin(a)];  const [cb, sb] = [Math.cos(b), Math.sin(b)];  const [cg, sg] = [Math.cos(g), Math.sin(g)];   // Device-frame -> Earth-frame rotation matrix, per the W3C spec's Z-X'-Y'' composition  return [    [ca * cg - sa * sb * sg, -cb * sa, ca * sg + cg * sa * sb],    [cg * sa + ca * sb * sg,  ca * cb, sa * sg - ca * cg * sb],    [-cb * sg,                sb,      cb * cg],  ];} function worldToCamera(v: {x:number,y:number,z:number}, R: number[][]) {  // Camera-frame vector = R^T * v_world  (R maps device->world, so its transpose maps world->device)  return {    x: R[0][0]*v.x + R[1][0]*v.y + R[2][0]*v.z,    y: R[0][1]*v.x + R[1][1]*v.y + R[2][1]*v.z,    z: R[0][2]*v.x + R[1][2]*v.y + R[2][2]*v.z,  };}
+Web-specific gotcha: Validate this stage by logging v_camera while slowly panning the phone toward a celestial object whose real bearing you know (e.g. the Sun in daytime, checked against your shadow's direction) — v_camera.x and .y should shrink toward zero and .z should go positive as you point straight at it.
+8. Stage 6 — FOV Calibration and Pinhole Projection
+Browsers don't expose camera intrinsics the way Android's Camera2 API does, so you need a manual (one-time) calibration instead of reading a real FOV value.
+Hardcode a starting estimate: roughly 60–70° horizontal FOV is typical for a phone's rear camera.
+Add a simple calibration screen: show two known reference points (e.g. ask the user to align the Sun with a fixed on-screen marker while facing it, or use two distant landmarks with a known angular separation) and let a slider adjust the assumed FOV until the projection matches — store the calibrated value in localStorage per device.
+function project(vCam: {x:number,y:number,z:number}, w: number, h: number, hFovDeg: number) {  if (vCam.z <= 0) return null; // behind the camera  const fx = w / (2 * Math.tan(toRad(hFovDeg) / 2));  const fy = fx * (h / w); // assume square pixels; adjust if you calibrate vFOV separately  return {    x: w / 2 + fx * (vCam.x / vCam.z),    y: h / 2 - fy * (vCam.y / vCam.z),  };}
+Exit criteria: after calibration, the projected point stays visually locked on a known reference direction as you pan the phone left/right and tilt it up/down.
+9. Stage 7 — Rendering and UI
+Clear and redraw the overlay <canvas> on every smoothed-orientation update, throttled with requestAnimationFrame (don't redraw inside the raw event handler directly — buffer the latest values and draw once per animation frame).
+When project() returns null or lands outside the canvas bounds, compute the angular difference between current heading and the object's azimuth and draw a directional arrow at the screen edge pointing toward it — this reuses the same bearing math already computed for the projection.
+Info panel: altitude, azimuth, sunrise/sunset (compute by scanning sunAltAz across the day for the altitude=0° crossing, or use a root-finding step around dawn/dusk), moonrise/moonset, and moon phase from illumFraction.
+Search: a simple toggle to point the arrow at the Sun or the Moon on demand, reusing the same directional-arrow logic.
+10. Stage 8 — Image Enhancement
+Apply brightness/contrast as a CSS filter directly on the <video> element — GPU-accelerated by the browser, effectively free, and much simpler than per-frame canvas pixel manipulation:
+video.style.filter = `brightness(${brightness}) contrast(${contrast})`;
+Only reach for a WebGL fragment shader on a <canvas> copy of the video frame if you specifically want to demonstrate lower-level pixel-processing work for the Image Processing half of the course (e.g. histogram equalization) — keep it off the default live path if performance matters more than the demonstration.
+11. Stage 9 — Cross-Browser Testing and a Demo Fallback
+Platform
+Watch for
+Android Chrome
+deviceorientationabsolute usually available; alpha is magnetic — no extra correction needed at AR-overlay precision, but note it in your report as a known simplification vs. the native app's GeomagneticField-based true-north correction
+iOS Safari
+Must request permission from a click handler; use webkitCompassHeading, not alpha; test on an actual iPhone — simulators don't provide real sensor data
+Desktop / indoor demo
+No orientation sensors at all — build a “simulate” mode (drag with mouse, or arrow keys, to change heading/pitch) so you can demo indoors to faculty without a real sky
+12. Timeline — What to Build, Week by Week
+Week
+Build this
+Exit criteria
+1
+Project scaffold (Vite+TS), HTTPS deploy, astronomy engine module (Stage 0 + 4)
+sunAltAz()/moonAltAz() verified in console against timeanddate.com; deployed URL loads on your phone
+2
+Camera feed + geolocation (Stage 1 + 2)
+Full-screen live camera on phone; console-logged GPS matches your real location
+3
+Device orientation with cross-browser handling + smoothing (Stage 3)
+Heading tracks a real compass on both an Android and an iOS phone; “Start AR” button correctly triggers iOS permission prompt
+4
+World vector + rotation matrix, logged not drawn yet (Stage 5)
+v_camera.x/y shrink and .z goes positive as you pan directly at a known bearing
+5
+FOV calibration UI + pinhole projection + first on-screen icon (Stage 6)
+Icon visibly tracks the real Sun outdoors as you pan/tilt the phone
+6
+Directional arrow for off-screen objects, info panel, moon-phase display (Stage 7)
+Arrow correctly points toward Sun/Moon when out of view; info panel shows plausible altitude/azimuth/rise-set values
+7
+Search toggle, brightness/contrast filter, animations/polish (Stage 8)
+UI feels responsive; overlay legible in bright daylight and at dusk
+8
+Cross-device testing (Android + iOS), desktop simulate-mode for demos, bug fixes
+App works correctly on both real test phones; indoor demo mode works without GPS/camera
+9–10
+Buffer: accuracy tuning, documentation, report writing, rehearsal demo
+Stable enough to demo live outdoors, with a fallback recording/simulate-mode ready in case of bad weather
+13. Suggested File Structure
+skymap-web/  src/    astronomy.ts        // sunAltAz, moonAltAz, sunrise/sunset scan    orientation.ts       // startOrientation, low-pass filter, matrix math    projection.ts        // toENU, worldToCamera, project    camera.ts             // getUserMedia setup    location.ts            // geolocation watch    render.ts                // canvas drawing, directional arrow, icons    calibration.ts             // FOV calibration UI + localStorage    main.ts                      // wires everything, requestAnimationFrame loop  index.html  style.css
+14. Pitfall Checklist (pre-demo self-check)
+Blank camera / permission errors → app not served over HTTPS (or not on localhost).
+iOS permission prompt never appears → requestPermission() called outside a click handler.
+Overlay rotated or mirrored → rotation matrix axis order doesn't match the W3C composition in §7, or R vs. R^T swapped.
+Overlay drifts slowly over minutes → no low-pass filter, or filter constant too aggressive/too weak; also check for accumulated angle-wraparound near 0°/360°.
+Overlay lands in a plausible-but-wrong spot → FOV not calibrated for the specific test device.
+Works on your Android phone, breaks on the demo iPhone → webkitCompassHeading path not implemented/tested.
+Sun/Moon position off by a noticeable amount → date/time mixed local vs. UTC; JavaScript's Date is UTC-based internally, but double check any manual date-string parsing.
+15. References to Add to Your Report
+W3C Device Orientation Event Specification — rotation matrix definition and the iOS permission model.
+MDN Web Docs — MediaDevices.getUserMedia(), Geolocation API, DeviceOrientationEvent.
+Jean Meeus, Astronomical Algorithms, 2nd ed. — Ch. 25 (Sun), Ch. 47 (Moon) — same source as the native implementation guide.
+NOAA Solar Calculator — public reference for cross-checking sunAltAz() output.
