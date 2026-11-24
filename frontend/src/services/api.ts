@@ -16,35 +16,42 @@ function candidateBases(): string[] {
   return out;
 }
 
+function fetchWithTimeout(url: string, init: RequestInit | undefined, ms: number): Promise<Response> {
+  const ctrl = new AbortController();
+  const timer = window.setTimeout(() => ctrl.abort(), ms);
+  return fetch(url, { ...init, signal: ctrl.signal }).finally(() => window.clearTimeout(timer));
+}
+
 async function apiFetch(path: string, init?: RequestInit): Promise<Response> {
   const bases = candidateBases();
-  let lastError: Error = new Error('Backend server currently offline.');
+  let lastError: Error = new Error(
+    'Backend offline. From the backend folder run: py -3 -m uvicorn app.main:app --port 8000'
+  );
 
   for (const base of bases) {
     try {
-      const res = await fetch(`${base}${path}`, {
-        ...init,
-        signal: init?.signal ?? AbortSignal.timeout(12000),
-      });
+      const res = await fetchWithTimeout(`${base}${path}`, init, 4000);
       if (res.ok) return res;
       const payload = await res.json().catch(() => ({}));
       const detail = (payload as { detail?: string }).detail;
       lastError = new Error(
-        typeof detail === 'string' && detail
-          ? detail
-          : `Backend request failed (${res.status})`
+        typeof detail === 'string' && detail ? detail : `Backend request failed (${res.status})`
       );
       if (res.status >= 400 && res.status < 500 && res.status !== 404) {
         throw lastError;
       }
     } catch (err) {
-      if (err instanceof Error && err.message && !err.message.includes('fetch')) {
+      const name = err instanceof Error ? err.name : '';
+      const msg = err instanceof Error ? err.message : '';
+      if (name === 'AbortError') {
+        lastError = new Error(
+          'Backend offline. From the backend folder run: py -3 -m uvicorn app.main:app --port 8000'
+        );
+        continue;
+      }
+      if (err instanceof Error && !/Failed to fetch|NetworkError|Load failed/i.test(msg)) {
         lastError = err;
-        if (!/Failed to fetch|NetworkError|Load failed|timeout|offline/i.test(err.message) && !err.name.includes('Abort')) {
-          throw err;
-        }
-      } else {
-        lastError = new Error('Backend server currently offline.');
+        if (!/offline/i.test(msg)) throw err;
       }
     }
   }

@@ -75,44 +75,38 @@ export function SolarDashboard({
     if (!compareServer) return;
 
     let cancelled = false;
-    let retryTimer: ReturnType<typeof setTimeout> | undefined;
     setServerLoading(true);
     setServerError(null);
     setServerCoords(null);
 
-    const run = (attempt: number) => {
-      fetchServerSolarPosition(
-        location.latitude,
-        location.longitude,
-        location.elevationM,
-        currentDate.toISOString(),
-        selectedBody.toLowerCase()
-      )
-        .then((res) => {
-          if (!cancelled) {
-            setServerCoords(res);
-            setServerError(null);
-            setServerLoading(false);
-          }
-        })
-        .catch((err) => {
-          if (cancelled) return;
-          if (attempt < 3) {
-            retryTimer = setTimeout(() => run(attempt + 1), 1500 * attempt);
-            return;
-          }
-          setServerError(err instanceof Error ? err.message : 'Backend server currently offline.');
-          setServerLoading(false);
-        });
-    };
+    // Freeze the timestamp — live clock ticks every 1s and must not restart the request.
+    const at = currentDate.toISOString();
 
-    run(1);
+    fetchServerSolarPosition(
+      location.latitude,
+      location.longitude,
+      location.elevationM,
+      at,
+      selectedBody.toLowerCase()
+    )
+      .then((res) => {
+        if (!cancelled) {
+          setServerCoords(res);
+          setServerError(null);
+          setServerLoading(false);
+        }
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setServerError(err instanceof Error ? err.message : 'Backend server currently offline.');
+        setServerLoading(false);
+      });
 
     return () => {
       cancelled = true;
-      if (retryTimer) clearTimeout(retryTimer);
     };
-  }, [compareServer, location, currentDate, selectedBody, compareAttempt]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- live currentDate would cancel the fetch every second
+  }, [compareServer, location.latitude, location.longitude, location.elevationM, selectedBody, compareAttempt]);
 
   useEffect(() => {
     if (!compareServer) {
