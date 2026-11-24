@@ -33,7 +33,7 @@ export function Navbar({
   ] as const;
 
   return (
-    <header className="sticky top-0 z-30 border-b border-orbit-border bg-orbit-background/90 backdrop-blur-md">
+    <header className="relative z-30 border-b border-orbit-border bg-orbit-background">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
         <div
           onClick={() => setActiveTab('welcome')}

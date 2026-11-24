@@ -127,22 +127,23 @@ function AppMain({
 
   return (
     <div className="skymap-app-shell orbitarium-root min-h-screen flex flex-col font-welcome-body text-orbit-foreground">
-      {activeTab !== 'welcome' && <SafetyBanner />}
-
       <MissionCompleteToast missionIds={lastNewlyCompleted} onDismiss={clearLastNewlyCompleted} />
       <XpGainToast />
 
       {activeTab !== 'welcome' && (
-        <Navbar
-          activeTab={activeTab}
-          setActiveTab={setActiveTab}
-          location={location}
-          onOpenCalibration={() => setIsCalibrationOpen(true)}
-          serverOnline={serverOnline}
-          onRequestGps={requestGpsLocation}
-          gpsLoading={gpsLoading}
-          isLiveGps={isLiveGps}
-        />
+        <div className="sticky top-0 z-50 bg-orbit-background">
+          <SafetyBanner />
+          <Navbar
+            activeTab={activeTab}
+            setActiveTab={setActiveTab}
+            location={location}
+            onOpenCalibration={() => setIsCalibrationOpen(true)}
+            serverOnline={serverOnline}
+            onRequestGps={requestGpsLocation}
+            gpsLoading={gpsLoading}
+            isLiveGps={isLiveGps}
+          />
+        </div>
       )}
 
       {activeTab === 'welcome' ? (
