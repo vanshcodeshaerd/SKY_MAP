@@ -1,216 +1,179 @@
-# SkyGazer AR ☀️🔭
-### Browser-Based Solar Tracking, Augmented Reality & Computer Vision Laboratory
-*A University-Level Academic Project in Computer Graphics & Image Processing (CGIP)*
+# SkyMap AR / SkyGazer AR
 
-[![Tech Stack: React](https://img.shields.io/badge/Frontend-React%2018%20%2B%20TypeScript-61DAFB?logo=react&logoColor=black)](https://react.dev/)
-[![3D: Three.js & WebGL](https://img.shields.io/badge/3D%20Graphics-Three.js%20%2F%20WebGL-black?logo=three.js)](https://threejs.org/)
-[![Backend: FastAPI](https://img.shields.io/badge/Backend-Python%20FastAPI-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
-[![Computer Vision: OpenCV](https://img.shields.io/badge/Vision-OpenCV%204-5C3EE8?logo=opencv&logoColor=white)](https://opencv.org/)
-[![Astronomy: Skyfield](https://img.shields.io/badge/Ephemeris-NASA%20JPL%20DE421%20%2F%20Skyfield-darkblue)](https://rhodesmill.org/skyfield/)
+**Browser AR for the night sky** — planets, bright stars, constellation lines, connect-the-dots **Play**, 3D explorer, and optional **NASA JPL DE421** verification from a Python API.
 
----
+[![Live App](https://img.shields.io/badge/Live_App-sky--map--ar.vercel.app-000?style=for-the-badge&logo=vercel)](https://sky-map-ar.vercel.app)
+[![API Health](https://img.shields.io/badge/API-Render_FastAPI-46E3B1?style=for-the-badge&logo=render)](https://skygazer-apii.onrender.com/api/health)
+[![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=black)](https://react.dev/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-Python-009688?logo=fastapi)](https://fastapi.tiangolo.com/)
+[![Ephemeris](https://img.shields.io/badge/Ephemeris-DE421_Skyfield-0B3D91)](https://rhodesmill.org/skyfield/)
 
-## 📖 Project Overview
+| | |
+|---|---|
+| **Live web app** | [https://sky-map-ar.vercel.app](https://sky-map-ar.vercel.app) |
+| **Repository** | [github.com/vanshcodeshaerd/SKY_MAP](https://github.com/vanshcodeshaerd/SKY_MAP) |
+| **Backend health** | [https://sky-map-ar.vercel.app/api/health](https://sky-map-ar.vercel.app/api/health) (proxied to Render) |
+| **Constellation Play** | [https://sky-map-ar.vercel.app/constellations/](https://sky-map-ar.vercel.app/constellations/) or **AR → Play** in the main app |
 
-**SkyGazer AR** is a browser-accessible solar tracking and augmented reality (AR) application engineered to demonstrate foundational and advanced principles of **Computer Graphics and Image Processing (CGIP)**.
-
-By ingesting geographic coordinates and timestamps, SkyGazer AR calculates the Sun's precise topocentric celestial position (azimuth and altitude), transforms these coordinates into a 3D camera-space projection, and overlays a synthetic, glowing virtual Sun reticle onto a real-time camera feed. 
-
-In addition to live AR tracking, the project incorporates:
-1. **Interactive 3D Celestial Sphere:** A full-orbit WebGL planetarium rendering local horizon planes, compass grids, and 24-hour diurnal solar trajectories.
-2. **Computer Vision Experimentation Lab:** An OpenCV-powered testbed that extracts bright solar candidate centroids via adaptive thresholding, morphological filtering, and spatial image moments, quantitatively benchmarking optical detections against theoretical astronomical vectors.
+*University-level **Computer Graphics & Image Processing (CGIP)** project: coordinate transforms, WebGL, sensor fusion, ephemeris math, and OpenCV experiments.*
 
 ---
 
-## 🧠 Brainstorming CGIP & OpenGL / WebGL Foundations
+## Highlights
 
-SkyGazer AR is purposefully engineered as an educational laboratory for core Computer Graphics and Image Processing principles:
-
-### 1. Computer Graphics (CG) & OpenGL Foundations
-- **Homogeneous Coordinates & Affine Transforms:** Every position in space is represented in $\mathbb{R}^4$ homogeneous space $[x, y, z, 1]^T$, enabling unified matrix multiplication for translation, rotation, and scaling.
-- **Model-View-Projection (MVP) Pipeline:**
-  $$\mathbf{v}_{\text{clip}} = \mathbf{P}_{\text{proj}} \cdot \mathbf{V}_{\text{view}} \cdot \mathbf{M}_{\text{model}} \cdot \mathbf{v}_{\text{local}}$$
-  - **Model Matrix ($\mathbf{M}$):** Places the Sun, ground horizon disc, and trajectory splines in the East-North-Up (ENU) world frame.
-  - **View Matrix ($\mathbf{V}$):** Formulated from the inverse camera pose ($[\mathbf{R}_{\text{world}}^{\text{cam}} \mid \mathbf{t}_{\text{cam}}]^{-1}$) derived dynamically from smartphone IMU sensors (accelerometer, gyroscope, magnetometer).
-  - **Projection Matrix ($\mathbf{P}$):** Models the camera's intrinsic optical characteristics (focal length and aspect ratio) to project 3D frustum rays onto 2D normalized device coordinates (NDC).
-- **Perspective Division & Screen Mapping:** Clip-space coordinates $(x_c, y_c, z_c, w_c)$ undergo perspective division by $w_c$ to yield NDC $[-1, 1]^3$, followed by viewport transformation into screen pixel coordinates $(u, v)$.
-- **Custom GLSL Shader Pipelines:**
-  - **Vertex Shader:** Transforms 3D vertex positions and computes view-space vectors.
-  - **Fragment Shader:** Executes radial distance falloff functions and exponential glow equations to synthesize a realistic solar corona with additive alpha blending (`gl.blendFunc(gl.SRC_ALPHA, gl.ONE)`).
-- **Parametric Spline Curves:** Generates smooth 24-hour diurnal trajectory paths using 3D Catmull-Rom splines, partitioned into visible (above horizon) and sub-horizon (below ground) geometries.
-
-### 2. Image Processing (IP) & Computer Vision Foundations
-- **Color Space Conversions:** Transforming RGB/BGR camera frames into **Grayscale** (luminance isolation) and **HSV** (Hue-Saturation-Value) to separate intensity from chromaticity and exploit sensor saturation phenomena.
-- **Image Filtering & Spatial Convolution:** Gaussian blur kernels ($9\times 9$, $\sigma = 2.0$) to suppress high-frequency digital camera sensor noise.
-- **Binarization & Thresholding:** Evaluating fixed luminance cutoffs vs. Otsu's optimal global variance binarization for isolating candidate solar disks.
-- **Mathematical Morphology:** 
-  - **Opening ($I \circ B$):** Erosion followed by dilation with an elliptical structuring element to eliminate salt-and-pepper noise and specular artifacts.
-  - **Closing ($I \bullet B$):** Dilation followed by erosion to bridge fragmented glare boundaries and optical halo gaps.
-- **Connected Component Analysis & Spatial Moments:** Contour extraction (`cv2.findContours`) coupled with 0th and 1st order raw spatial moments:
-  $$m_{pq} = \sum_{x} \sum_{y} x^p y^q I(x, y) \implies \bar{x} = \frac{m_{10}}{m_{00}}, \; \bar{y} = \frac{m_{01}}{m_{00}}$$
-- **Quantitative Angular Error Quantification:** Vector dot products between optical image centroids and astronomical ephemeris predictions:
-  $$\theta_{\text{err}} = \arccos\left(\frac{\mathbf{v}_{\text{pred}} \cdot \mathbf{v}_{\text{optical}}}{\|\mathbf{v}_{\text{pred}}\| \|\mathbf{v}_{\text{optical}}\|}\right)$$
+| Area | What you get |
+|------|----------------|
+| **AR Sky View** | Live camera + overlay for **Sun, Moon, and planets**; **stars + IAU-style lines**; BOTH / PLANETS / CONSTELLATIONS filters |
+| **One AR tab** | **Play** (full constellation quest) opens inside AR — not a separate product |
+| **Stability** | Shared attitude smoothing so **stars, lines, and planets** use the same heading/pitch pipeline |
+| **Client ephemeris** | `astronomy-engine` (VSOP87) — works **offline** after the page loads |
+| **Server ephemeris** | Skyfield **DE421** on Render — dashboard benchmark + optional **batch** vectors when API is online |
+| **3D Explorer** | WebGL sphere, horizons, diurnal paths |
+| **CV Lab** | Upload frames; OpenCV thresholding vs predicted sky position |
+| **Kids / gamification** | Missions, XP, safety quiz, constellation connect-the-dots |
 
 ---
 
-## 🛠️ Technology Stack Breakdown
+## What’s new (November 2026)
 
-| Layer | Technology | Primary Functionality |
-|---|---|---|
-| **Frontend Framework** | **React 18 + TypeScript** | Component-driven reactive UI architecture with strict static typing. |
-| **Bundler & Dev Server** | **Vite** | Ultra-fast Hot Module Replacement (HMR) and optimized build bundling. |
-| **Styling & Design System** | **Tailwind CSS + shadcn/ui** | Astronomy-inspired dark theme palette (`#0B0F19`, `#1E293B`, `#F59E0B`). |
-| **3D Rendering Engine** | **Three.js & WebGL 2.0** | 3D scene graph, camera attitude transformation, shader materials, and 60 FPS render loop. |
-| **Client Astronomy** | **Astronomy Engine (JS)** | Fast, zero-dependency in-browser VSOP87 ephemeris for instant 60 FPS rendering. |
-| **Hardware Browser APIs** | **MediaDevices, DeviceOrientation, Geolocation** | Live camera video passthrough, orientation Euler angles, and GPS coordinate retrieval. |
-| **Backend Framework** | **Python 3.11 + FastAPI** | High-performance asynchronous REST API with automatic OpenAPI documentation. |
-| **Scientific Astronomy** | **Skyfield (NASA JPL DE421)** | Authoritative ephemeris verification engine calculating topocentric refraction-corrected vectors. |
-| **Computer Vision Engine**| **OpenCV (Python headless) + NumPy** | Image decoding, thresholding, morphological filtering, contour analysis, and moments. |
-| **Data Validation** | **Pydantic v2** | Strict input/output schema validation for geographic coordinates, timestamps, and vision results. |
+- **Production split deploy:** Vercel (frontend + `/constellations/`) + Render (`backend/`), same-origin **`/api` proxy** in [`vercel.json`](vercel.json).
+- **API connectivity:** CORS for `*.vercel.app`, `probeServerHealth`, navbar **DE421 API** vs **Local AR**, production `/api` routing fix ([`apiCore.ts`](frontend/src/services/apiCore.ts)).
+- **New endpoints:** `GET /api/solar/positions/batch`, `GET /api/geo/declination` (magnetic nudge when GPS is on).
+- **AR:** Hybrid DE421/VSOP87 body vectors, adaptive attitude smoothing, **Play** embedded in [`ARSkyView`](frontend/src/features/ar-view/ARSkyView.tsx).
+- **Tooling:** `backend/scripts/ar_ephemeris_audit.py`, `probe_deployed_api.py`, expanded pytest.
+
+Details: [`DEPLOYMENT.md`](DEPLOYMENT.md) · [`docs/DRY_RUN_REPORT.md`](docs/DRY_RUN_REPORT.md)
 
 ---
 
-## 🏗️ System Architecture & Workflow
+## Architecture
 
 ```
-[User Browser Client]
-  ├── Geolocation API ────────► Geographic Coordinates (Lat, Lon, Elevation)
-  ├── DeviceOrientation API ──► Attitude Euler Angles (Alpha, Beta, Gamma)
-  ├── MediaDevices API ───────► Live Camera Stream (Video Background)
-  ├── astronomy-engine (JS) ──► Instant Topocentric Azimuth & Altitude (60 FPS)
+Phone browser
+  ├─ Vercel CDN ── React SPA (frontend/)
+  │     ├─ astronomy-engine ── AR @ 60 FPS (works offline)
+  │     └─ fetch /api/* ── same origin
   │
-  └── Three.js / WebGL 2.0 Canvas
-        ├── ENU World Coordinate Transform (East-North-Up)
-        ├── Attitude Quaternion Rotation (Device Pose)
-        ├── Perspective Projection Matrix (Camera Pinhole Model)
-        └── Output: Synthetic Sun Marker & Diurnal Arc over Live Camera Feed
-  │
-  ▼ [HTTP Requests (Asynchronous / Batch / Verification)]
-[FastAPI Python Backend]
-  ├── /api/solar/position ──► Skyfield (NASA JPL DE421) High-Precision Benchmark
-  ├── /api/solar/path ──────► Dense 24-Hour Diurnal Path Batch Waypoints
-  └── /api/vision/process ──► OpenCV BGR -> Grayscale -> Threshold -> Moments Centroid
+  └─ Vercel rewrite /api → Render
+        └─ FastAPI (backend/) ── Skyfield DE421, OpenCV vision
 ```
 
----
-
-## 🚀 Quick Start Guide
-
-### Prerequisites
-- **Node.js:** $\ge 18.0.0$ (with `npm`)
-- **Python:** $\ge 3.10.0$ (Python 3.11 recommended)
-- **Modern Web Browser:** Chrome $\ge 110$, Edge $\ge 110$, Safari $\ge 16$, or Firefox $\ge 115$ with WebGL 2.0 support.
+**Offline?** No Wi‑Fi → no Vercel/Render, but **AR overlay still runs** on local ephemeris. **DE421** needs internet.
 
 ---
 
-### 1. Backend Setup (FastAPI + Skyfield + OpenCV)
+## Repository layout
 
-1. Open your terminal in the project root:
-   ```bash
-   cd backend
-   ```
-2. Create and activate a Python virtual environment:
-   ```bash
-   # Windows (PowerShell)
-   python -m venv .venv
-   .venv\Scripts\Activate.ps1
-
-   # Linux / macOS
-   python3 -m venv .venv
-   source .venv/bin/activate
-   ```
-3. Install dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
-4. Start the FastAPI development server:
-   ```bash
-   uvicorn app.main:app --reload --port 8000
-   ```
-5. Test the backend:
-   - Health check: [http://localhost:8000/api/health](http://localhost:8000/api/health)
-   - Interactive API Docs (Swagger UI): [http://localhost:8000/docs](http://localhost:8000/docs)
+| Path | Role |
+|------|------|
+| [`frontend/`](frontend/) | Main React + Vite app (Dashboard, AR, 3D, CV, missions) |
+| [`backend/`](backend/) | FastAPI, DE421, solar/catalog/vision APIs |
+| [`skymap-web/`](skymap-web/) | Constellation AR + Play (bundled to `/constellations/`, also **AR → Play**) |
+| [`DEPLOYMENT.md`](DEPLOYMENT.md) | Vercel + Render + Docker |
+| [`docker-compose.yml`](docker-compose.yml) | Single-container unified deploy |
 
 ---
 
-### 2. Frontend Setup (React + Vite + TypeScript)
+## Quick start (local)
 
-1. In a separate terminal window, navigate to the frontend directory:
-   ```bash
-   cd frontend
-   ```
-2. Install npm packages:
-   ```bash
-   npm install
-   ```
-3. Start the Vite development server:
-   ```bash
-   npm run dev
-   ```
-4. Open your browser and navigate to:
-   ```
-   http://localhost:5173
-   ```
-
-*Note: For testing AR camera and device orientation sensors on a physical mobile device, run Vite with `--host` (`npm run dev -- --host`) and connect to your computer's local IP address over HTTPS.*
-
----
-
-## ⚠️ Critical Safety Warning
-
-> [!CAUTION]
-> **NEVER LOOK DIRECTLY AT THE PHYSICAL SUN:**
-> Looking directly at the Sun through an unshielded smartphone camera, optical viewfinder, telescope, or binoculars can cause **permanent retinal damage (solar retinopathy)** and permanently burn the device's CMOS digital image sensor. Always use certified ISO 12312-2 solar filters for direct solar observation.
-
----
-
-## Implementation progress
-
-**Last updated:** 2026-11-02
-
-This section tracks the 8-phase build plan. Detailed notes live in [PROGRESS.md](PROGRESS.md); update both when a phase changes.
-
-| Phase | ID | Status | Notes |
-| --- | --- | --- | --- |
-| 1 | phase1-scaffold | Done | FastAPI + Vite/React/TS/Tailwind, `.gitignore`, `/api/health`, Vite `/api` proxy |
-| 2 | phase2-ephemeris | Done | Skyfield DE421, `/api/solar/position` & `/path`, Pydantic validation, pytest (12 tests) |
-| 3 | phase3-dashboard | Done | Dashboard, `astronomy-engine`, geolocation, server compare toggle |
-| 4 | phase4-3d | Done | `ThreeSkyExplorer` — sphere, horizon, diurnal path, OrbitControls |
-| 5–6 | phase5-6-ar | Done | `ARSkyView` — camera, orientation, `projectEnuToScreen`, calibration, safety banner |
-| 7 | phase7-cv | Done | `/api/vision/process`, CV Lab UI |
-| Extras | phase3-extras | Partial | WMM/declination in settings; gyro smoothing in AR; CSV/OpenCV.js — verify in Settings/CV Lab |
-| Gamification | phase-gamification-1 | Done | Mission engine, `localStorage` progress |
-| Gamification | phase-gamification-2 | Done | Mission Control on Welcome, Dashboard/AR/CV mission wiring |
-| Gamification | phase-gamification-3 | Done | Daily challenge, collection book, debrief toasts, progress CSV |
-| Gamification | phase-gamification-4 | Done | Stargazer XP, daily quests, golden lock, discovery badges, safety quiz |
-| 8 | phase8-verify | In progress | Backend pytest green; frontend `npm run build` OK; manual AR/camera testing on device |
-
-**Coordinate API check (New Delhi, 2026-06-21T06:30Z):** Skyfield az/alt ≈ 133.84° / 82.70°; client `astronomy-engine` within ~0.002° — suitable for AR overlay.
-
-**Run locally**
+**Requires:** Node 18+, Python 3.10+ (3.11 recommended), modern mobile browser for AR (HTTPS or localhost).
 
 ```bash
-# Terminal 1 — backend (from backend/, use .venv)
-.venv\Scripts\Activate.ps1
+# Terminal 1 — API
+cd backend
+python -m venv .venv
+.venv\Scripts\Activate.ps1          # Windows
+pip install -r requirements.txt
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
-# Terminal 2 — frontend
+# Terminal 2 — UI
 cd frontend
+npm install
 npm run dev
 ```
 
+Open [http://localhost:5173](http://localhost:5173) — Vite proxies `/api` → port 8000.
+
+**Constellation dev:**
+
+```bash
+cd skymap-web && npm install && npm run dev
+```
+
+**Tests:**
+
+```bash
+cd backend && python -m pytest tests/ -q
+cd skymap-web && npm run test:astro && npm run validate:catalog
+```
+
 ---
 
-## 📚 Technical Documentation & Research Artifacts
+## API (Render / local)
 
-For in-depth mathematical derivations, literature citations, and detailed implementation phases, consult the dedicated project documentation files:
-- [PROJECT_RESEARCH.md](file:///c:/Users/vansh/OneDrive/Desktop/CG&IP/PROJECT_RESEARCH.md) — Complete 26-section research specification, spherical trigonometry derivations, camera projection equations, and experimental methodology.
-- [RESEARCH_SOURCES.md](file:///c:/Users/vansh/OneDrive/Desktop/CG&IP/RESEARCH_SOURCES.md) — Verified bibliographic register of peer-reviewed papers (with DOIs) and official technical documentation.
-- [IMPLEMENTATION_ROADMAP.md](file:///c:/Users/vansh/OneDrive/Desktop/CG&IP/IMPLEMENTATION_ROADMAP.md) — 8-phase engineering roadmap with dependencies, deliverables, and acceptance criteria.
-- [backend/README.md](file:///c:/Users/vansh/OneDrive/Desktop/CG&IP/backend/README.md) — Backend architecture, API schemas, and OpenCV microservice documentation.
-- [frontend/README.md](file:///c:/Users/vansh/OneDrive/Desktop/CG&IP/frontend/README.md) — Frontend architecture, Three.js WebGL rendering pipeline, and sensor fusion guide.
+| Method | Path | Purpose |
+|--------|------|---------|
+| GET | `/api/health` | `status: online`, engine info |
+| GET | `/api/solar/position` | DE421 az/alt for Sun, Moon, planets |
+| GET | `/api/solar/positions/batch` | All bodies + ENU vectors |
+| GET | `/api/solar/path` | 24h waypoints + rise/set |
+| GET | `/api/geo/declination` | Approx magnetic declination (°) |
+| GET | `/api/constellations` | Catalog metadata |
+| POST | `/api/vision/process` | OpenCV bright-blob centroid |
+
+Interactive docs: `/docs` on the backend host.
 
 ---
 
-## 📄 License & Academic Attribution
-Developed as an academic research and laboratory project for university-level Computer Graphics & Image Processing (CGIP) curricula. Released under the MIT License.
+## Deploy (short)
+
+1. **Render:** Root `backend/`, start `uvicorn app.main:app --host 0.0.0.0 --port $PORT`.
+2. **Vercel:** Repo root `./`, uses root [`vercel.json`](vercel.json); set `/api` rewrite to your Render URL.
+3. **Env:** Leave `VITE_API_BASE_URL` **unset** on Vercel to use `/api` proxy (recommended).
+
+Full steps: [`DEPLOYMENT.md`](DEPLOYMENT.md)
+
+---
+
+## CGIP foundations (summary)
+
+SkyMap AR demonstrates:
+
+- **Graphics:** ENU frame, pinhole projection, quaternions from device IMU, Three.js / Canvas AR overlay.
+- **Image processing:** Grayscale, threshold, morphology, moments; compare optical centroid vs ephemeris angle error.
+- **Astronomy:** Topocentric azimuth/altitude, refraction, client vs server ephemeris parity.
+
+Deep dives: [`PROJECT_RESEARCH.md`](PROJECT_RESEARCH.md) · [`IMPLEMENTATION_ROADMAP.md`](IMPLEMENTATION_ROADMAP.md) · [`backend/README.md`](backend/README.md) · [`frontend/README.md`](frontend/README.md)
+
+---
+
+## Safety
+
+> **Never look at the real Sun through an unfiltered camera, telescope, or binoculars.** Permanent eye and sensor damage can result. Use ISO 12312-2 solar filters for direct observation.
+
+The in-app **safety banner** reminds users; see [`SafetyBanner.tsx`](frontend/src/components/SafetyBanner.tsx).
+
+---
+
+## Implementation status
+
+**Last updated:** 2026-11-25
+
+| Phase | Status | Notes |
+|-------|--------|--------|
+| Scaffold & API | Done | FastAPI, Vite, health, solar, vision |
+| Dashboard & DE421 compare | Done | Live + batch API |
+| 3D explorer & AR | Done | BOTH/PLANETS/CONSTELLATIONS, calibration |
+| Constellation Play | Done | Unified AR tab + `/constellations/` |
+| Production deploy | Done | Vercel + Render, `/api` proxy |
+| Device QA | Ongoing | Compass/gyro vary by phone — use calibrate + Align to Sun/Moon |
+
+More tracking: [`PROGRESS.md`](PROGRESS.md)
+
+---
+
+## License
+
+MIT — academic CGIP research and laboratory use.
+
+Developed for **Computer Graphics & Image Processing** coursework; citations and sources in [`RESEARCH_SOURCES.md`](RESEARCH_SOURCES.md).
