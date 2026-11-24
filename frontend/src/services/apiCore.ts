@@ -9,16 +9,24 @@ export type ServerHealthState = {
   coldStartHint: boolean;
 };
 
-const rawBase = import.meta.env.VITE_API_BASE_URL || '';
-const PRIMARY = rawBase ? `${rawBase.replace(/\/$/, '')}/api` : '/api';
 const DEV_FALLBACKS = ['http://127.0.0.1:8000/api', 'http://localhost:8000/api'];
 
+/** Production: same-origin `/api` (Vercel rewrite) must run before any baked `VITE_API_BASE_URL`. */
 function candidateBases(): string[] {
-  const out = [PRIMARY];
+  const out: string[] = [];
+  const push = (b: string) => {
+    if (b && !out.includes(b)) out.push(b);
+  };
+
+  push('/api');
+
+  const rawBase = import.meta.env.VITE_API_BASE_URL || '';
+  if (rawBase) {
+    push(`${rawBase.replace(/\/$/, '')}/api`);
+  }
+
   if (!import.meta.env.PROD) {
-    for (const f of DEV_FALLBACKS) {
-      if (!out.includes(f)) out.push(f);
-    }
+    for (const f of DEV_FALLBACKS) push(f);
   }
   return out;
 }
@@ -29,7 +37,11 @@ export function fetchWithTimeout(url: string, init: RequestInit | undefined, ms:
   return fetch(url, { ...init, signal: ctrl.signal }).finally(() => window.clearTimeout(timer));
 }
 
-export async function apiFetch(path: string, init?: RequestInit, timeoutMs = 4000): Promise<Response> {
+export async function apiFetch(
+  path: string,
+  init?: RequestInit,
+  timeoutMs = import.meta.env.PROD ? 12000 : 4000
+): Promise<Response> {
   const bases = candidateBases();
   let lastError: Error = new Error(
     'Backend offline. From the backend folder run: py -3 -m uvicorn app.main:app --port 8000'
@@ -64,7 +76,7 @@ export async function apiFetch(path: string, init?: RequestInit, timeoutMs = 400
 }
 
 export async function probeServerHealth(firstProbe = false): Promise<ServerHealthState> {
-  const timeout = firstProbe ? 15000 : 5000;
+  const timeout = firstProbe ? 20000 : 10000;
   try {
     const res = await apiFetch('/health', undefined, timeout);
     const data = await res.json();

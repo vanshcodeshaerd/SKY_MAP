@@ -615,7 +615,9 @@ export function SolarDashboard({
               <div className="flex flex-col sm:flex-row sm:items-center gap-2">
                 <p className="text-amber-400/90 text-[11px] flex-1">
                   {serverError.includes('offline') || serverError.includes('Failed to fetch')
-                    ? 'Backend server currently offline. Start it with: python -m uvicorn app.main:app --port 8000 (from backend/). Local VSOP87 remains operational.'
+                    ? import.meta.env.PROD
+                      ? 'Could not reach /api on this site (Vercel proxy → Render). Open /api/health in a tab, wait ~30s if Render slept, then Retry DE421.'
+                      : 'Backend server currently offline. Start it with: python -m uvicorn app.main:app --port 8000 (from backend/). Local VSOP87 remains operational.'
                     : serverError}
                 </p>
                 <button

@@ -1,10 +1,11 @@
 /** Optional DE421 API status chip (AR works offline). */
 
-const bases = [
-  import.meta.env.VITE_API_BASE_URL
-    ? `${String(import.meta.env.VITE_API_BASE_URL).replace(/\/$/, '')}/api`
-    : '/api',
-];
+const bases = ['/api'];
+const raw = import.meta.env.VITE_API_BASE_URL;
+if (raw) {
+  const b = `${String(raw).replace(/\/$/, '')}/api`;
+  if (!bases.includes(b)) bases.push(b);
+}
 
 export function startApiHealthChip(el: HTMLElement) {
   const paint = (online: boolean, detail: string) => {
