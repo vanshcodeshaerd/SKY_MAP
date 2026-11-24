@@ -40,6 +40,7 @@ import {
   AR_VIEWPORT_MARGIN_PX,
 } from './arSubHorizon';
 import { PlanetDiscoveryModal } from './PlanetDiscoveryModal';
+import { ConstellationPlayFrame } from './ConstellationPlayFrame';
 import { useMissionProgressContext } from '../../hooks/useMissionProgress';
 import * as THREE from 'three';
 
@@ -99,11 +100,13 @@ export function ARSkyView({
   const [celestialFilterMode, setCelestialFilterMode] = useState<CelestialFilterMode>('BOTH');
   const skyVisibility = useMemo(() => visibilityFromMode(celestialFilterMode), [celestialFilterMode]);
   const [showConstellations, setShowConstellations] = useState<boolean>(true);
+  const [constellationPlayOpen, setConstellationPlayOpen] = useState(false);
   const [showAllPlanetsInAR, setShowAllPlanetsInAR] = useState<boolean>(true);
   const constellationsLayerOn =
     skyVisibility.stars && skyVisibility.constellationLines && showConstellations;
   const planetsLayerOn = skyVisibility.planets;
   const applyCelestialFilterMode = useCallback((mode: CelestialFilterMode) => {
+    setConstellationPlayOpen(false);
     setCelestialFilterMode(mode);
     if (mode === 'CONSTELLATIONS') {
       setShowConstellations(true);
@@ -306,25 +309,25 @@ export function ARSkyView({
       const targetGamma =
         orientation.cameraRoll !== undefined && orientation.cameraRoll !== null ? orientation.cameraRoll! : manualRoll;
 
-      // Dynamic adaptive smoothing: fast panning responds immediately, holding steady filters micro-jitter
-      const dHeading = ((targetAlpha - smoothedAnglesRef.current.heading + 540) % 360) - 180;
-      const dPitch = targetBeta - smoothedAnglesRef.current.pitch;
-      const dRoll = targetGamma - smoothedAnglesRef.current.roll;
-
-      const motionSpeed = Math.abs(dHeading) + Math.abs(dPitch);
-      const adaptiveFactor = hasSensor
-        ? motionSpeed > 8
-          ? 0.78
-          : motionSpeed > 2.5
-            ? 0.5
-            : motionSpeed > 0.45
-              ? 0.22
-              : 0.07
-        : 0.55;
-
-      smoothedAnglesRef.current.heading = (smoothedAnglesRef.current.heading + dHeading * adaptiveFactor + 360) % 360;
-      smoothedAnglesRef.current.pitch += dPitch * adaptiveFactor;
-      smoothedAnglesRef.current.roll += dRoll * adaptiveFactor;
+      // Attitude already smoothed in useDeviceOrientation — avoid double-filter (stars vs planets drift).
+      if (hasSensor) {
+        smoothedAnglesRef.current.heading = (targetAlpha + 360) % 360;
+        smoothedAnglesRef.current.pitch = targetBeta;
+        const dRoll = targetGamma - smoothedAnglesRef.current.roll;
+        const rollFactor = Math.abs(dRoll) > 6 ? 0.45 : 0.12;
+        smoothedAnglesRef.current.roll += dRoll * rollFactor;
+      } else {
+        const dHeading = ((targetAlpha - smoothedAnglesRef.current.heading + 540) % 360) - 180;
+        const dPitch = targetBeta - smoothedAnglesRef.current.pitch;
+        const dRoll = targetGamma - smoothedAnglesRef.current.roll;
+        const motionSpeed = Math.abs(dHeading) + Math.abs(dPitch);
+        const adaptiveFactor =
+          motionSpeed > 8 ? 0.78 : motionSpeed > 2.5 ? 0.5 : motionSpeed > 0.45 ? 0.22 : 0.07;
+        smoothedAnglesRef.current.heading =
+          (smoothedAnglesRef.current.heading + dHeading * adaptiveFactor + 360) % 360;
+        smoothedAnglesRef.current.pitch += dPitch * adaptiveFactor;
+        smoothedAnglesRef.current.roll += dRoll * adaptiveFactor;
+      }
 
       const rawAlpha = smoothedAnglesRef.current.heading;
       const rawBeta = smoothedAnglesRef.current.pitch;
@@ -1275,22 +1278,34 @@ export function ARSkyView({
           )}
         </div>
 
-        {/* Celestial filter: BOTH | PLANETS | CONSTELLATIONS (instant scene-layer switch) */}
-        <div className="absolute top-[4.25rem] left-1/2 -translate-x-1/2 z-30 flex rounded-full border border-slate-700/80 bg-slate-950/90 backdrop-blur-md p-0.5 pointer-events-auto shadow-lg">
+        {/* Unified sky layers: both / planets / stars+lines + Play (same AR tab) */}
+        <div className="absolute top-[4.25rem] left-1/2 -translate-x-1/2 z-30 flex flex-wrap justify-center max-w-[95vw] gap-0.5 rounded-full border border-slate-700/80 bg-slate-950/90 backdrop-blur-md p-0.5 pointer-events-auto shadow-lg">
           {(['BOTH', 'PLANETS', 'CONSTELLATIONS'] as const).map((mode) => (
             <button
               key={mode}
               type="button"
               onClick={() => applyCelestialFilterMode(mode)}
               className={`px-2.5 sm:px-3 py-1 rounded-full text-[10px] sm:text-[11px] font-semibold tracking-wide transition ${
-                celestialFilterMode === mode
+                !constellationPlayOpen && celestialFilterMode === mode
                   ? 'bg-sky-500/25 text-sky-200 border border-sky-400/50'
                   : 'text-slate-400 hover:text-slate-200 border border-transparent'
               }`}
             >
-              {mode === 'BOTH' ? 'Both' : mode === 'PLANETS' ? 'Planets' : 'Stars & Lines'}
+              {mode === 'BOTH' ? 'Both' : mode === 'PLANETS' ? 'Planets' : 'Constellations'}
             </button>
           ))}
+          <button
+            type="button"
+            onClick={() => setConstellationPlayOpen(true)}
+            className={`px-2.5 sm:px-3 py-1 rounded-full text-[10px] sm:text-[11px] font-semibold tracking-wide transition ${
+              constellationPlayOpen
+                ? 'bg-violet-500/30 text-violet-100 border border-violet-400/50'
+                : 'text-slate-400 hover:text-violet-200 border border-transparent'
+            }`}
+            title="Connect-the-dots constellation quest (full IAU catalog)"
+          >
+            Play
+          </button>
         </div>
 
         {/* Uncluttered Top Right Action Bar (Mode Pill + Layers Button) */}
@@ -1914,6 +1929,10 @@ export function ARSkyView({
           />
         )}
       </div>
+
+      {constellationPlayOpen && (
+        <ConstellationPlayFrame onClose={() => setConstellationPlayOpen(false)} />
+      )}
     </div>
   );
 }

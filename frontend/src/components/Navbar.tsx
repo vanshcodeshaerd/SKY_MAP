@@ -146,13 +146,6 @@ export function Navbar({
             </span>
           </div>
 
-          <a
-            href="/constellations/"
-            className="hidden md:flex min-h-[38px] items-center gap-1.5 text-[11px] px-2.5 py-1.5 rounded-md border font-medium bg-orbit-card text-orbit-foreground border-orbit-border hover:border-orbit-primary/40 transition"
-            title="Constellation Play (connect-the-dots AR)"
-          >
-            Play
-          </a>
 
           <button
             onClick={onOpenCalibration}
