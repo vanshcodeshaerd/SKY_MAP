@@ -1,3 +1,4 @@
+import * as Astronomy from 'astronomy-engine';
 import { toRad } from '../astronomy.ts';
 import { lstDegrees } from './fast.ts';
 import type { Vector3 } from '../projection.ts';
@@ -10,48 +11,57 @@ function matMulVec(m: number[][], v: Vector3): Vector3 {
   };
 }
 
-function rotX(a: number): number[][] {
-  const c = Math.cos(a), s = Math.sin(a);
-  return [
-    [1, 0, 0],
-    [0, c, -s],
-    [0, s, c],
-  ];
+let eqdCacheMin = Number.NaN;
+let eqdCache: number[][] | null = null;
+
+/** J2000 equator → equator-of-date, cached per UTC minute. */
+function eqjToEqdMatrix(date: Date): number[][] {
+  const minute = Math.floor(date.getTime() / 60000);
+  if (eqdCache && minute === eqdCacheMin) return eqdCache;
+  eqdCache = Astronomy.Rotation_EQJ_EQD(date).rot;
+  eqdCacheMin = minute;
+  return eqdCache;
 }
 
-function rotZ(a: number): number[][] {
-  const c = Math.cos(a), s = Math.sin(a);
-  return [
-    [c, -s, 0],
-    [s, c, 0],
-    [0, 0, 1],
-  ];
+/**
+ * Equatorial cartesian (x=vernal equinox, z=north pole) → East-North-Up.
+ * Matches equatorialToHorizontal + toENU (az clockwise from north).
+ */
+export function equatorialVectorToEnu(vEq: Vector3, latDeg: number, lonDeg: number, date: Date): Vector3 {
+  const lst = toRad(lstDegrees(date, lonDeg));
+  const cL = Math.cos(lst);
+  const sL = Math.sin(lst);
+  const cPhi = Math.cos(toRad(latDeg));
+  const sPhi = Math.sin(toRad(latDeg));
+
+  const xh = vEq.x * cL + vEq.y * sL;
+  const yh = -vEq.x * sL + vEq.y * cL;
+  const zh = vEq.z;
+
+  return {
+    x: yh,
+    y: cPhi * zh - sPhi * xh,
+    z: sPhi * zh + cPhi * xh,
+  };
 }
 
-function matMul(a: number[][], b: number[][]): number[][] {
-  const r: number[][] = [
-    [0, 0, 0],
-    [0, 0, 0],
-    [0, 0, 0],
-  ];
-  for (let i = 0; i < 3; i++) {
-    for (let j = 0; j < 3; j++) {
-      for (let k = 0; k < 3; k++) r[i][j] += a[i][k] * b[k][j];
-    }
-  }
-  return r;
-}
-
-/** M_sky→ENU = Rx(90°−φ) · Rz(LST) */
+/** M_sky→ENU kept for tests / older callers: of-date HA frame, not J2000. */
 export function skyToEnuMatrix(latDeg: number, date: Date, lon: number): number[][] {
   const lst = toRad(lstDegrees(date, lon));
   const lat = toRad(latDeg);
-  const rx = rotX(Math.PI / 2 - lat);
-  const rz = rotZ(lst);
-  return matMul(rx, rz);
+  const cL = Math.cos(lst);
+  const sL = Math.sin(lst);
+  const cPhi = Math.cos(lat);
+  const sPhi = Math.sin(lat);
+  return [
+    [-sL, cL, 0],
+    [-sPhi * cL, -sPhi * sL, cPhi],
+    [cPhi * cL, cPhi * sL, sPhi],
+  ];
 }
 
+/** J2000 ICRS unit vector → geographic ENU (precessed to of-date). */
 export function icrsToEnu(vIcrf: Vector3, lat: number, lon: number, date: Date): Vector3 {
-  const M = skyToEnuMatrix(lat, date, lon);
-  return matMulVec(M, vIcrf);
+  const ofDate = matMulVec(eqjToEqdMatrix(date), vIcrf);
+  return equatorialVectorToEnu(ofDate, lat, lon, date);
 }

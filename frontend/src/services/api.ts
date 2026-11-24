@@ -5,7 +5,51 @@
 import { SolarCoordinates, DiurnalWaypoint, SolarEvents, VisionProcessResult } from '../types/astronomy';
 
 const rawBase = import.meta.env.VITE_API_BASE_URL || '';
-const API_BASE = rawBase ? `${rawBase.replace(/\/$/, '')}/api` : '/api';
+const PRIMARY = rawBase ? `${rawBase.replace(/\/$/, '')}/api` : '/api';
+const FALLBACKS = ['http://127.0.0.1:8000/api', 'http://localhost:8000/api'];
+
+function candidateBases(): string[] {
+  const out = [PRIMARY];
+  for (const f of FALLBACKS) {
+    if (!out.includes(f)) out.push(f);
+  }
+  return out;
+}
+
+async function apiFetch(path: string, init?: RequestInit): Promise<Response> {
+  const bases = candidateBases();
+  let lastError: Error = new Error('Backend server currently offline.');
+
+  for (const base of bases) {
+    try {
+      const res = await fetch(`${base}${path}`, {
+        ...init,
+        signal: init?.signal ?? AbortSignal.timeout(12000),
+      });
+      if (res.ok) return res;
+      const payload = await res.json().catch(() => ({}));
+      const detail = (payload as { detail?: string }).detail;
+      lastError = new Error(
+        typeof detail === 'string' && detail
+          ? detail
+          : `Backend request failed (${res.status})`
+      );
+      if (res.status >= 400 && res.status < 500 && res.status !== 404) {
+        throw lastError;
+      }
+    } catch (err) {
+      if (err instanceof Error && err.message && !err.message.includes('fetch')) {
+        lastError = err;
+        if (!/Failed to fetch|NetworkError|Load failed|timeout|offline/i.test(err.message) && !err.name.includes('Abort')) {
+          throw err;
+        }
+      } else {
+        lastError = new Error('Backend server currently offline.');
+      }
+    }
+  }
+  throw lastError;
+}
 
 export async function fetchServerHealth(): Promise<{
   status: string;
@@ -13,8 +57,7 @@ export async function fetchServerHealth(): Promise<{
   ephemeris_engine: string;
   timestamp_utc: string;
 }> {
-  const res = await fetch(`${API_BASE}/health`);
-  if (!res.ok) throw new Error(`Health check failed: ${res.statusText}`);
+  const res = await apiFetch('/health');
   return res.json();
 }
 
@@ -33,9 +76,7 @@ export async function fetchServerSolarPosition(
   });
   if (timestamp) params.append('timestamp', timestamp);
 
-  const res = await fetch(`${API_BASE}/solar/position?${params.toString()}`);
-  if (!res.ok) throw new Error(`Solar position query failed: ${res.statusText}`);
-
+  const res = await apiFetch(`/solar/position?${params.toString()}`);
   const data = await res.json();
   return {
     azimuthDeg: data.azimuth_degrees,
@@ -63,9 +104,7 @@ export async function fetchServerSolarPath(
     step_minutes: stepMinutes.toString(),
   });
 
-  const res = await fetch(`${API_BASE}/solar/path?${params.toString()}`);
-  if (!res.ok) throw new Error(`Solar path query failed: ${res.statusText}`);
-
+  const res = await apiFetch(`/solar/path?${params.toString()}`);
   const data = await res.json();
   const waypoints: DiurnalWaypoint[] = data.waypoints.map((w: any) => ({
     timeUtc: w.time_utc,
@@ -91,15 +130,10 @@ export async function uploadVisionImage(
   const formData = new FormData();
   formData.append('file', file);
 
-  const res = await fetch(`${API_BASE}/vision/process?threshold=${threshold}`, {
+  const res = await apiFetch(`/vision/process?threshold=${threshold}`, {
     method: 'POST',
     body: formData,
   });
-
-  if (!res.ok) {
-    const errorData = await res.json().catch(() => ({}));
-    throw new Error(errorData.detail || `Vision processing failed: ${res.statusText}`);
-  }
 
   return res.json();
 }

@@ -68,40 +68,51 @@ export function SolarDashboard({
   const [serverCoords, setServerCoords] = useState<SolarCoordinates | null>(null);
   const [serverLoading, setServerLoading] = useState<boolean>(false);
   const [serverError, setServerError] = useState<string | null>(null);
+  const [compareAttempt, setCompareAttempt] = useState(0);
   const { setServerCompareState } = useMissionProgressContext();
 
-  // Handle server comparison
   useEffect(() => {
     if (!compareServer) return;
 
     let cancelled = false;
+    let retryTimer: ReturnType<typeof setTimeout> | undefined;
     setServerLoading(true);
     setServerError(null);
+    setServerCoords(null);
 
-    fetchServerSolarPosition(
-      location.latitude,
-      location.longitude,
-      location.elevationM,
-      currentDate.toISOString(),
-      selectedBody.toLowerCase()
-    )
-      .then((res) => {
-        if (!cancelled) {
-          setServerCoords(res);
+    const run = (attempt: number) => {
+      fetchServerSolarPosition(
+        location.latitude,
+        location.longitude,
+        location.elevationM,
+        currentDate.toISOString(),
+        selectedBody.toLowerCase()
+      )
+        .then((res) => {
+          if (!cancelled) {
+            setServerCoords(res);
+            setServerError(null);
+            setServerLoading(false);
+          }
+        })
+        .catch((err) => {
+          if (cancelled) return;
+          if (attempt < 3) {
+            retryTimer = setTimeout(() => run(attempt + 1), 1500 * attempt);
+            return;
+          }
+          setServerError(err instanceof Error ? err.message : 'Backend server currently offline.');
           setServerLoading(false);
-        }
-      })
-      .catch((err) => {
-        if (!cancelled) {
-          setServerError(err.message);
-          setServerLoading(false);
-        }
-      });
+        });
+    };
+
+    run(1);
 
     return () => {
       cancelled = true;
+      if (retryTimer) clearTimeout(retryTimer);
     };
-  }, [compareServer, location, currentDate, selectedBody]);
+  }, [compareServer, location, currentDate, selectedBody, compareAttempt]);
 
   useEffect(() => {
     if (!compareServer) {
@@ -586,7 +597,9 @@ export function SolarDashboard({
               </h3>
             </div>
             <p className="text-[11px] text-slate-400 mt-0.5">
-              Local VSOP87 analytical calculations operate with 0ms latency in the browser. Use this tool to verify client accuracy against server-side JPL ephemerides.
+              Local VSOP87 runs in the browser. DE421 needs the FastAPI server on port 8000
+              (<span className="font-mono text-slate-300">backend/start.bat</span> or
+              <span className="font-mono text-slate-300">py -3 -m uvicorn app.main:app --port 8000</span>).
             </p>
           </div>
           <button
@@ -605,9 +618,24 @@ export function SolarDashboard({
           <div className="p-3 rounded-md bg-orbit-background border border-orbit-border text-xs font-mono space-y-3">
             {serverLoading && <p className="text-slate-400 animate-pulse">Calculating NASA JPL DE421 ephemeris vector via FastAPI...</p>}
             {serverError && (
-              <p className="text-amber-400/90 text-[11px]">
-                Backend server currently offline. Local VSOP87 client calculations remain 100% operational.
-              </p>
+              <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                <p className="text-amber-400/90 text-[11px] flex-1">
+                  {serverError.includes('offline') || serverError.includes('Failed to fetch')
+                    ? 'Backend server currently offline. Start it with: python -m uvicorn app.main:app --port 8000 (from backend/). Local VSOP87 remains operational.'
+                    : serverError}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCompareAttempt((n) => n + 1);
+                    setServerLoading(true);
+                    setServerError(null);
+                  }}
+                  className="shrink-0 min-h-[32px] px-3 py-1 rounded-md text-[11px] bg-amber-500 text-slate-950 font-semibold"
+                >
+                  Retry DE421
+                </button>
+              </div>
             )}
             {serverCoords && (
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">

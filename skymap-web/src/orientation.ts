@@ -19,16 +19,6 @@ export interface SensorCapabilities {
   lastEventTimestamp: number;
 }
 
-function angleDiff(a: number, b: number) {
-  let diff = a - b;
-  while (diff < -180) diff += 360;
-  while (diff > 180) diff -= 360;
-  return diff;
-}
-
-let smoothed: OrientationData = { h: 0, b: 90, g: 0 };
-let hasInitialized = false;
-
 const capabilities: SensorCapabilities = {
   supported: typeof window !== 'undefined' && 'DeviceOrientationEvent' in window,
   absolute: false,
@@ -50,17 +40,6 @@ export function getScreenOrientationAngle(): number {
   return typeof legacy === 'number' ? legacy : 0;
 }
 
-function lowPass(next: OrientationData, a = 0.55) {
-  if (!hasInitialized) {
-    smoothed = { ...next };
-    hasInitialized = true;
-    return;
-  }
-  smoothed.h = (((smoothed.h + a * angleDiff(next.h, smoothed.h)) % 360) + 360) % 360;
-  smoothed.b += a * angleDiff(next.b, smoothed.b);
-  smoothed.g += a * angleDiff(next.g, smoothed.g);
-}
-
 export function getSmoothedOrientation(): OrientationData {
   const att = getSmoothedAttitude();
   return { h: att.heading, b: 90 + att.pitch, g: att.roll };
@@ -69,8 +48,6 @@ export function getSmoothedOrientation(): OrientationData {
 export { getSmoothedAttitude, getLatestAttitude } from './ar/deviceAttitude.ts';
 
 export function resetOrientationFilter() {
-  hasInitialized = false;
-  smoothed = { h: 0, b: 90, g: 0 };
   resetAttitudeFilter();
 }
 
@@ -100,12 +77,8 @@ export async function startOrientation(onUpdate: (h: number, b: number, g: numbe
     capabilities.lastEventTimestamp = Date.now();
     const att = attitudeFromEvent(e);
     pushAttitudeSample(att);
-    lowPass({
-      h: att.heading,
-      b: 90 + att.pitch,
-      g: att.roll,
-    });
-    onUpdate(smoothed.h, smoothed.b, smoothed.g);
+    const sm = getSmoothedAttitude();
+    onUpdate(sm.heading, 90 + sm.pitch, sm.roll);
   };
 
   if ('ondeviceorientationabsolute' in window) {

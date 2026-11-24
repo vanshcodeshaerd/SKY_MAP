@@ -14,6 +14,9 @@ import { boresightENU, clipSegmentToNearPlane, orientationMatrix, project, toENU
 import { planetAltAz, planetEquatorial, NAKED_EYE_PLANETS } from '../src/planets.ts';
 import { visibilityFromMode } from '../src/render/types.ts';
 import { headingToCardinal } from '../src/ui/compassHud.ts';
+import { icrsUnitVector } from '../src/astronomy/icrs.ts';
+import { equatorialVectorToEnu, icrsToEnu } from '../src/astronomy/skyTransform.ts';
+import * as Astronomy from 'astronomy-engine';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const stars = JSON.parse(fs.readFileSync(path.join(__dirname, '../src/data/stars.advanced.json'), 'utf-8'));
@@ -109,3 +112,32 @@ const sirius = stars.find((x) => x.name === 'Sirius');
 const pm = applyProperMotion(sirius, new Date('2050-01-01T00:00:00Z'));
 assert.ok(Number.isFinite(pm.ra) && Number.isFinite(pm.dec));
 console.log('✓ Compass cardinal & proper motion checks passed');
+
+// 7. Star ENU must match alt/az ENU so constellations sit on the same sky as planets
+{
+  const ra = 88.7929;
+  const dec = 7.4071;
+  const loc = { lat: 34.0522, lon: -118.2437 };
+  const v = icrsUnitVector(ra, dec);
+  const enuA = equatorialVectorToEnu(v, loc.lat, loc.lon, testDate);
+  const hor = equatorialToHorizontal(ra, dec, loc.lat, loc.lon, testDate);
+  const enuB = toENU(hor.altitude, hor.azimuth);
+  const mismatch = Math.hypot(enuA.x - enuB.x, enuA.y - enuB.y, enuA.z - enuB.z);
+  assert.ok(mismatch < 1e-8, `Star ENU vs alt/az ENU mismatch ${mismatch}`);
+
+  const obs = new Astronomy.Observer(loc.lat, loc.lon, 0);
+  const eqj = Astronomy.VectorFromSphere(new Astronomy.Spherical(dec, ra, 1), testDate);
+  const eqd = Astronomy.RotateVector(Astronomy.Rotation_EQJ_EQD(testDate), eqj);
+  const eq = Astronomy.EquatorFromVector(eqd);
+  const horE = Astronomy.Horizon(testDate, obs, eq.ra, eq.dec);
+  const enuStar = icrsToEnu(v, loc.lat, loc.lon, testDate);
+  const enuEng = toENU(horE.altitude, horE.azimuth);
+  const ang = Math.acos(Math.max(-1, Math.min(1, enuStar.x * enuEng.x + enuStar.y * enuEng.y + enuStar.z * enuEng.z))) * (180 / Math.PI);
+  assert.ok(ang < 0.75, `Precessed star vs engine Horizon ${ang}°`);
+
+  const jup = planetAltAz('Jupiter', testDate, loc.lat, loc.lon);
+  const jeq = planetEquatorial('Jupiter', testDate, loc.lat, loc.lon);
+  const jh = Astronomy.Horizon(testDate, obs, jeq.ra / 15, jeq.dec, 'normal');
+  assert.ok(Math.abs(jup.altitude - jh.altitude) < 0.02 && Math.abs(((jup.azimuth - jh.azimuth + 540) % 360) - 180) < 0.02);
+  console.log('✓ Star/constellation ENU matches planets; planets use engine Horizon');
+}

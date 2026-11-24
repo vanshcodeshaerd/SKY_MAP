@@ -138,10 +138,11 @@ export function planetAltAz(
   lon: number
 ): CelestialPosition & { distanceAU: number; magnitude: number; angularDiameterArcsec: number } {
   const eq = planetEquatorial(name, date, lat, lon);
-  const hor = equatorialToHorizontal(eq.ra, eq.dec, lat, lon, date);
+  const obs = observer(lat, lon);
+  const hor = Astronomy.Horizon(date, obs, eq.ra / 15, eq.dec, 'normal');
   return {
     altitude: hor.altitude,
-    azimuth: hor.azimuth,
+    azimuth: norm360(hor.azimuth),
     distanceAU: eq.distanceAU,
     magnitude: eq.magnitude,
     angularDiameterArcsec: eq.angularDiameterArcsec,
@@ -155,7 +156,8 @@ export function getPlanetDetails(
   lon: number
 ): PlanetDetails {
   const eq = planetEquatorial(name, date, lat, lon);
-  const hor = equatorialToHorizontal(eq.ra, eq.dec, lat, lon, date);
+  const horEngine = Astronomy.Horizon(date, observer(lat, lon), eq.ra / 15, eq.dec, 'normal');
+  const hor = { altitude: horEngine.altitude, azimuth: norm360(horEngine.azimuth) };
   const rts = computeRiseTransitSet(name, date, lat, lon);
   const meta = META[name];
 

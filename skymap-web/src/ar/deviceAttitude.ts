@@ -1,6 +1,7 @@
 /**
- * Real-time device attitude in geographic ENU frame (matches SkyGazer AR math).
- * cameraPitch: +90° zenith, 0° horizon, -90° nadir — NOT raw DeviceOrientation beta.
+ * Real-time device attitude in geographic ENU.
+ * Heading is the rear-camera optical azimuth (not raw compass when looking up).
+ * cameraPitch: +90° zenith, 0° horizon, -90° nadir.
  */
 
 export interface DeviceAttitude {
@@ -13,6 +14,8 @@ export interface DeviceAttitude {
 let latest: DeviceAttitude = { heading: 0, pitch: 25, roll: 0, timestamp: 0 };
 let smooth: DeviceAttitude = { heading: 0, pitch: 25, roll: 0, timestamp: 0 };
 let initialized = false;
+/** webkit/true-north minus optical heading — holds while looking at zenith. */
+let compassBias = 0;
 
 function wrap360(d: number) {
   return ((d % 360) + 360) % 360;
@@ -23,6 +26,13 @@ function angleDiff(a: number, b: number) {
   while (d < -180) d += 360;
   while (d > 180) d -= 360;
   return d;
+}
+
+function screenRotationDeg(): number {
+  if (typeof window === 'undefined') return 0;
+  if (window.screen?.orientation?.angle != null) return window.screen.orientation.angle;
+  const legacy = (window as Window & { orientation?: number }).orientation;
+  return typeof legacy === 'number' ? legacy : 0;
 }
 
 /** Parse a DeviceOrientationEvent into geographic heading + elevation pitch. */
@@ -44,36 +54,37 @@ export function attitudeFromEvent(e: DeviceOrientationEvent): DeviceAttitude {
   const cG = Math.cos(g),
     sG = Math.sin(g);
 
-  // Rear-camera optical axis in ENU (same as useDeviceOrientation)
   const Fx = -(cA * sG + sA * sB * cG);
   const Fy = -(sA * sG - cA * sB * cG);
   const Fz = -(cB * cG);
   const pitch = (Math.asin(Math.max(-1, Math.min(1, Fz))) * 180) / Math.PI;
 
-  let heading: number;
-  if (typeof webkitHeading === 'number' && !Number.isNaN(webkitHeading) && webkitHeading >= 0) {
-    heading = wrap360(webkitHeading);
-  } else {
-    heading = wrap360((Math.atan2(Fx, Fy) * 180) / Math.PI);
-    let screenAngle = 0;
-    if (typeof window !== 'undefined') {
-      if (window.screen?.orientation?.angle != null) screenAngle = window.screen.orientation.angle;
-      else if (typeof (window as Window & { orientation?: number }).orientation === 'number') {
-        screenAngle = (window as Window & { orientation?: number }).orientation!;
-      }
-    }
-    heading = wrap360(heading + screenAngle);
+  let opticalHeading = wrap360((Math.atan2(Fx, Fy) * 180) / Math.PI);
+  const hasWebkit =
+    typeof webkitHeading === 'number' && !Number.isNaN(webkitHeading) && webkitHeading >= 0;
+
+  if (!hasWebkit) {
+    opticalHeading = wrap360(opticalHeading + screenRotationDeg());
   }
+
+  if (hasWebkit && Math.abs(pitch) < 52) {
+    const target = angleDiff(webkitHeading, opticalHeading);
+    compassBias += 0.14 * angleDiff(target, compassBias);
+    compassBias = angleDiff(compassBias, 0);
+  }
+
+  const heading = wrap360(opticalHeading + compassBias);
+  const roll = Math.abs(pitch) > 78 ? 0 : gamma;
 
   return {
     heading,
     pitch,
-    roll: gamma,
+    roll,
     timestamp: performance.now(),
   };
 }
 
-/** Adaptive smoothing: low lag when panning, light damping when still. */
+/** Adaptive smoothing: overlay holds still when the phone is still. */
 export function pushAttitudeSample(sample: DeviceAttitude): DeviceAttitude {
   latest = sample;
   if (!initialized) {
@@ -85,8 +96,8 @@ export function pushAttitudeSample(sample: DeviceAttitude): DeviceAttitude {
   const dH = angleDiff(sample.heading, smooth.heading);
   const dP = sample.pitch - smooth.pitch;
   const dR = sample.roll - smooth.roll;
-  const motion = Math.abs(dH) + Math.abs(dP);
-  const factor = motion > 5 ? 0.72 : motion > 1.5 ? 0.48 : 0.28;
+  const motion = Math.abs(dH) + Math.abs(dP) + Math.abs(dR) * 0.35;
+  const factor = motion > 8 ? 0.78 : motion > 2.5 ? 0.5 : motion > 0.45 ? 0.22 : 0.07;
 
   smooth = {
     heading: wrap360(smooth.heading + dH * factor),
@@ -107,10 +118,10 @@ export function getSmoothedAttitude(): DeviceAttitude {
 
 export function resetAttitudeFilter() {
   initialized = false;
+  compassBias = 0;
   smooth = { heading: 0, pitch: 25, roll: 0, timestamp: 0 };
 }
 
-/** For planetarium / manual override */
 export function setManualAttitude(heading: number, pitch: number, roll = 0) {
   const s = { heading: wrap360(heading), pitch, roll, timestamp: performance.now() };
   latest = s;

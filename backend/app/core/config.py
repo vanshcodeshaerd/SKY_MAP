@@ -7,7 +7,14 @@ class Settings:
     project_name: str = "SkyGazer AR"
     version: str = "1.0.0"
     ephemeris_engine: str = "Skyfield (NASA JPL DE421)"
-    cors_origins: List[str] = ["http://localhost:5173"]
+    cors_origins: List[str] = [
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:4173",
+        "http://127.0.0.1:4173",
+        "http://localhost:5174",
+        "http://127.0.0.1:5174",
+    ]
     max_upload_bytes: int = 10 * 1024 * 1024
     allowed_image_types: frozenset[str] = frozenset(
         {"image/jpeg", "image/jpg", "image/png"}

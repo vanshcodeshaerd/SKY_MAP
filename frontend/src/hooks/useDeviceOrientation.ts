@@ -23,6 +23,7 @@ export function useDeviceOrientation() {
 
   const [needsPermission, setNeedsPermission] = useState<boolean>(false);
   const usingAbsoluteRef = useRef<boolean>(false);
+  const compassBiasRef = useRef(0);
 
   useEffect(() => {
     // Check if iOS 13+ permission is required
@@ -89,20 +90,12 @@ export function useDeviceOrientation() {
       // Compute Elevation Pitch: +90° = Zenith, 0° = Horizon, -90° = Nadir
       const pitchDeg = (Math.asin(Math.max(-1, Math.min(1, Fz))) * 180) / Math.PI;
 
-      // Compute Compass Heading: 0° = North, 90° = East, 180° = South, 270° = West
-      let headingDeg: number;
-
+      // Optical-axis azimuth. Compass (webkit) only nudges yaw near the horizon so looking up stays stable.
+      let opticalHeading = ((Math.atan2(Fx, Fy) * 180) / Math.PI + 360) % 360;
       const usedWebkitHeading =
         typeof webkitHeading === 'number' && !isNaN(webkitHeading) && webkitHeading >= 0;
 
-      if (usedWebkitHeading) {
-        // iOS Safari: heading is already in geographic frame — do not add screen rotation.
-        headingDeg = (webkitHeading + 360) % 360;
-      } else {
-        // Derived from W3C vector projection; compensate for display rotation vs device axes.
-        const rawHeading = (Math.atan2(Fx, Fy) * 180) / Math.PI;
-        headingDeg = (rawHeading + 360) % 360;
-
+      if (!usedWebkitHeading) {
         let screenAngle = 0;
         if (typeof window !== 'undefined') {
           if (
@@ -114,10 +107,15 @@ export function useDeviceOrientation() {
             screenAngle = (window as any).orientation;
           }
         }
-        headingDeg = (headingDeg + screenAngle + 360) % 360;
+        opticalHeading = (opticalHeading + screenAngle + 360) % 360;
+      } else if (Math.abs(pitchDeg) < 52) {
+        let err = webkitHeading - opticalHeading - compassBiasRef.current;
+        while (err < -180) err += 360;
+        while (err > 180) err -= 360;
+        compassBiasRef.current += 0.14 * err;
       }
 
-      const effectiveCompassHeading = headingDeg;
+      const effectiveCompassHeading = (opticalHeading + compassBiasRef.current + 360) % 360;
 
       setOrientation((prev) => ({
         ...prev,
