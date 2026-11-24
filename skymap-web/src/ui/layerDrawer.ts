@@ -27,7 +27,15 @@ export function initLayerDrawer(onChange: (s: LayerSettings) => void): LayerSett
 
   const drawer = document.getElementById('layer-drawer');
   const settingsBtn = document.getElementById('btn-settings');
-  settingsBtn?.addEventListener('click', () => drawer?.classList.toggle('hidden'));
+  const closeBtn = document.getElementById('layer-drawer-close');
+
+  settingsBtn?.addEventListener('click', () => {
+    document.getElementById('search-panel')?.classList.add('hidden');
+    drawer?.classList.toggle('hidden');
+  });
+  closeBtn?.addEventListener('click', () => {
+    drawer?.classList.add('hidden');
+  });
 
   const emit = () => onChange({ ...settings });
 
@@ -49,19 +57,21 @@ export function initLayerDrawer(onChange: (s: LayerSettings) => void): LayerSett
     });
   }
 
-  const bortle = document.getElementById('bortle-slider') as HTMLInputElement;
+  const bortle = document.getElementById('bortle-slider') as HTMLInputElement | null;
+  const bortleVal = document.getElementById('bortle-val');
   bortle?.addEventListener('input', () => {
     settings.bortle = parseInt(bortle.value, 10);
+    if (bortleVal) bortleVal.textContent = `${settings.bortle}`;
     emit();
   });
 
-  const contrast = document.getElementById('contrast-slider') as HTMLInputElement;
+  const contrast = document.getElementById('contrast-slider') as HTMLInputElement | null;
   contrast?.addEventListener('input', () => {
     settings.contrast = parseFloat(contrast.value);
     emit();
   });
 
-  const bright = document.getElementById('brightness-slider') as HTMLInputElement;
+  const bright = document.getElementById('brightness-slider') as HTMLInputElement | null;
   bright?.addEventListener('input', () => {
     settings.brightness = parseFloat(bright.value);
     emit();

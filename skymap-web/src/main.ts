@@ -1,15 +1,33 @@
 import { initCamera } from './camera';
 import { watchLocation, type LocationData } from './location';
-import { startOrientation, getSmoothedOrientation } from './orientation';
+import {
+  getScreenOrientationAngle,
+  getSensorCapabilities,
+  getSmoothedOrientation,
+  startOrientation,
+} from './orientation';
 import { initCalibrationUI, getCalibratedFOV } from './calibration';
 import { loadCatalog, indexStars } from './catalog';
 import { SkyState } from './sky/SkyState';
 import { createRenderer, type IRenderer } from './render/index.ts';
-import type { RenderOptions } from './render/types.ts';
+import {
+  visibilityFromMode,
+  type CelestialFilterMode,
+  type RenderOptions,
+} from './render/types.ts';
 import { buildSkyScene } from './scene/buildScene.ts';
-import { coneSearch, findConstellationByStars, confirmWithSimbad } from './recognition.ts';
+import {
+  computeConstellationCenters,
+  computeNextConstellations,
+  coneSearch,
+  ConstellationTracker,
+  confirmWithSimbad,
+} from './recognition.ts';
 import { showCalibrationModal } from './ui/calibrationModal.ts';
-import { showConstellationCard } from './ui/constellationCard.ts';
+import { hideConstellationCard, showConstellationCard } from './ui/constellationCard.ts';
+import { showPlanetCard } from './ui/planetCard.ts';
+import { updateCompassHud } from './ui/compassHud.ts';
+import { initSearchPanel } from './ui/searchPanel.ts';
 import { initLayerDrawer, type LayerSettings } from './ui/layerDrawer.ts';
 import { initTimeSlider } from './ui/timeSlider.ts';
 import { magneticDeclination } from './sensors/wmm.ts';
@@ -18,13 +36,17 @@ import { setBrightness, setContrast, setSobelEnabled, processSobelFrame } from '
 import { hitTestStar, buildGeodesicArc, type MeasureState } from './measure.ts';
 import { drawDirectionalArrow } from './render/draw2d.ts';
 import { sunAltAz, moonAltAz } from './astronomy.ts';
-import { planetAltAz, NAKED_EYE_PLANETS } from './planets.ts';
+import { equatorialToHorizontal } from './astronomy/fast.ts';
+import { getPlanetDetails, type PlanetName } from './planets.ts';
 import { initPlanetariumControls, drawPlanetariumDome } from './planetarium.ts';
 import { WebXRRenderer } from './render/WebXRRenderer.ts';
+import { orientationMatrix } from './projection.ts';
 
 const catalog = loadCatalog('advanced');
 const sky = new SkyState(catalog.stars);
 const starIndex = indexStars(catalog.stars);
+const constellationCenters = computeConstellationCenters(catalog.stars, catalog.constellations);
+const tracker = new ConstellationTracker();
 const fusion = new OrientationFusion();
 
 const video = document.getElementById('camera-feed') as HTMLVideoElement;
@@ -32,6 +54,7 @@ const canvas = document.getElementById('ar-canvas') as HTMLCanvasElement;
 const ctx = canvas.getContext('2d')!;
 const startScreen = document.getElementById('start-screen') as HTMLElement;
 const startBtn = document.getElementById('start-btn') as HTMLButtonElement;
+const startSkyBtn = document.getElementById('start-sky-btn') as HTMLButtonElement;
 const uiContainer = document.getElementById('ui-container') as HTMLElement;
 const planetariumScreen = document.getElementById('planetarium-screen') as HTMLElement;
 const planetariumCanvas = document.getElementById('planetarium-canvas') as HTMLCanvasElement;
@@ -39,29 +62,38 @@ const pCtx = planetariumCanvas?.getContext('2d');
 
 const hudAlt = document.getElementById('hud-alt') as HTMLElement;
 const hudAz = document.getElementById('hud-az') as HTMLElement;
-const hudPhase = document.getElementById('hud-phase') as HTMLElement;
 const hudBoresight = document.getElementById('hud-boresight') as HTMLElement;
-const targetDist = document.getElementById('target-dist') as HTMLElement;
-const btnSun = document.getElementById('btn-sun') as HTMLButtonElement;
-const btnMoon = document.getElementById('btn-moon') as HTMLButtonElement;
+const hudLoc = document.getElementById('hud-loc') as HTMLElement;
 const fovSlider = document.getElementById('fov-slider') as HTMLInputElement;
 const fovVal = document.getElementById('fov-val') as HTMLElement;
 const btnModeAr = document.getElementById('btn-mode-ar') as HTMLButtonElement;
 const btnModeSky = document.getElementById('btn-mode-sky') as HTMLButtonElement;
 const btnVr = document.getElementById('btn-vr') as HTMLButtonElement;
+const btnCalibrate = document.getElementById('btn-calibrate') as HTMLButtonElement;
+const planetBar = document.getElementById('planet-bar') as HTMLElement;
 
-let currentLocation: LocationData | null = null;
+const filterBothBtn = document.getElementById('filter-both') as HTMLButtonElement;
+const filterPlanetsBtn = document.getElementById('filter-planets') as HTMLButtonElement;
+const filterConstellationsBtn = document.getElementById('filter-constellations') as HTMLButtonElement;
+
+// Default observer fallback if GPS is still acquiring or denied on desktop
+let currentLocation: LocationData = { lat: 23.0225, lon: 72.5714 };
+let locationLocked = false;
+let cameraReady = false;
 let currentFov = getCalibratedFOV();
-let targetBody: 'Sun' | 'Moon' = 'Sun';
+let targetBody: PlanetName | 'Sun' | 'Moon' = 'Sun';
+let selectedPlanetName: PlanetName | 'Sun' | 'Moon' | null = null;
+let guidedConstellationId: string | null = null;
+let celestialMode: CelestialFilterMode = 'BOTH';
 let simDate = new Date();
 let azimuthNudge = 0;
-let useIosTrueNorth = false;
 let appMode: 'AR' | 'PLANETARIUM' = 'AR';
+let cardDismissedForCon: string | null = null;
 let renderer!: IRenderer;
 let webglRenderer: IRenderer | null = null;
 let xrRenderer: WebXRRenderer | null = null;
 const measure: MeasureState = { starA: null, starB: null };
-let projectedForHit: ReturnType<typeof buildSkyScene>['stars'] = [];
+let lastScene: ReturnType<typeof buildSkyScene> | null = null;
 
 const renderOptions: RenderOptions = {
   mode: 'AR',
@@ -87,6 +119,71 @@ let layerSettings: LayerSettings = initLayerDrawer((s) => {
   }
 });
 
+function applyCelestialFilterMode(mode: CelestialFilterMode) {
+  celestialMode = mode;
+  const map: [HTMLButtonElement | null, CelestialFilterMode][] = [
+    [filterBothBtn, 'BOTH'],
+    [filterPlanetsBtn, 'PLANETS'],
+    [filterConstellationsBtn, 'CONSTELLATIONS'],
+  ];
+
+  for (const [btn, m] of map) {
+    if (!btn) continue;
+    btn.classList.toggle('hud-pill-active', m === mode);
+    btn.classList.toggle('text-on-surface-variant', m !== mode);
+  }
+
+  if (mode === 'CONSTELLATIONS') {
+    planetBar?.classList.add('hidden');
+    showPlanetCard(null);
+    selectedPlanetName = null;
+  } else {
+    planetBar?.classList.remove('hidden');
+  }
+
+  if (mode === 'PLANETS') {
+    hideConstellationCard();
+    guidedConstellationId = null;
+  }
+}
+
+filterBothBtn?.addEventListener('click', () => applyCelestialFilterMode('BOTH'));
+filterPlanetsBtn?.addEventListener('click', () => applyCelestialFilterMode('PLANETS'));
+filterConstellationsBtn?.addEventListener('click', () => applyCelestialFilterMode('CONSTELLATIONS'));
+applyCelestialFilterMode('BOTH');
+
+function selectTargetPlanet(name: PlanetName | 'Sun' | 'Moon') {
+  targetBody = name;
+  selectedPlanetName = name;
+
+  document.querySelectorAll<HTMLButtonElement>('.planet-chip').forEach((chip) => {
+    const active = chip.dataset.planet === name;
+    chip.classList.toggle('hud-pill-active', active);
+    chip.classList.toggle('bg-white/5', !active);
+    chip.classList.toggle('border-white/10', !active);
+    chip.classList.toggle('text-on-surface-variant', !active);
+  });
+
+  if (name !== 'Sun' && name !== 'Moon') {
+    const details = getPlanetDetails(name, simDate, currentLocation.lat, currentLocation.lon);
+    showPlanetCard(details, () => {
+      selectedPlanetName = null;
+    });
+    if (appMode === 'PLANETARIUM' && planetarium) {
+      planetarium.lookAt(details.azimuth, details.altitude);
+    }
+  } else {
+    showPlanetCard(null);
+  }
+}
+
+document.querySelectorAll<HTMLButtonElement>('.planet-chip').forEach((chip) => {
+  chip.addEventListener('click', () => {
+    const p = chip.dataset.planet as PlanetName | 'Sun' | 'Moon' | undefined;
+    if (p) selectTargetPlanet(p);
+  });
+});
+
 function resizeCanvas() {
   canvas.width = window.innerWidth;
   canvas.height = window.innerHeight;
@@ -99,27 +196,6 @@ function resizeCanvas() {
 }
 window.addEventListener('resize', resizeCanvas);
 
-function updateTargetUI() {
-  const activeClass = ['bg-primary-container/20', 'border-primary-container', 'text-primary-container', 'shadow-[0_0_8px_rgba(0,242,255,0.4)]'];
-  const inactiveClass = ['bg-surface-container/50', 'border-outline/30', 'text-on-surface-variant', 'hover:bg-surface-variant'];
-  if (targetBody === 'Sun') {
-    btnSun.classList.add(...activeClass);
-    btnSun.classList.remove(...inactiveClass);
-    btnMoon.classList.add(...inactiveClass);
-    btnMoon.classList.remove(...activeClass);
-    targetDist.textContent = '1 AU';
-  } else {
-    btnMoon.classList.add(...activeClass);
-    btnMoon.classList.remove(...inactiveClass);
-    btnSun.classList.add(...inactiveClass);
-    btnSun.classList.remove(...activeClass);
-    targetDist.textContent = '384K KM';
-  }
-}
-btnSun.addEventListener('click', () => { targetBody = 'Sun'; updateTargetUI(); });
-btnMoon.addEventListener('click', () => { targetBody = 'Moon'; updateTargetUI(); });
-updateTargetUI();
-
 initCalibrationUI(fovSlider, fovVal, (newFov) => {
   currentFov = newFov;
   fovVal.textContent = `${newFov}°`;
@@ -130,67 +206,234 @@ initTimeSlider((d) => {
   sky.setSimulatedDate(d);
 });
 
-const planetarium = planetariumScreen ? initPlanetariumControls(planetariumScreen) : null;
+const planetarium = planetariumScreen
+  ? initPlanetariumControls(planetariumScreen, (deltaFov) => {
+      currentFov = Math.max(25, Math.min(115, currentFov + deltaFov));
+      if (fovSlider) fovSlider.value = currentFov.toString();
+      if (fovVal) fovVal.textContent = `${Math.round(currentFov)}°`;
+    })
+  : null;
 
-btnModeAr?.addEventListener('click', () => {
-  appMode = 'AR';
-  planetariumScreen?.classList.add('hidden');
-  video.style.display = 'block';
-  renderer.setMode('AR');
+window.addEventListener('keydown', (e) => {
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+    e.preventDefault();
+    document.getElementById('layer-drawer')?.classList.add('hidden');
+    const sp = document.getElementById('search-panel');
+    sp?.classList.toggle('hidden');
+    if (!sp?.classList.contains('hidden')) {
+      (document.getElementById('sky-search-input') as HTMLInputElement | null)?.focus();
+    }
+  }
 });
-btnModeSky?.addEventListener('click', () => {
-  appMode = 'PLANETARIUM';
-  planetariumScreen?.classList.remove('hidden');
-  video.style.display = 'none';
-  renderer.setMode('VR_PLANETARIUM');
-});
+
+function setEnvironmentMode(mode: 'AR' | 'PLANETARIUM') {
+  appMode = mode;
+  if (mode === 'AR') {
+    planetariumScreen?.classList.add('hidden');
+    video.style.display = 'block';
+    btnModeAr.classList.add('hud-pill-active');
+    btnModeAr.classList.remove('text-on-surface-variant');
+    btnModeSky.classList.remove('hud-pill-active');
+    btnModeSky.classList.add('text-on-surface-variant');
+    renderer?.setMode('AR');
+  } else {
+    planetariumScreen?.classList.remove('hidden');
+    video.style.display = 'none';
+    btnModeSky.classList.add('hud-pill-active');
+    btnModeSky.classList.remove('text-on-surface-variant');
+    btnModeAr.classList.remove('hud-pill-active');
+    btnModeAr.classList.add('text-on-surface-variant');
+    renderer?.setMode('VR_PLANETARIUM');
+  }
+}
+
+btnModeAr?.addEventListener('click', () => setEnvironmentMode('AR'));
+btnModeSky?.addEventListener('click', () => setEnvironmentMode('PLANETARIUM'));
 btnVr?.addEventListener('click', async () => {
   if (!xrRenderer) {
     xrRenderer = new WebXRRenderer(renderOptions);
     await xrRenderer.init(document.body, renderOptions);
   }
   const ok = await xrRenderer.enterVR();
-  if (!ok) alert('WebXR immersive-vr not supported on this device.');
+  if (!ok) {
+    alert('WebXR immersive-vr is unavailable on this browser. Switching to 360° Planetarium mode.');
+    setEnvironmentMode('PLANETARIUM');
+  }
+});
+
+btnCalibrate?.addEventListener('click', () => {
+  showCalibrationModal(
+    (cal) => {
+      azimuthNudge = cal.azimuthNudge;
+    },
+    {
+      cameraReady,
+      locationReady: locationLocked,
+      headingDeg: getFusedOrientation().h,
+    }
+  );
+});
+
+initSearchPanel(catalog.constellations, catalog.stars, {
+  onSelectConstellation: (conId) => {
+    guidedConstellationId = conId;
+    tracker.forceSelect(conId);
+    if (celestialMode === 'PLANETS') applyCelestialFilterMode('BOTH');
+    const center = constellationCenters.get(conId);
+    if (center && appMode === 'PLANETARIUM' && planetarium) {
+      const hor = equatorialToHorizontal(center.ra, center.dec, currentLocation.lat, currentLocation.lon, simDate);
+      planetarium.lookAt(hor.azimuth, hor.altitude);
+    }
+  },
+  onSelectPlanet: (planet) => {
+    if (celestialMode === 'CONSTELLATIONS') applyCelestialFilterMode('BOTH');
+    selectTargetPlanet(planet);
+  },
 });
 
 canvas.addEventListener('click', (e) => {
-  if (!layerSettings.measureMode) return;
-  const star = hitTestStar(projectedForHit, starIndex, e.clientX, e.clientY);
-  if (!star) return;
-  if (!measure.starA) measure.starA = star;
-  else if (!measure.starB) measure.starB = star;
-  else { measure.starA = star; measure.starB = null; }
+  if (!lastScene) return;
+
+  if (layerSettings.measureMode) {
+    const star = hitTestStar(lastScene.stars, starIndex, e.clientX, e.clientY);
+    if (!star) return;
+    if (!measure.starA) measure.starA = star;
+    else if (!measure.starB) measure.starB = star;
+    else {
+      measure.starA = star;
+      measure.starB = null;
+    }
+    return;
+  }
+
+  // Hit-test planets/bodies first if visible
+  if (celestialMode !== 'CONSTELLATIONS') {
+    for (const b of lastScene.bodies) {
+      if (!b.onScreen || b.kind === 'dso') continue;
+      if (Math.hypot(b.x - e.clientX, b.y - e.clientY) <= 26) {
+        selectTargetPlanet(b.label as PlanetName | 'Sun' | 'Moon');
+        return;
+      }
+    }
+  }
+
+  // Hit-test stars to inspect their constellation
+  if (celestialMode !== 'PLANETS') {
+    const star = hitTestStar(lastScene.stars, starIndex, e.clientX, e.clientY);
+    if (star?.constellationId) {
+      guidedConstellationId = star.constellationId;
+      tracker.forceSelect(star.constellationId);
+    }
+  }
 });
 
 function getFusedOrientation() {
   const raw = getSmoothedOrientation();
-  const decl = currentLocation ? magneticDeclination(currentLocation.lat, currentLocation.lon) : 0;
+  const caps = getSensorCapabilities();
+  const decl = magneticDeclination(currentLocation.lat, currentLocation.lon);
   return fusion.updateFromEuler(
     { h: raw.h + azimuthNudge, b: raw.b, g: raw.g },
     decl,
-    useIosTrueNorth
+    caps.iosTrueNorth
   );
 }
 
+let lastUiUpdate = 0;
+
 function render() {
   requestAnimationFrame(render);
-  if (!currentLocation) return;
 
-  const orientation = appMode === 'PLANETARIUM' && planetarium
-    ? { h: planetarium.yaw(), b: planetarium.pitch(), g: 0 }
-    : getFusedOrientation();
+  const screenAngle = getScreenOrientationAngle();
+  const orientation =
+    appMode === 'PLANETARIUM' && planetarium
+      ? { h: planetarium.yaw(), b: planetarium.pitch(), g: 0 }
+      : getFusedOrientation();
 
-  const R = [
-    [1, 0, 0],
-    [0, 1, 0],
-    [0, 0, 1],
-  ];
+  updateCompassHud(orientation.h);
+
+  const R = orientationMatrix(orientation.h, orientation.b, orientation.g, appMode === 'PLANETARIUM' ? 0 : screenAngle);
+  const visibility = visibilityFromMode(celestialMode);
 
   let measureArc = null;
-  if (measure.starA && measure.starB) {
-    const pa = projectedForHit.find((p) => p.id === measure.starA!.id);
-    const pb = projectedForHit.find((p) => p.id === measure.starB!.id);
+  if (measure.starA && measure.starB && lastScene) {
+    const pa = lastScene.stars.find((p) => p.id === measure.starA!.id);
+    const pb = lastScene.stars.find((p) => p.id === measure.starB!.id);
     if (pa && pb) measureArc = buildGeodesicArc({ x: pa.x, y: pa.y }, { x: pb.x, y: pb.y }, measure.starA, measure.starB);
+  }
+
+  // Recognition & Constellation Tracking (only when constellations are active)
+  const nowMs = performance.now();
+  let activeConId: string | null = guidedConstellationId;
+  if (visibility.constellations) {
+    const magThresh = layerSettings.bortle <= 3 ? 6 : layerSettings.bortle <= 5 ? 4.8 : 3.2;
+    const rec = coneSearch(
+      catalog.stars,
+      currentLocation.lat,
+      currentLocation.lon,
+      simDate,
+      orientation.h,
+      orientation.b,
+      orientation.g,
+      currentFov / 2,
+      magThresh,
+      appMode === 'PLANETARIUM' ? 0 : screenAngle
+    );
+    const tracked = tracker.update(rec, nowMs);
+    activeConId = guidedConstellationId ?? tracked.constellationId;
+
+    if (nowMs - lastUiUpdate > 250) {
+      lastUiUpdate = nowMs;
+      const starLabel = rec.star?.name ?? rec.star?.bayer ?? '';
+      hudBoresight.textContent = [starLabel, activeConId].filter(Boolean).join(' · ') || 'Scanning sky...';
+
+      if (activeConId && activeConId !== cardDismissedForCon) {
+        const nextSuggestions = computeNextConstellations(
+          activeConId,
+          rec.ra,
+          rec.dec,
+          orientation.h,
+          currentLocation.lat,
+          currentLocation.lon,
+          simDate,
+          catalog.constellations,
+          constellationCenters
+        );
+        showConstellationCard({
+          conId: activeConId,
+          meta: catalog.constellations,
+          stars: catalog.stars,
+          isLocked: guidedConstellationId !== null,
+          recognition: {
+            confidence: tracked.confidence,
+            status: tracked.status,
+            alt: rec.alt,
+            az: rec.az,
+          },
+          nextSuggestions,
+          onSelectNext: (nextId) => {
+            cardDismissedForCon = null;
+            guidedConstellationId = nextId;
+            tracker.forceSelect(nextId);
+            const center = constellationCenters.get(nextId);
+            if (center && appMode === 'PLANETARIUM' && planetarium) {
+              const hor = equatorialToHorizontal(center.ra, center.dec, currentLocation.lat, currentLocation.lon, simDate);
+              planetarium.lookAt(hor.azimuth, hor.altitude);
+            }
+          },
+          onUnlock: () => {
+            guidedConstellationId = null;
+            cardDismissedForCon = null;
+          },
+          onClose: () => {
+            cardDismissedForCon = activeConId;
+          },
+        });
+      }
+      confirmWithSimbad(rec.ra, rec.dec, () => {});
+    }
+  } else if (nowMs - lastUiUpdate > 250) {
+    lastUiUpdate = nowMs;
+    hudBoresight.textContent = `Planet Mode (${targetBody})`;
   }
 
   const scene = buildSkyScene({
@@ -202,112 +445,124 @@ function render() {
     heading: orientation.h,
     beta: orientation.b,
     gamma: orientation.g,
+    screenAngle: appMode === 'PLANETARIUM' ? 0 : screenAngle,
     width: canvas.width,
     height: canvas.height,
     fov: currentFov,
     bortle: layerSettings.bortle,
     lines: catalog.lines,
+    visibility,
+    activeConstellationId: activeConId,
+    selectedPlanetName,
     measureArc,
   });
-  projectedForHit = scene.stars;
+  lastScene = scene;
 
-  const rec = coneSearch(
-    catalog.stars,
-    currentLocation.lat,
-    currentLocation.lon,
-    simDate,
-    orientation.h,
-    orientation.b,
-    orientation.g,
-    currentFov / 2,
-    layerSettings.bortle <= 3 ? 6 : layerSettings.bortle <= 5 ? 4.8 : 3
-  );
-  const con = findConstellationByStars(
-    catalog.stars,
-    currentLocation.lat,
-    currentLocation.lon,
-    simDate,
-    orientation.h,
-    orientation.b,
-    orientation.g,
-    12
-  );
-  const conId = rec.constellationId ?? con;
-  if (rec.star || conId) {
-    const label = rec.star?.name ?? rec.star?.id ?? '';
-    hudBoresight.textContent = [label, conId].filter(Boolean).join(' · ') || '—';
-    showConstellationCard(conId, catalog.constellations, catalog.stars);
-    confirmWithSimbad(rec.ra, rec.dec, (hit) => {
-      if (!hit) return;
-      const simCon = hit.constellation ?? conId;
-      hudBoresight.textContent = [hit.id.replace(/^NAME /, ''), simCon].filter(Boolean).join(' · ');
-      showConstellationCard(simCon, catalog.constellations, catalog.stars);
-    });
-  } else if (hudBoresight) {
-    hudBoresight.textContent = '—';
+  // Update target Alt/Az telemetry
+  let targetAz = 0;
+  let targetAlt = 0;
+  if (targetBody === 'Sun') {
+    const s = sunAltAz(simDate, currentLocation.lat, currentLocation.lon);
+    targetAlt = s.altitude;
+    targetAz = s.azimuth;
+  } else if (targetBody === 'Moon') {
+    const m = moonAltAz(simDate, currentLocation.lat, currentLocation.lon);
+    targetAlt = m.altitude;
+    targetAz = m.azimuth;
+  } else {
+    const details = getPlanetDetails(targetBody, simDate, currentLocation.lat, currentLocation.lon);
+    targetAlt = details.altitude;
+    targetAz = details.azimuth;
   }
-
-  const sunPos = sunAltAz(simDate, currentLocation.lat, currentLocation.lon);
-  const moonPos = moonAltAz(simDate, currentLocation.lat, currentLocation.lon);
-  const bodyPos = targetBody === 'Sun' ? sunPos : moonPos;
-  hudAlt.textContent = `${bodyPos.altitude > 0 ? '+' : ''}${bodyPos.altitude.toFixed(1)}°`;
-  hudAz.textContent = `${bodyPos.azimuth.toFixed(1)}°`;
-  if (targetBody === 'Moon' && moonPos.illumFraction !== undefined) {
-    hudPhase.textContent = `${(moonPos.illumFraction * 100).toFixed(0)}%`;
-  }
+  hudAlt.textContent = `${targetAlt >= 0 ? '+' : ''}${targetAlt.toFixed(1)}°`;
+  hudAz.textContent = `${targetAz.toFixed(1)}°`;
 
   if (appMode === 'PLANETARIUM' && pCtx && planetariumCanvas) {
     drawPlanetariumDome(pCtx, planetariumCanvas.width, planetariumCanvas.height, layerSettings.bortle);
   }
-  renderer.render({ ...scene, bortle: layerSettings.bortle }, R);
+
+  renderer.render(scene, R);
+  webglRenderer?.render(scene, R);
+
   if (appMode === 'AR') {
     processSobelFrame(video);
-    const target = targetBody === 'Sun' ? sunPos : moonPos;
-    const targetOnScreen = scene.bodies.some((b) => b.label === targetBody && b.onScreen);
-    if (!targetOnScreen) {
-      drawDirectionalArrow(ctx, canvas.width, canvas.height, orientation.h, target.azimuth, targetBody === 'Sun' ? '#fbbf24' : '#f1f5f9');
+  }
+
+  // Offscreen directional guidance arrow
+  if (visibility.planets) {
+    const targetSprite = scene.bodies.find((b) => b.label === targetBody);
+    if (targetSprite && !targetSprite.onScreen) {
+      drawDirectionalArrow(ctx, canvas.width, canvas.height, orientation.h, targetAz, targetSprite.color, targetBody);
+    }
+  } else if (guidedConstellationId) {
+    const center = constellationCenters.get(guidedConstellationId);
+    if (center) {
+      const hor = equatorialToHorizontal(center.ra, center.dec, currentLocation.lat, currentLocation.lon, simDate);
+      const anyVisible = scene.labels.some(
+        (l) => l.constellationId?.toLowerCase() === guidedConstellationId?.toLowerCase()
+      );
+      if (!anyVisible) {
+        drawDirectionalArrow(ctx, canvas.width, canvas.height, orientation.h, hor.azimuth, '#00f2ff', guidedConstellationId);
+      }
+    }
+  }
+}
+
+async function startExperience(initialMode: 'AR' | 'PLANETARIUM') {
+  renderer = await createRenderer('canvas', document.body, renderOptions);
+  resizeCanvas();
+
+  try {
+    watchLocation(
+      (loc) => {
+        currentLocation = loc;
+        locationLocked = true;
+        if (hudLoc) hudLoc.textContent = `${loc.lat.toFixed(2)}°, ${loc.lon.toFixed(2)}°`;
+      },
+      () => {
+        if (hudLoc) hudLoc.textContent = `${currentLocation.lat.toFixed(2)}°, ${currentLocation.lon.toFixed(2)}° (Default)`;
+      }
+    );
+  } catch {
+    if (hudLoc) hudLoc.textContent = `${currentLocation.lat.toFixed(2)}°, ${currentLocation.lon.toFixed(2)}° (Default)`;
+  }
+
+  if (initialMode === 'AR') {
+    try {
+      await initCamera(video);
+      cameraReady = true;
+    } catch {
+      cameraReady = false;
+      initialMode = 'PLANETARIUM';
+    }
+    try {
+      await startOrientation(() => {});
+    } catch {
+      // Fallback gracefully if device orientation is unavailable on desktop
     }
   }
 
-  webglRenderer?.render(scene, R);
+  setEnvironmentMode(initialMode);
+  requestAnimationFrame(render);
 
-  for (const planet of NAKED_EYE_PLANETS) {
-    planetAltAz(planet, simDate, currentLocation.lat, currentLocation.lon);
-  }
+  startScreen.classList.add('opacity-0');
+  setTimeout(() => {
+    startScreen.classList.add('hidden');
+    uiContainer.classList.remove('hidden');
+    setTimeout(() => {
+      uiContainer.style.opacity = '1';
+    }, 50);
+  }, 400);
 }
 
 startBtn.addEventListener('click', async () => {
   startBtn.textContent = 'INITIALIZING...';
   startBtn.disabled = true;
-  try {
-    renderer = await createRenderer('canvas', document.body, renderOptions);
-    resizeCanvas();
+  await startExperience('AR');
+});
 
-    await initCamera(video);
-    watchLocation(
-      (loc) => { currentLocation = loc; },
-      (err) => console.error(err)
-    );
-
-    showCalibrationModal((cal) => {
-      azimuthNudge = cal.azimuthNudge;
-    });
-
-    await startOrientation(() => {});
-    useIosTrueNorth = typeof (window as any).DeviceOrientationEvent !== 'undefined';
-
-    requestAnimationFrame(render);
-
-    startScreen.classList.add('opacity-0');
-    setTimeout(() => {
-      startScreen.classList.add('hidden');
-      uiContainer.classList.remove('hidden');
-      setTimeout(() => { uiContainer.style.opacity = '1'; }, 50);
-    }, 500);
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    alert(`System Error: ${msg}`);
-    startBtn.textContent = 'ENGAGE AR';
-    startBtn.disabled = false;
-  }
+startSkyBtn?.addEventListener('click', async () => {
+  startSkyBtn.textContent = 'LOADING...';
+  startSkyBtn.disabled = true;
+  await startExperience('PLANETARIUM');
 });

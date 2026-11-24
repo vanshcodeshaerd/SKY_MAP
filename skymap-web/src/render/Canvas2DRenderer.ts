@@ -1,6 +1,13 @@
 import type { IRenderer } from './IRenderer.ts';
 import type { RenderMode, RenderOptions, SkySceneData } from './types.ts';
-import { clearCanvas, drawDirectionalArrow, drawGeodesicArc, drawIcon, magnitudeColor, magnitudeRadius } from './draw2d.ts';
+import {
+  clearCanvas,
+  drawDirectionalArrow,
+  drawGeodesicArc,
+  drawPlanetSprite,
+  magnitudeColor,
+  magnitudeRadius,
+} from './draw2d.ts';
 
 export class Canvas2DRenderer implements IRenderer {
   private canvas: HTMLCanvasElement | null = null;
@@ -25,7 +32,9 @@ export class Canvas2DRenderer implements IRenderer {
   setMode(mode: RenderMode): void {
     this.options.mode = mode;
     if (this.canvas) {
-      this.canvas.style.display = mode === 'VR_PLANETARIUM' ? 'none' : 'block';
+      // Keep ar-canvas visible in both AR and VR_PLANETARIUM so stars/planets render over the dome
+      this.canvas.style.display = 'block';
+      this.canvas.style.zIndex = mode === 'VR_PLANETARIUM' ? '9' : '2';
     }
   }
 
@@ -38,56 +47,87 @@ export class Canvas2DRenderer implements IRenderer {
 
   render(sceneData: SkySceneData, _cameraMatrix: number[][]): void {
     if (!this.ctx || !this.canvas) return;
-    clearCanvas(this.ctx, this.canvas.width, this.canvas.height);
+    const ctx = this.ctx;
+    clearCanvas(ctx, this.canvas.width, this.canvas.height);
 
-    const limit = sceneData.bortle <= 3 ? 6.5 : sceneData.bortle <= 5 ? 4.8 : 3.0;
+    const vis = sceneData.visibility;
+    const limit = sceneData.bortle <= 3 ? 6.5 : sceneData.bortle <= 5 ? 4.8 : 3.2;
 
-    if (this.options.showLines) {
+    if (vis.constellations && vis.constellationLines && this.options.showLines) {
       for (const seg of sceneData.lines) {
         if (!seg.visible) continue;
-        this.ctx.save();
-        this.ctx.strokeStyle = 'rgba(0, 242, 255, 0.35)';
-        this.ctx.lineWidth = 1.5;
-        this.ctx.beginPath();
-        this.ctx.moveTo(seg.x1, seg.y1);
-        this.ctx.lineTo(seg.x2, seg.y2);
-        this.ctx.stroke();
-        this.ctx.restore();
+        ctx.save();
+        if (seg.highlighted) {
+          ctx.strokeStyle = 'rgba(0, 242, 255, 0.92)';
+          ctx.lineWidth = 2.4;
+          ctx.shadowColor = 'rgba(0, 242, 255, 0.6)';
+          ctx.shadowBlur = 6;
+        } else {
+          ctx.strokeStyle = 'rgba(56, 189, 248, 0.34)';
+          ctx.lineWidth = 1.25;
+        }
+        ctx.beginPath();
+        ctx.moveTo(seg.x1, seg.y1);
+        ctx.lineTo(seg.x2, seg.y2);
+        ctx.stroke();
+        ctx.restore();
       }
     }
 
-    if (this.options.showStars) {
+    if (vis.stars && this.options.showStars) {
       for (const star of sceneData.stars) {
         if (!star.onScreen || star.magnitude > Math.min(limit, this.options.magLimit)) continue;
         const r = magnitudeRadius(star.magnitude);
         const color = magnitudeColor(star.colorIndex);
-        this.ctx.beginPath();
-        this.ctx.arc(star.x, star.y, r, 0, Math.PI * 2);
-        this.ctx.fillStyle = color;
-        this.ctx.fill();
-        if (this.options.showLabels && star.name && star.magnitude < 2.5) {
-          this.ctx.fillStyle = 'rgba(255,255,255,0.9)';
-          this.ctx.font = '10px Space Mono, monospace';
-          this.ctx.textAlign = 'center';
-          this.ctx.fillText(star.name, star.x, star.y + r + 12);
+        const inActiveCon =
+          sceneData.activeConstellationId &&
+          star.constellationId?.toLowerCase() === sceneData.activeConstellationId.toLowerCase();
+
+        if (star.magnitude < 1.5 || inActiveCon) {
+          const glow = ctx.createRadialGradient(star.x, star.y, r * 0.2, star.x, star.y, r * 3.5);
+          glow.addColorStop(0, color);
+          glow.addColorStop(1, 'transparent');
+          ctx.fillStyle = glow;
+          ctx.beginPath();
+          ctx.arc(star.x, star.y, r * 3.5, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        ctx.beginPath();
+        ctx.arc(star.x, star.y, r, 0, Math.PI * 2);
+        ctx.fillStyle = color;
+        ctx.fill();
+
+        if (this.options.showLabels && star.name && (star.magnitude < 2.6 || inActiveCon)) {
+          ctx.fillStyle = inActiveCon ? '#00f2ff' : 'rgba(255,255,255,0.88)';
+          ctx.font = "10px 'Space Mono', monospace";
+          ctx.textAlign = 'center';
+          ctx.fillText(star.name, star.x, star.y + r + 12);
         }
       }
     }
 
     for (const body of sceneData.bodies) {
       if (body.onScreen) {
-        drawIcon(this.ctx, { x: body.x, y: body.y }, body.label, body.color);
+        drawPlanetSprite(ctx, body);
+      }
+    }
+
+    if (vis.constellations && vis.constellationLabels && this.options.showLabels) {
+      for (const lbl of sceneData.labels) {
+        ctx.save();
+        ctx.fillStyle = lbl.highlighted ? '#00f2ff' : 'rgba(148, 210, 255, 0.72)';
+        ctx.font = lbl.highlighted ? "bold 12px 'Space Mono', monospace" : "10px 'Space Mono', monospace";
+        ctx.textAlign = 'center';
+        ctx.shadowColor = 'rgba(0,0,0,0.9)';
+        ctx.shadowBlur = 4;
+        ctx.fillText(lbl.text, lbl.x, lbl.y);
+        ctx.restore();
       }
     }
 
     for (const arc of sceneData.overlays) {
-      drawGeodesicArc(this.ctx, arc.points, arc.label);
-    }
-
-    for (const lbl of sceneData.labels) {
-      this.ctx.fillStyle = '#00f2ff';
-      this.ctx.font = 'bold 12px Space Mono, monospace';
-      this.ctx.fillText(lbl.text, lbl.x, lbl.y);
+      drawGeodesicArc(ctx, arc.points, arc.label);
     }
   }
 
@@ -97,9 +137,10 @@ export class Canvas2DRenderer implements IRenderer {
     h: number,
     heading: number,
     az: number,
-    color: string
+    color: string,
+    label?: string
   ) {
-    drawDirectionalArrow(ctx, w, h, heading, az, color);
+    drawDirectionalArrow(ctx, w, h, heading, az, color, label);
   }
 
   dispose(): void {}

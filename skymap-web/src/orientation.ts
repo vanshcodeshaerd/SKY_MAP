@@ -1,7 +1,15 @@
 export interface OrientationData {
-  h: number; // heading (alpha)
+  h: number; // clockwise compass heading [0, 360)
   b: number; // pitch (beta)
   g: number; // roll (gamma)
+}
+
+export interface SensorCapabilities {
+  supported: boolean;
+  absolute: boolean;
+  iosTrueNorth: boolean;
+  permissionGranted: boolean;
+  lastEventTimestamp: number;
 }
 
 function angleDiff(a: number, b: number) {
@@ -11,54 +19,90 @@ function angleDiff(a: number, b: number) {
   return diff;
 }
 
-let smoothed: OrientationData = { h: 0, b: 0, g: 0 };
+let smoothed: OrientationData = { h: 0, b: 90, g: 0 };
 let hasInitialized = false;
 
-function lowPass(next: OrientationData, a = 0.18) {
+const capabilities: SensorCapabilities = {
+  supported: typeof window !== 'undefined' && 'DeviceOrientationEvent' in window,
+  absolute: false,
+  iosTrueNorth: false,
+  permissionGranted: false,
+  lastEventTimestamp: 0,
+};
+
+export function getSensorCapabilities(): Readonly<SensorCapabilities> {
+  return capabilities;
+}
+
+export function getScreenOrientationAngle(): number {
+  if (typeof window === 'undefined') return 0;
+  if (window.screen?.orientation && typeof window.screen.orientation.angle === 'number') {
+    return window.screen.orientation.angle;
+  }
+  const legacy = (window as unknown as { orientation?: number }).orientation;
+  return typeof legacy === 'number' ? legacy : 0;
+}
+
+function lowPass(next: OrientationData, a = 0.22) {
   if (!hasInitialized) {
     smoothed = { ...next };
     hasInitialized = true;
     return;
   }
-  smoothed.h += a * angleDiff(next.h, smoothed.h); 
-  // Keep h in [0, 360)
-  smoothed.h = ((smoothed.h % 360) + 360) % 360;
-  
-  smoothed.b += a * (next.b - smoothed.b);
-  smoothed.g += a * (next.g - smoothed.g);
+  smoothed.h = (((smoothed.h + a * angleDiff(next.h, smoothed.h)) % 360) + 360) % 360;
+  smoothed.b += a * angleDiff(next.b, smoothed.b);
+  smoothed.g += a * angleDiff(next.g, smoothed.g);
 }
 
 export function getSmoothedOrientation(): OrientationData {
   return smoothed;
 }
 
+export function resetOrientationFilter() {
+  hasInitialized = false;
+  smoothed = { h: 0, b: 90, g: 0 };
+}
+
 export async function startOrientation(onUpdate: (h: number, b: number, g: number) => void) {
-  // iOS 13+ requires a permission request fired from a user gesture (a click)
-  const AnyDOE = DeviceOrientationEvent as any;
-  if (typeof AnyDOE.requestPermission === "function") {
+  const AnyDOE = DeviceOrientationEvent as unknown as {
+    requestPermission?: () => Promise<'granted' | 'denied'>;
+  };
+  if (typeof AnyDOE?.requestPermission === 'function') {
     const result = await AnyDOE.requestPermission();
-    if (result !== "granted") throw new Error("Orientation permission denied");
+    if (result !== 'granted') {
+      capabilities.permissionGranted = false;
+      throw new Error('Orientation permission denied');
+    }
   }
+  capabilities.permissionGranted = true;
 
   const handler = (e: DeviceOrientationEvent) => {
-    const iosHeading = (e as any).webkitCompassHeading; // iOS Safari only
-    const heading = iosHeading != null 
-      ? iosHeading                 // already true-north-referenced on iOS
-      : 360 - (e.alpha ?? 0);      // Android: alpha is magnetic north, counter-clockwise
-      
-    const current = {
-        h: heading,
-        b: e.beta ?? 0,
-        g: e.gamma ?? 0
-    };
-    
-    lowPass(current);
+    if (e.alpha == null && e.beta == null && e.gamma == null) return;
+    const iosHeading = (e as unknown as { webkitCompassHeading?: number }).webkitCompassHeading;
+    if (iosHeading != null) {
+      capabilities.iosTrueNorth = true;
+      capabilities.absolute = true;
+    } else if (e.absolute) {
+      capabilities.absolute = true;
+    }
+
+    const heading =
+      iosHeading != null
+        ? iosHeading
+        : (((360 - (e.alpha ?? 0)) % 360) + 360) % 360;
+
+    capabilities.lastEventTimestamp = Date.now();
+    lowPass({
+      h: heading,
+      b: e.beta ?? 90,
+      g: e.gamma ?? 0,
+    });
     onUpdate(smoothed.h, smoothed.b, smoothed.g);
   };
 
-  if ("ondeviceorientationabsolute" in window) {
-    (window as any).addEventListener("deviceorientationabsolute", handler);
+  if ('ondeviceorientationabsolute' in window) {
+    (window as Window).addEventListener('deviceorientationabsolute' as keyof WindowEventMap, handler as EventListener);
   } else {
-    (window as any).addEventListener("deviceorientation", handler);
+    (window as Window).addEventListener('deviceorientation', handler);
   }
 }

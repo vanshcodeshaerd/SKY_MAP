@@ -3,268 +3,304 @@
 <head>
     <meta charset="utf-8"/>
     <meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" name="viewport"/>
-    <title>Sky Map AR - 3D HUD</title>
-    
-    <!-- Tailwind and Fonts -->
+    <title>SkyMap AR/VR — Astronomical Explorer</title>
+
     <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet"/>
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
-    
+
     <script id="tailwind-config">
         tailwind.config = {
           darkMode: "class",
           theme: {
             extend: {
               colors: {
-                "surface": "#10131a",
-                "surface-container": "#1d2026",
-                "primary-container": "#00f2ff",
-                "on-surface": "#e1e2eb",
-                "on-surface-variant": "#b9cacb"
+                "surface": "#0b0f17",
+                "surface-container": "#141a26",
+                "primary-container": "#38bdf8",
+                "on-surface": "#f1f5f9",
+                "on-surface-variant": "#94a3b8"
               },
               fontFamily: {
-                "data-sm": ["Space Mono"],
-                "data-lg": ["Space Mono"],
-                "label-caps": ["Space Mono"]
+                "sans": ["Inter", "system-ui", "sans-serif"],
+                "data-sm": ["Space Mono", "monospace"],
+                "data-lg": ["Space Mono", "monospace"],
+                "label-caps": ["Space Mono", "monospace"]
               }
             }
           }
         }
     </script>
-    
-    <!-- Link to our original custom styles (for camera-feed and ar-canvas) -->
+
     <link rel="stylesheet" href="./style.css">
 
     <style>
         body {
-            background-color: transparent;
+            background-color: #03050a;
+            font-family: 'Inter', system-ui, sans-serif;
             overflow: hidden;
             overscroll-behavior: none;
         }
-        
-        .scanline {
-            width: 100%;
-            height: 100px;
-            background: linear-gradient(0deg, rgba(0,242,255,0) 0%, rgba(0,242,255,0.1) 50%, rgba(0,242,255,0) 100%);
-            opacity: 0.1;
-            position: absolute;
-            bottom: 100%;
-            animation: scanline 8s linear infinite;
-            pointer-events: none;
-            z-index: 40;
-        }
-        @keyframes scanline {
-            0% { bottom: 100%; }
-            100% { bottom: -100px; }
-        }
-        
+
+        /* 21st.dev-inspired Observatory Glass */
         .hud-glass {
-            background: linear-gradient(135deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.01) 100%);
-            border: 0.5px solid rgba(0,242,255,0.3);
+            background: rgba(11, 15, 23, 0.72);
+            border: 1px solid rgba(148, 163, 184, 0.16);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.06);
             backdrop-filter: blur(20px);
             -webkit-backdrop-filter: blur(20px);
-            box-shadow: 0 0 15px rgba(0,242,255,0.05) inset;
-        }
-        
-        .pulse-ring {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            width: 200px;
-            height: 200px;
-            border: 1px solid rgba(0,242,255,0.5);
-            border-radius: 50%;
-            animation: pulse 2s infinite;
-            pointer-events: none;
         }
 
-        @keyframes pulse {
-            0% { transform: translate(-50%, -50%) scale(0.8); opacity: 0; }
-            50% { opacity: 1; }
-            100% { transform: translate(-50%, -50%) scale(1.2); opacity: 0; }
+        .hud-pill-active {
+            background: rgba(56, 189, 248, 0.18);
+            border: 1px solid rgba(56, 189, 248, 0.55);
+            color: #7dd3fc;
+            box-shadow: 0 0 12px rgba(56, 189, 248, 0.22);
         }
 
-        /* Hide UI initially until started */
-        #ui-container {
-            transition: opacity 0.5s ease;
-        }
-        #ui-container.hidden {
-            opacity: 0;
-            pointer-events: none;
-        }
+        #ui-container { transition: opacity 0.35s ease; }
+        #ui-container.hidden { opacity: 0; pointer-events: none; }
+
         body.night-red video { filter: sepia(1) hue-rotate(-50deg) saturate(3) !important; }
+        body.night-red .text-primary-container,
+        body.night-red .hud-pill-active { color: #f87171 !important; border-color: rgba(248,113,113,0.5) !important; }
+
         #sobel-overlay { position: absolute; inset: 0; z-index: 5; pointer-events: none; opacity: 0.6; }
-        #planetarium-screen { z-index: 8; }
+        #planetarium-screen { z-index: 4; }
+        #ar-canvas { pointer-events: auto; }
+
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
     </style>
 </head>
-<body class="text-on-surface h-screen w-screen relative">
+<body class="text-on-surface h-screen w-screen relative select-none">
 
-    <!-- AR Core Elements (Video + Canvas) -->
+    <!-- AR / Planetarium Core -->
     <video id="camera-feed" autoplay playsinline muted></video>
-    <canvas id="ar-canvas"></canvas>
-    <canvas id="sobel-overlay"></canvas>
     <div id="planetarium-screen" class="hidden absolute inset-0 pointer-events-auto">
         <canvas id="planetarium-canvas" class="absolute inset-0"></canvas>
     </div>
+    <canvas id="ar-canvas"></canvas>
+    <canvas id="sobel-overlay"></canvas>
 
-    <!-- Start Screen (Overlay) -->
-    <div id="start-screen" class="absolute inset-0 z-50 flex flex-col items-center justify-center bg-surface/90 backdrop-blur-md transition-opacity duration-500">
-        <h1 class="text-5xl font-bold text-primary-container mb-4 tracking-wider">ASTRO_HUD</h1>
-        <p class="text-on-surface-variant mb-8 text-lg">Initialize sensors to begin tracking.</p>
-        <button id="start-btn" class="px-8 py-3 bg-primary-container/20 border border-primary-container text-primary-container rounded-lg hover:bg-primary-container/40 transition-colors shadow-[0_0_15px_rgba(0,242,255,0.5)]">
-            ENGAGE AR
-        </button>
+    <!-- Start Screen -->
+    <div id="start-screen" class="absolute inset-0 z-50 flex flex-col items-center justify-center bg-[#04070f]/95 backdrop-blur-xl transition-opacity duration-500 p-6 text-center">
+        <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-sky-500/10 border border-sky-400/25 text-sky-300 text-[11px] font-mono mb-4">
+            <span class="w-1.5 h-1.5 rounded-full bg-sky-400 animate-pulse"></span>
+            88 IAU CONSTELLATIONS · JPL PLANETARY EPHEMERIS
+        </div>
+        <h1 class="text-4xl md:text-6xl font-bold tracking-tight text-white mb-3">
+            SkyMap <span class="text-sky-400">AR/VR</span>
+        </h1>
+        <p class="text-on-surface-variant mb-8 text-sm md:text-base max-w-md leading-relaxed">
+            Real-time celestial navigation, intelligent constellation recognition, and a 360° interactive planetarium.
+        </p>
+        <div class="flex flex-wrap gap-3 justify-center">
+            <button id="start-btn" class="px-7 py-3 rounded-xl bg-sky-500 hover:bg-sky-400 text-slate-950 font-semibold text-sm transition-all shadow-[0_0_24px_rgba(56,189,248,0.35)]">
+                Launch AR Camera
+            </button>
+            <button id="start-sky-btn" class="px-6 py-3 rounded-xl hud-glass hover:bg-white/10 text-white font-semibold text-sm transition-all">
+                Open 360° Planetarium
+            </button>
+        </div>
     </div>
 
-    <!-- UI Overlay (Stitch Generated) -->
+    <!-- Main HUD -->
     <div id="ui-container" class="hidden absolute inset-0 z-20 pointer-events-none">
-        
-        <div class="scanline"></div>
 
-        <!-- 3D Reticle Element (Three.js) -->
+        <!-- Subtle Precision Reticle -->
         <div class="absolute inset-0 flex items-center justify-center z-10 pointer-events-none">
-            <div class="pulse-ring"></div>
-            <!-- Crosshairs -->
-            <div class="absolute top-0 bottom-0 left-1/2 w-[1px] bg-primary-container/30 -translate-x-1/2"></div>
-            <div class="absolute left-0 right-0 top-1/2 h-[1px] bg-primary-container/30 -translate-y-1/2"></div>
-            <!-- Reticle Corners -->
-            <div class="absolute top-1/4 left-1/4 w-4 h-4 border-t border-l border-primary-container/80"></div>
-            <div class="absolute top-1/4 right-1/4 w-4 h-4 border-t border-r border-primary-container/80"></div>
-            <div class="absolute bottom-1/4 left-1/4 w-4 h-4 border-b border-l border-primary-container/80"></div>
-            <div class="absolute bottom-1/4 right-1/4 w-4 h-4 border-b border-r border-primary-container/80"></div>
-            
-            <!-- We can inject ThreeJS here later if we want -->
+            <div class="w-9 h-9 rounded-full border border-sky-400/35 flex items-center justify-center">
+                <div class="w-1 h-1 rounded-full bg-sky-300/80"></div>
+            </div>
         </div>
 
-        <!-- TopAppBar -->
-        <header class="fixed top-0 left-0 w-full bg-surface/60 backdrop-blur-xl shadow-[0_0_15px_rgba(0,242,255,0.2)] z-50 flex justify-between items-center px-6 py-4 border-b-0 pointer-events-auto">
-            <div class="flex items-center gap-2 pointer-events-auto">
-                <button type="button" id="btn-mode-ar" class="px-2 py-1 text-xs text-primary-container border border-primary-container/40 rounded">AR</button>
-                <button type="button" id="btn-mode-sky" class="px-2 py-1 text-xs text-on-surface-variant border border-outline/30 rounded">SKY</button>
-                <button type="button" id="btn-vr" class="px-2 py-1 text-xs text-on-surface-variant border border-outline/30 rounded">VR</button>
-            </div>
-            <h1 class="font-data-lg text-lg text-primary-container uppercase tracking-widest font-bold">ASTRO_HUD v2.0</h1>
-            <div class="flex items-center gap-4 text-on-surface-variant hover:bg-primary-container/10 transition-colors p-2 rounded cursor-pointer pointer-events-auto" id="btn-settings">
-                <span class="material-symbols-outlined">settings</span>
-            </div>
-        </header>
+        <!-- TOP STACK: Header + Compass Strip in unified flex flow (never overlaps) -->
+        <div class="fixed top-2.5 inset-x-2.5 md:inset-x-4 z-50 flex flex-col items-center gap-2 pointer-events-none">
+            <header class="w-full max-w-5xl hud-glass rounded-2xl px-3 py-2 flex flex-wrap items-center justify-between gap-2 pointer-events-auto">
+                <!-- Environment Switcher -->
+                <div class="flex items-center gap-1 bg-black/30 p-0.5 rounded-xl border border-white/5">
+                    <button type="button" id="btn-mode-ar" class="px-2.5 py-1 text-[11px] font-semibold rounded-lg hud-pill-active transition-all">AR</button>
+                    <button type="button" id="btn-mode-sky" class="px-2.5 py-1 text-[11px] font-semibold rounded-lg text-on-surface-variant hover:text-white transition-all">SKY 360°</button>
+                    <button type="button" id="btn-vr" class="px-2.5 py-1 text-[11px] font-semibold rounded-lg text-on-surface-variant hover:text-white transition-all">VR</button>
+                </div>
 
-        <!-- Side Panels -->
-        <div class="absolute inset-0 pointer-events-none flex items-center justify-between px-6 z-20">
-            <!-- Left Panel: Target Toggle -->
-            <div class="hud-glass rounded-xl p-6 flex flex-col items-center gap-4 pointer-events-auto">
-                <span class="font-label-caps text-xs text-primary-container/70 mb-2">TARGET LOCK</span>
-                <div class="flex flex-col gap-2">
-                    <button id="btn-sun" class="w-12 h-12 flex items-center justify-center rounded-lg bg-primary-container/20 border border-primary-container text-primary-container shadow-[0_0_8px_rgba(0,242,255,0.4)] transition-all">
-                        <span class="text-xl">☀️</span>
+                <!-- Independent Celestial Filter Segmented Control -->
+                <div class="flex items-center gap-1 bg-black/30 p-0.5 rounded-xl border border-white/5" role="group" aria-label="Celestial filter mode">
+                    <button type="button" id="filter-both" class="px-2.5 py-1 text-[11px] font-semibold rounded-lg hud-pill-active transition-all">BOTH</button>
+                    <button type="button" id="filter-planets" class="px-2.5 py-1 text-[11px] font-semibold rounded-lg text-on-surface-variant hover:text-white transition-all">PLANETS</button>
+                    <button type="button" id="filter-constellations" class="px-2.5 py-1 text-[11px] font-semibold rounded-lg text-on-surface-variant hover:text-white transition-all">CONSTELLATIONS</button>
+                </div>
+
+                <!-- Quick Toolbar -->
+                <div class="flex items-center gap-1">
+                    <button type="button" id="btn-search-toggle" title="Search Sky" class="p-1.5 rounded-lg text-on-surface-variant hover:bg-white/10 hover:text-sky-300 transition-colors">
+                        <span class="material-symbols-outlined text-[18px]">search</span>
                     </button>
-                    <button id="btn-moon" class="w-12 h-12 flex items-center justify-center rounded-lg bg-surface-container/50 border border-outline/30 text-on-surface-variant hover:bg-surface-variant transition-all">
-                        <span class="text-xl">🌙</span>
+                    <button type="button" id="btn-time-toggle" title="Time Machine" class="p-1.5 rounded-lg text-on-surface-variant hover:bg-white/10 hover:text-sky-300 transition-colors">
+                        <span class="material-symbols-outlined text-[18px]">schedule</span>
+                    </button>
+                    <button type="button" id="btn-calibrate" title="Calibrate AR" class="p-1.5 rounded-lg text-on-surface-variant hover:bg-white/10 hover:text-sky-300 transition-colors">
+                        <span class="material-symbols-outlined text-[18px]">explore</span>
+                    </button>
+                    <button type="button" id="btn-settings" title="Layers &amp; Settings" class="p-1.5 rounded-lg text-on-surface-variant hover:bg-white/10 hover:text-sky-300 transition-colors">
+                        <span class="material-symbols-outlined text-[18px]">tune</span>
                     </button>
                 </div>
-                <div class="w-full h-[1px] bg-gradient-to-r from-transparent via-primary-container/50 to-transparent my-2"></div>
-                <div class="flex flex-col items-center">
-                    <span class="font-data-sm text-xs text-primary-container">DIST</span>
-                    <span id="target-dist" class="font-data-sm text-xs text-on-surface">1AU</span>
-                </div>
-            </div>
+            </header>
 
-            <!-- Right Panel: FOV Slider -->
-            <div class="hud-glass rounded-xl p-6 flex flex-col items-center h-64 pointer-events-auto">
-                <span class="font-label-caps text-xs text-primary-container/70 mb-4">FOV CAL</span>
-                <div class="relative h-full flex items-center justify-center">
-                    <input type="range" id="fov-slider" min="30" max="120" value="65" 
-                           class="w-32 -rotate-90 accent-primary-container bg-surface-container appearance-none h-1 rounded outline-none" />
+            <!-- 8-Point Directional Compass Pill -->
+            <div class="hud-glass rounded-full px-3.5 py-1 flex items-center gap-2 text-[11px] font-mono pointer-events-none">
+                <div id="compass-strip" class="flex items-center gap-2">
+                    <span data-dir="N" class="text-primary-container font-bold">N</span>
+                    <span data-dir="NE" class="text-on-surface-variant/60 hidden sm:inline">NE</span>
+                    <span data-dir="E" class="text-on-surface-variant/60">E</span>
+                    <span data-dir="SE" class="text-on-surface-variant/60 hidden sm:inline">SE</span>
+                    <span data-dir="S" class="text-on-surface-variant/60">S</span>
+                    <span data-dir="SW" class="text-on-surface-variant/60 hidden sm:inline">SW</span>
+                    <span data-dir="W" class="text-on-surface-variant/60">W</span>
+                    <span data-dir="NW" class="text-on-surface-variant/60 hidden sm:inline">NW</span>
                 </div>
-                <div class="mt-4 flex flex-col items-center">
-                    <span id="fov-val" class="font-data-sm text-xs text-primary-container">65°</span>
-                </div>
-            </div>
-        </div>
-
-        <!-- Bottom Dashboard -->
-        <div class="absolute bottom-10 left-6 right-6 md:left-1/4 md:right-1/4 z-30 pointer-events-auto">
-            <div class="hud-glass rounded-2xl p-6 flex flex-row justify-between items-center relative overflow-hidden">
-                <div class="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-primary-container/80 to-transparent"></div>
-                
-                <div class="flex flex-col items-center flex-1">
-                    <span class="font-label-caps text-[10px] text-on-surface-variant mb-1">ALTITUDE</span>
-                    <div class="bg-surface-container/50 px-3 py-1 rounded-full border border-primary-container/20">
-                        <span id="hud-alt" class="font-data-sm text-sm text-primary-container">Waiting...</span>
-                    </div>
-                </div>
-                
-                <div class="w-[1px] h-10 bg-gradient-to-b from-transparent via-primary-container/30 to-transparent"></div>
-                
-                <div class="flex flex-col items-center flex-1">
-                    <span class="font-label-caps text-[10px] text-on-surface-variant mb-1">AZIMUTH</span>
-                    <div class="bg-surface-container/50 px-3 py-1 rounded-full border border-primary-container/20">
-                        <span id="hud-az" class="font-data-sm text-sm text-primary-container">Waiting...</span>
-                    </div>
-                </div>
-                
-                <div class="w-[1px] h-10 bg-gradient-to-b from-transparent via-primary-container/30 to-transparent hidden md:block"></div>
-                
-                <div class="flex flex-col items-center flex-1">
-                    <span class="font-label-caps text-[10px] text-on-surface-variant mb-1">BORESIGHT</span>
-                    <div class="bg-surface-container/50 px-3 py-1 rounded-full border border-primary-container/20">
-                        <span id="hud-boresight" class="font-data-sm text-xs text-primary-container">—</span>
-                    </div>
-                </div>
-                <div class="w-[1px] h-10 bg-gradient-to-b from-transparent via-primary-container/30 to-transparent hidden md:block"></div>
-                <div class="flex flex-col items-center flex-1 hidden md:flex">
-                    <span class="font-label-caps text-[10px] text-on-surface-variant mb-1">MOON PHASE</span>
-                    <div class="bg-surface-container/50 px-3 py-1 rounded-full border border-primary-container/20 flex items-center gap-2">
-                        <span class="material-symbols-outlined text-[14px] text-primary-container">brightness_4</span>
-                        <span id="hud-phase" class="font-data-sm text-sm text-primary-container">Waiting...</span>
-                    </div>
-                </div>
+                <span class="text-white/15">|</span>
+                <span id="compass-heading" class="text-sky-300 font-bold">0° N</span>
             </div>
         </div>
 
-        <div id="time-slider-panel" class="absolute bottom-28 left-6 right-6 md:left-1/4 md:right-1/4 z-30 pointer-events-auto hud-glass rounded-xl p-4 hidden md:block">
-            <span class="font-label-caps text-[10px] text-primary-container">TIME MACHINE</span>
-            <input type="range" id="time-slider" min="-24" max="168" value="0" step="1" class="w-full mt-2 accent-primary-container"/>
-            <span id="time-label" class="font-data-sm text-xs text-on-surface-variant">now</span>
+        <!-- Right FOV Control (Desktop) -->
+        <div class="fixed right-3 top-1/2 -translate-y-1/2 z-20 pointer-events-auto hud-glass rounded-2xl p-2.5 hidden md:flex flex-col items-center gap-2">
+            <span class="font-label-caps text-[9px] text-on-surface-variant">FOV</span>
+            <div class="h-28 flex items-center justify-center">
+                <input type="range" id="fov-slider" min="25" max="115" value="65"
+                       class="w-24 -rotate-90 accent-sky-400 bg-white/10 appearance-none h-1 rounded outline-none" />
+            </div>
+            <span id="fov-val" class="font-data-sm text-[11px] text-sky-300">65°</span>
+        </div>
+
+        <!-- BOTTOM DOCK: Time Machine + Solar System Strip + Telemetry -->
+        <div class="fixed bottom-2.5 inset-x-2.5 md:left-1/2 md:-translate-x-1/2 md:w-full md:max-w-2xl z-30 pointer-events-auto flex flex-col gap-1.5">
+            <!-- Collapsible Time Machine -->
+            <div id="time-slider-panel" class="hidden hud-glass rounded-xl px-3.5 py-2 flex items-center gap-3">
+                <span class="font-label-caps text-[10px] text-sky-300 whitespace-nowrap">TIME</span>
+                <input type="range" id="time-slider" min="-24" max="168" value="0" step="1" class="flex-1 accent-sky-400"/>
+                <span id="time-label" class="font-data-sm text-[11px] text-on-surface whitespace-nowrap">Live (Now)</span>
+                <button id="time-reset" type="button" class="px-2 py-0.5 text-[10px] rounded bg-sky-500/20 text-sky-300 border border-sky-400/30 hover:bg-sky-500/30">NOW</button>
+            </div>
+
+            <!-- Horizontal Solar System Pill Strip (hidden in CONSTELLATIONS mode) -->
+            <div id="planet-bar" class="hud-glass rounded-xl px-2 py-1.5 flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+                <button type="button" data-planet="Sun" class="planet-chip shrink-0 px-2.5 py-1 text-[11px] rounded-lg hud-pill-active transition-all">☀ Sun</button>
+                <button type="button" data-planet="Moon" class="planet-chip shrink-0 px-2.5 py-1 text-[11px] rounded-lg bg-white/5 border border-white/10 text-on-surface-variant hover:text-white transition-all">🌙 Moon</button>
+                <button type="button" data-planet="Mercury" class="planet-chip shrink-0 px-2.5 py-1 text-[11px] rounded-lg bg-white/5 border border-white/10 text-on-surface-variant hover:text-white transition-all">☿ Mercury</button>
+                <button type="button" data-planet="Venus" class="planet-chip shrink-0 px-2.5 py-1 text-[11px] rounded-lg bg-white/5 border border-white/10 text-on-surface-variant hover:text-white transition-all">♀ Venus</button>
+                <button type="button" data-planet="Mars" class="planet-chip shrink-0 px-2.5 py-1 text-[11px] rounded-lg bg-white/5 border border-white/10 text-on-surface-variant hover:text-white transition-all">♂ Mars</button>
+                <button type="button" data-planet="Jupiter" class="planet-chip shrink-0 px-2.5 py-1 text-[11px] rounded-lg bg-white/5 border border-white/10 text-on-surface-variant hover:text-white transition-all">♃ Jupiter</button>
+                <button type="button" data-planet="Saturn" class="planet-chip shrink-0 px-2.5 py-1 text-[11px] rounded-lg bg-white/5 border border-white/10 text-on-surface-variant hover:text-white transition-all">♄ Saturn</button>
+            </div>
+
+            <!-- Telemetry Bar -->
+            <div class="hud-glass rounded-2xl px-4 py-2 flex items-center justify-between text-center">
+                <div class="flex flex-col items-center flex-1">
+                    <span class="font-label-caps text-[9px] text-on-surface-variant">ALT</span>
+                    <span id="hud-alt" class="font-data-sm text-xs text-sky-300">—</span>
+                </div>
+                <div class="w-[1px] h-6 bg-white/10"></div>
+                <div class="flex flex-col items-center flex-1">
+                    <span class="font-label-caps text-[9px] text-on-surface-variant">AZ</span>
+                    <span id="hud-az" class="font-data-sm text-xs text-sky-300">—</span>
+                </div>
+                <div class="w-[1px] h-6 bg-white/10"></div>
+                <div class="flex flex-col items-center flex-[1.5]">
+                    <span class="font-label-caps text-[9px] text-on-surface-variant">BORESIGHT</span>
+                    <span id="hud-boresight" class="font-data-sm text-xs text-sky-300 truncate max-w-[150px]">—</span>
+                </div>
+                <div class="w-[1px] h-6 bg-white/10 hidden sm:block"></div>
+                <div class="flex flex-col items-center flex-1 hidden sm:flex">
+                    <span class="font-label-caps text-[9px] text-on-surface-variant">LOCATION</span>
+                    <span id="hud-loc" class="font-data-sm text-[11px] text-on-surface-variant">Acquiring...</span>
+                </div>
+                <span id="hud-phase" class="hidden"></span>
+                <span id="target-dist" class="hidden"></span>
+            </div>
         </div>
     </div>
 
-  <div id="calibration-modal" class="hidden fixed inset-0 z-[60] flex items-center justify-center bg-surface/95 pointer-events-auto">
-    <div class="hud-glass rounded-2xl p-8 max-w-sm text-center">
-      <h2 class="text-primary-container font-bold mb-4">COMPASS CALIBRATION</h2>
-      <p class="text-sm text-on-surface-variant mb-4">Rotate device in a figure-8. Adjust azimuth if needed (±10°).</p>
-      <input type="range" id="azimuth-nudge" min="-10" max="10" value="0" step="0.5" class="w-full accent-primary-container mb-6"/>
-      <div class="flex gap-4 justify-center">
-        <button id="cal-continue" class="px-4 py-2 bg-primary-container/20 border border-primary-container text-primary-container rounded">CONTINUE</button>
-        <button id="cal-skip" class="px-4 py-2 border border-outline/40 text-on-surface-variant rounded">SKIP</button>
-      </div>
+    <!-- Command-Palette Search Panel -->
+    <div id="search-panel" class="hidden fixed top-24 right-3 md:right-6 z-[60] w-80 max-w-[calc(100vw-1.5rem)] hud-glass rounded-2xl p-3 pointer-events-auto">
+        <div class="flex items-center gap-2 mb-2">
+            <span class="material-symbols-outlined text-sky-400 text-[18px]">search</span>
+            <input id="sky-search-input" type="text" placeholder="Search constellation, star, planet..." class="flex-1 bg-black/30 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-sky-400"/>
+            <button id="search-panel-close" type="button" class="text-on-surface-variant hover:text-white text-sm px-1">✕</button>
+        </div>
+        <div id="sky-search-results" class="max-h-60 overflow-y-auto flex flex-col gap-0.5"></div>
     </div>
-  </div>
 
-  <div id="constellation-card" class="hidden fixed top-24 right-6 z-[55] w-64 hud-glass rounded-xl p-4 pointer-events-auto">
-    <h3 id="constellation-title" class="text-primary-container font-bold text-sm"></h3>
-    <p id="constellation-body" class="text-xs text-on-surface-variant mt-2 whitespace-pre-line"></p>
-  </div>
+    <!-- Constellation Inspector Card -->
+    <div id="constellation-card" class="hidden fixed top-28 left-3 md:left-4 z-[55] w-72 md:w-80 max-h-[52vh] overflow-y-auto hud-glass rounded-2xl p-3.5 pointer-events-auto">
+        <div class="flex justify-between items-start gap-2">
+            <h3 id="constellation-title" class="text-sky-300 font-bold text-xs md:text-sm leading-snug"></h3>
+            <button id="constellation-card-close" type="button" title="Minimize card" class="text-on-surface-variant hover:text-white text-xs px-1.5 py-0.5 rounded hover:bg-white/10">✕</button>
+        </div>
+        <div id="constellation-body" class="mt-2"></div>
+    </div>
 
-  <div id="layer-drawer" class="hidden fixed top-20 right-6 z-[55] w-72 hud-glass rounded-xl p-4 pointer-events-auto text-sm">
-    <h3 class="text-primary-container font-label-caps text-xs mb-3">LAYERS</h3>
-    <label class="flex gap-2 items-center mb-2"><input type="checkbox" id="layer-stars" checked/> Stars</label>
-    <label class="flex gap-2 items-center mb-2"><input type="checkbox" id="layer-lines" checked/> Constellation lines</label>
-    <label class="flex gap-2 items-center mb-2"><input type="checkbox" id="layer-labels" checked/> Bright labels</label>
-    <label class="flex gap-2 items-center mb-2"><input type="checkbox" id="layer-sobel"/> Sobel horizon</label>
-    <label class="flex gap-2 items-center mb-2"><input type="checkbox" id="layer-measure"/> Measure arc tool</label>
-    <label class="flex gap-2 items-center mb-2"><input type="checkbox" id="layer-webgl"/> WebGL stars</label>
-    <label class="flex gap-2 items-center mb-4"><input type="checkbox" id="layer-night-red"/> Night red mode</label>
-    <span class="text-xs text-primary-container/70">Bortle scale</span>
-    <input type="range" id="bortle-slider" min="1" max="9" value="5" class="w-full accent-primary-container"/>
-    <span class="text-xs text-primary-container/70 mt-2 block">Contrast</span>
-    <input type="range" id="contrast-slider" min="0.5" max="2" step="0.05" value="1" class="w-full accent-primary-container"/>
-    <span class="text-xs text-primary-container/70 mt-2 block">Brightness</span>
-    <input type="range" id="brightness-slider" min="0.5" max="2" step="0.05" value="1" class="w-full accent-primary-container"/>
-  </div>
+    <!-- Planet Inspector Card -->
+    <div id="planet-card" class="hidden fixed top-28 right-3 md:right-16 z-[56] w-72 max-w-[calc(100vw-1.5rem)] hud-glass rounded-2xl p-3.5 pointer-events-auto">
+        <h3 id="planet-title" class="text-amber-300 font-bold text-xs md:text-sm mb-2"></h3>
+        <div id="planet-body"></div>
+    </div>
 
-    <!-- Main Logic -->
+    <!-- Calibration Modal -->
+    <div id="calibration-modal" class="hidden fixed inset-0 z-[70] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 pointer-events-auto">
+        <div class="hud-glass rounded-2xl p-6 max-w-sm w-full text-center">
+            <h2 class="text-sky-300 font-bold text-base mb-1.5">AR Sensor Calibration</h2>
+            <p class="text-xs text-on-surface-variant mb-4">Move your device in a figure-8 to calibrate the magnetometer, then adjust heading offset if needed.</p>
+            <div id="cal-status-list" class="text-left text-xs bg-black/35 rounded-xl p-3 mb-4 space-y-1.5 border border-white/5"></div>
+            <div class="flex justify-between text-xs mb-1">
+                <span class="text-on-surface-variant">Manual Heading Offset</span>
+                <span id="azimuth-nudge-val" class="text-sky-300 font-bold font-mono">+0.0°</span>
+            </div>
+            <input type="range" id="azimuth-nudge" min="-15" max="15" value="0" step="0.5" class="w-full accent-sky-400 mb-5"/>
+            <div class="flex gap-2 justify-center">
+                <button id="cal-reset" type="button" class="px-3 py-1.5 text-xs border border-white/15 text-on-surface-variant rounded-lg hover:text-white">Reset</button>
+                <button id="cal-skip" type="button" class="px-3 py-1.5 text-xs border border-white/15 text-on-surface-variant rounded-lg hover:text-white">Skip</button>
+                <button id="cal-continue" type="button" class="px-4 py-1.5 text-xs bg-sky-500 text-slate-950 rounded-lg font-semibold hover:bg-sky-400">Apply</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Layer & Image Processing Drawer -->
+    <div id="layer-drawer" class="hidden fixed top-24 right-3 md:right-6 z-[60] w-72 max-w-[calc(100vw-1.5rem)] hud-glass rounded-2xl p-4 pointer-events-auto text-xs">
+        <div class="flex items-center justify-between mb-3">
+            <h3 class="text-sky-300 font-label-caps text-[11px] font-bold">LAYERS &amp; OPTICS</h3>
+            <button id="layer-drawer-close" type="button" class="text-on-surface-variant hover:text-white px-1">✕</button>
+        </div>
+        <div class="space-y-2 mb-3">
+            <label class="flex gap-2.5 items-center cursor-pointer"><input type="checkbox" id="layer-stars" checked class="rounded accent-sky-400"/> Stars</label>
+            <label class="flex gap-2.5 items-center cursor-pointer"><input type="checkbox" id="layer-lines" checked class="rounded accent-sky-400"/> Constellation lines</label>
+            <label class="flex gap-2.5 items-center cursor-pointer"><input type="checkbox" id="layer-labels" checked class="rounded accent-sky-400"/> Star &amp; constellation labels</label>
+            <label class="flex gap-2.5 items-center cursor-pointer"><input type="checkbox" id="layer-sobel" class="rounded accent-sky-400"/> Sobel horizon edges</label>
+            <label class="flex gap-2.5 items-center cursor-pointer"><input type="checkbox" id="layer-measure" class="rounded accent-sky-400"/> Angular distance tool</label>
+            <label class="flex gap-2.5 items-center cursor-pointer"><input type="checkbox" id="layer-webgl" class="rounded accent-sky-400"/> Three.js WebGL starfield</label>
+            <label class="flex gap-2.5 items-center cursor-pointer"><input type="checkbox" id="layer-night-red" class="rounded accent-sky-400"/> Night-vision red mode</label>
+        </div>
+        <div class="border-t border-white/10 pt-3 space-y-2.5">
+            <div>
+                <div class="flex justify-between text-[11px] text-on-surface-variant mb-1">
+                    <span>Bortle Light Pollution</span><span id="bortle-val" class="text-sky-300 font-mono">5</span>
+                </div>
+                <input type="range" id="bortle-slider" min="1" max="9" value="5" class="w-full accent-sky-400"/>
+            </div>
+            <div>
+                <span class="text-[11px] text-on-surface-variant block mb-1">Camera Contrast</span>
+                <input type="range" id="contrast-slider" min="0.5" max="2" step="0.05" value="1" class="w-full accent-sky-400"/>
+            </div>
+            <div>
+                <span class="text-[11px] text-on-surface-variant block mb-1">Camera Brightness</span>
+                <input type="range" id="brightness-slider" min="0.5" max="2" step="0.05" value="1" class="w-full accent-sky-400"/>
+            </div>
+        </div>
+    </div>
+
     <script type="module" src="/src/main.ts"></script>
 </body>
 </html>
