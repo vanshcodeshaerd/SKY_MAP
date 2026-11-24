@@ -79,3 +79,14 @@ export function initLayerDrawer(onChange: (s: LayerSettings) => void): LayerSett
 
   return settings;
 }
+
+/** PLANETS mode must not let layer checkboxes re-enable stars or stick figures. */
+export function setStarLayerControlsEnabled(enabled: boolean): void {
+  for (const id of ['layer-stars', 'layer-lines', 'layer-labels']) {
+    const el = document.getElementById(id) as HTMLInputElement | null;
+    if (!el) continue;
+    el.disabled = !enabled;
+    el.parentElement?.classList.toggle('opacity-40', !enabled);
+    el.parentElement?.classList.toggle('pointer-events-none', !enabled);
+  }
+}

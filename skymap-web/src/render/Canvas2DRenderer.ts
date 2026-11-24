@@ -57,7 +57,15 @@ export class Canvas2DRenderer implements IRenderer {
       for (const seg of sceneData.lines) {
         if (!seg.visible) continue;
         ctx.save();
-        if (seg.highlighted) {
+        if (seg.quest) {
+          ctx.strokeStyle = 'rgba(250, 204, 21, 0.95)';
+          ctx.lineWidth = 2.8;
+          ctx.shadowColor = 'rgba(250, 204, 21, 0.55)';
+          ctx.shadowBlur = 8;
+        } else if (seg.ghost) {
+          ctx.strokeStyle = 'rgba(56, 189, 248, 0.18)';
+          ctx.lineWidth = 1.1;
+        } else if (seg.highlighted) {
           ctx.strokeStyle = 'rgba(0, 242, 255, 0.92)';
           ctx.lineWidth = 2.4;
           ctx.shadowColor = 'rgba(0, 242, 255, 0.6)';
@@ -83,7 +91,7 @@ export class Canvas2DRenderer implements IRenderer {
           sceneData.activeConstellationId &&
           star.constellationId?.toLowerCase() === sceneData.activeConstellationId.toLowerCase();
 
-        if (star.magnitude < 1.5 || inActiveCon) {
+        if (star.magnitude < 1.5 || inActiveCon || star.questTarget) {
           const glow = ctx.createRadialGradient(star.x, star.y, r * 0.2, star.x, star.y, r * 3.5);
           glow.addColorStop(0, color);
           glow.addColorStop(1, 'transparent');
@@ -107,8 +115,17 @@ export class Canvas2DRenderer implements IRenderer {
       }
     }
 
-    for (const body of sceneData.bodies) {
-      if (body.onScreen) {
+    if (vis.planets) {
+      for (const body of sceneData.bodies) {
+        if (body.kind === 'dso') continue;
+        if (!body.onScreen) continue;
+        drawPlanetSprite(ctx, body);
+      }
+    }
+
+    if (vis.deepSkyObjects) {
+      for (const body of sceneData.bodies) {
+        if (body.kind !== 'dso' || !body.onScreen) continue;
         drawPlanetSprite(ctx, body);
       }
     }

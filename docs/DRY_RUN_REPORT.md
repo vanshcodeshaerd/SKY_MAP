@@ -130,3 +130,16 @@ npm run dry-run
 - **Frontend link:** proxy + health check wired; start both servers to see “online” in UI.  
 - **skymap-web AR:** scientifically aligned for **California** when GPS/IP location is used; automated accuracy **sub-tenth-degree** Sun agreement with backend.  
 - **Camera detection stability:** architecture tuned for **real-time** tracking; **perfect** alignment is only confirmed on **your** phone after GPS, permissions, and optional calibration.
+
+---
+
+## 9. Phase 1 Play mode — phone QA (manual)
+
+Automated tests cover catalog graph, mode flags, and quest edge math. Confirm on a real device:
+
+1. **STARS** — stars and stick figures only (no Sun/Moon/planet disks or planet chip bar).
+2. **PLANETS** — bodies only; layer “Stars” checkbox is disabled and cannot bring stars back.
+3. **BOTH** — stars and planets together.
+4. **Calibrate** — hold a bright star (or the Moon in BOTH/PLANETS) in the reticle ~1s; overlay heading should snap. Slider still works.
+5. **Play: Connect the Stars** — complete one figure in AR (dwell or tap) and one in Sky 360°. Hint shows a faint outline. Skip picks another above-horizon figure when possible.
+6. Switching to PLANETS or BOTH while playing exits Play with no leftover gold lines.

@@ -9,7 +9,7 @@
     "build": "npm run build:catalog && tsc && vite build",
     "preview": "vite preview",
     "validate:catalog": "node scripts/validate-catalog.mjs",
-    "test:astro": "tsx scripts/test-astronomy.mjs",
+    "test:astro": "tsx scripts/test-astronomy.mjs && tsx scripts/test-quest.mjs",
     "dry-run": "tsx scripts/dry-run-e2e.mjs"
   },
   "devDependencies": {

@@ -35,7 +35,7 @@ export function visibilityFromMode(mode: CelestialFilterMode): VisibilityConfig 
         constellations: true,
         constellationLines: true,
         constellationLabels: true,
-        deepSkyObjects: true,
+        deepSkyObjects: false,
       };
     case 'BOTH':
     default:

@@ -102,7 +102,13 @@
             <button id="start-sky-btn" class="px-6 py-3 rounded-xl hud-glass hover:bg-white/10 text-white font-semibold text-sm transition-all">
                 Open 360° Planetarium
             </button>
+            <button id="start-play-btn" class="px-6 py-3 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-semibold text-sm transition-all shadow-[0_0_24px_rgba(251,191,36,0.35)]">
+                Play: Connect the Stars
+            </button>
         </div>
+        <p class="text-[11px] text-on-surface-variant/80 mt-5 max-w-sm">
+            Hipparcos stars · IAU stick figures · align the compass so overlays sit on the real sky.
+        </p>
     </div>
 
     <!-- Main HUD -->
@@ -129,7 +135,7 @@
                 <div class="flex items-center gap-1 bg-black/30 p-0.5 rounded-xl border border-white/5" role="group" aria-label="Celestial filter mode">
                     <button type="button" id="filter-both" class="px-2.5 py-1 text-[11px] font-semibold rounded-lg hud-pill-active transition-all">BOTH</button>
                     <button type="button" id="filter-planets" class="px-2.5 py-1 text-[11px] font-semibold rounded-lg text-on-surface-variant hover:text-white transition-all">PLANETS</button>
-                    <button type="button" id="filter-constellations" class="px-2.5 py-1 text-[11px] font-semibold rounded-lg text-on-surface-variant hover:text-white transition-all">CONSTELLATIONS</button>
+                    <button type="button" id="filter-constellations" class="px-2.5 py-1 text-[11px] font-semibold rounded-lg text-on-surface-variant hover:text-white transition-all" title="Stars &amp; constellation lines only">STARS</button>
                 </div>
 
                 <!-- Quick Toolbar -->
@@ -167,7 +173,7 @@
         </div>
 
         <!-- Right FOV Control (Desktop) -->
-        <div class="fixed right-3 top-1/2 -translate-y-1/2 z-20 pointer-events-auto hud-glass rounded-2xl p-2.5 hidden md:flex flex-col items-center gap-2">
+        <div id="fov-control" class="fixed right-3 top-1/2 -translate-y-1/2 z-20 pointer-events-auto hud-glass rounded-2xl p-2.5 hidden md:flex flex-col items-center gap-2">
             <span class="font-label-caps text-[9px] text-on-surface-variant">FOV</span>
             <div class="h-28 flex items-center justify-center">
                 <input type="range" id="fov-slider" min="25" max="115" value="65"
@@ -197,8 +203,24 @@
                 <button type="button" data-planet="Saturn" class="planet-chip shrink-0 px-2.5 py-1 text-[11px] rounded-lg bg-white/5 border border-white/10 text-on-surface-variant hover:text-white transition-all">♄ Saturn</button>
             </div>
 
+            <div id="quest-hud" class="hidden hud-glass rounded-2xl px-4 py-3 flex flex-col gap-2 pointer-events-auto">
+                <div class="flex items-start justify-between gap-2">
+                    <div>
+                        <p id="quest-title" class="text-amber-200 font-bold text-sm">Connect the stars</p>
+                        <p id="quest-progress" class="font-mono text-sky-300 text-xs mt-0.5">0 / 0 lines</p>
+                    </div>
+                    <button id="quest-exit" type="button" class="text-[11px] px-2 py-1 rounded-lg bg-white/5 text-on-surface-variant hover:text-white">Exit Play</button>
+                </div>
+                <p id="quest-message" class="text-xs text-on-surface leading-relaxed">Point the circle at a bright star and hold still.</p>
+                <div class="flex flex-wrap gap-2">
+                    <button id="quest-hint" type="button" class="px-3 py-1.5 text-[11px] rounded-lg bg-white/5 border border-white/10 text-sky-200">Hint</button>
+                    <button id="quest-skip" type="button" class="px-3 py-1.5 text-[11px] rounded-lg bg-white/5 border border-white/10 text-on-surface-variant">Skip figure</button>
+                </div>
+                <p class="text-[10px] text-on-surface-variant/80">Hipparcos stars · IAU stick figures · calibrate if dots miss the real sky.</p>
+            </div>
+
             <!-- Telemetry Bar -->
-            <div class="hud-glass rounded-2xl px-4 py-2 flex items-center justify-between text-center">
+            <div id="telemetry-bar" class="hud-glass rounded-2xl px-4 py-2 flex items-center justify-between text-center">
                 <div class="flex flex-col items-center flex-1">
                     <span class="font-label-caps text-[9px] text-on-surface-variant">ALT</span>
                     <span id="hud-alt" class="font-data-sm text-xs text-sky-300">—</span>
@@ -222,6 +244,10 @@
                 <span id="target-dist" class="hidden"></span>
             </div>
         </div>
+    </div>
+
+    <div id="catalog-error-toast" class="hidden fixed top-24 left-1/2 -translate-x-1/2 z-[80] max-w-md px-4 py-2 rounded-xl hud-glass text-[12px] text-amber-100 text-center border border-amber-500/40 pointer-events-none">
+        Star catalog is incomplete — Play is unavailable. Explore mode still works.
     </div>
 
     <div id="sensor-warning" class="hidden fixed bottom-24 left-1/2 -translate-x-1/2 z-[70] max-w-md px-4 py-2 rounded-xl hud-glass text-[11px] text-amber-200 text-center border border-amber-500/40 pointer-events-none">
@@ -263,7 +289,8 @@
                 <span class="text-on-surface-variant">Manual Heading Offset</span>
                 <span id="azimuth-nudge-val" class="text-sky-300 font-bold font-mono">+0.0°</span>
             </div>
-            <input type="range" id="azimuth-nudge" min="-15" max="15" value="0" step="0.5" class="w-full accent-sky-400 mb-5"/>
+            <input type="range" id="azimuth-nudge" min="-180" max="180" value="0" step="0.5" class="w-full accent-sky-400 mb-2"/>
+            <p id="cal-align-status" class="text-[11px] text-amber-200/90 mb-4 min-h-[2.5rem]"></p>
             <div class="flex gap-2 justify-center">
                 <button id="cal-reset" type="button" class="px-3 py-1.5 text-xs border border-white/15 text-on-surface-variant rounded-lg hover:text-white">Reset</button>
                 <button id="cal-skip" type="button" class="px-3 py-1.5 text-xs border border-white/15 text-on-surface-variant rounded-lg hover:text-white">Skip</button>

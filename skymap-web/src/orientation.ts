@@ -1,4 +1,9 @@
-import { attitudeFromEvent, getSmoothedAttitude, pushAttitudeSample } from './ar/deviceAttitude.ts';
+import {
+  attitudeFromEvent,
+  getSmoothedAttitude,
+  pushAttitudeSample,
+  resetAttitudeFilter,
+} from './ar/deviceAttitude.ts';
 
 export interface OrientationData {
   h: number; // clockwise compass heading [0, 360)
@@ -66,6 +71,7 @@ export { getSmoothedAttitude, getLatestAttitude } from './ar/deviceAttitude.ts';
 export function resetOrientationFilter() {
   hasInitialized = false;
   smoothed = { h: 0, b: 90, g: 0 };
+  resetAttitudeFilter();
 }
 
 export async function startOrientation(onUpdate: (h: number, b: number, g: number) => void) {

@@ -56,7 +56,12 @@ export function loadCatalog(stage: CatalogStage = 'advanced'): CatalogBundle {
   const loadTimeMs = performance.now() - t0;
   console.info(`Catalog [${stage}]: ${stars.length} stars, ${activeLines.length} lines in ${loadTimeMs.toFixed(1)}ms`);
 
-  return { stars, constellations, lines: activeLines, dso, loadTimeMs };
+  return { stars, constellations, lines: activeLines, dso, loadTimeMs, graphErrors };
+}
+
+/** Play mode requires a complete 88-constellation graph with no dangling HIP line refs. */
+export function catalogPlayReady(bundle: CatalogBundle): boolean {
+  return bundle.graphErrors.length === 0 && bundle.constellations.length === 88 && bundle.lines.length > 0;
 }
 
 export function indexStars(stars: Star[]): Map<string, Star> {

@@ -2,7 +2,7 @@ import { initCamera } from './camera';
 import { watchLocation, fetchIpLocation, DEFAULT_CA_LOCATION, type LocationData } from './location';
 import { getSensorCapabilities, getSmoothedAttitude, startOrientation } from './orientation';
 import { initCalibrationUI, getCalibratedFOV } from './calibration';
-import { loadCatalog, indexStars } from './catalog';
+import { catalogPlayReady, loadCatalog, indexStars } from './catalog';
 import { SkyState } from './sky/SkyState';
 import { createRenderer, type IRenderer } from './render/index.ts';
 import {
@@ -12,18 +12,39 @@ import {
 } from './render/types.ts';
 import { buildSkyScene } from './scene/buildScene.ts';
 import {
+  boresightEquatorial,
   computeConstellationCenters,
   computeNextConstellations,
   coneSearch,
   ConstellationTracker,
   confirmWithSimbad,
 } from './recognition.ts';
-import { showCalibrationModal } from './ui/calibrationModal.ts';
+import {
+  isCalibrationModalOpen,
+  setCalibrationAlignHint,
+  setCalibrationNudge,
+  showCalibrationModal,
+} from './ui/calibrationModal.ts';
+import {
+  applyStarLock,
+  createQuest,
+  nearestStarInSet,
+  nextHintStarId,
+  nudgeToAlignAzimuth,
+  pickQuestConstellation,
+  questStarIds,
+  tickQuestDwell,
+  wrap180,
+  QUEST_ALIGN_DWELL_MS,
+  QUEST_ALIGN_RADIUS_DEG,
+  type QuestRuntime,
+} from './game/constellationQuest.ts';
+import { initQuestHud, setPlayModeChrome, showCatalogIncomplete, updateQuestHud } from './ui/questHud.ts';
 import { hideConstellationCard, showConstellationCard } from './ui/constellationCard.ts';
 import { showPlanetCard } from './ui/planetCard.ts';
 import { updateCompassHud } from './ui/compassHud.ts';
 import { initSearchPanel } from './ui/searchPanel.ts';
-import { initLayerDrawer, type LayerSettings } from './ui/layerDrawer.ts';
+import { initLayerDrawer, setStarLayerControlsEnabled, type LayerSettings } from './ui/layerDrawer.ts';
 import { initTimeSlider } from './ui/timeSlider.ts';
 import { magneticDeclination } from './sensors/wmm.ts';
 import { setBrightness, setContrast, setSobelEnabled, processSobelFrame } from './vision/cameraFilters.ts';
@@ -31,6 +52,7 @@ import { hitTestStar, type MeasureState } from './measure.ts';
 import { drawDirectionalArrow } from './render/draw2d.ts';
 import { sunAltAz, moonAltAz } from './astronomy.ts';
 import { equatorialToHorizontal } from './astronomy/fast.ts';
+import { angularSeparationDeg } from './astronomy/precision.ts';
 import { getPlanetDetails, type PlanetName } from './planets.ts';
 import { initPlanetariumControls, drawPlanetariumDome } from './planetarium.ts';
 import { WebXRRenderer } from './render/WebXRRenderer.ts';
@@ -48,6 +70,7 @@ const ctx = canvas.getContext('2d')!;
 const startScreen = document.getElementById('start-screen') as HTMLElement;
 const startBtn = document.getElementById('start-btn') as HTMLButtonElement;
 const startSkyBtn = document.getElementById('start-sky-btn') as HTMLButtonElement;
+const startPlayBtn = document.getElementById('start-play-btn') as HTMLButtonElement;
 const uiContainer = document.getElementById('ui-container') as HTMLElement;
 const planetariumScreen = document.getElementById('planetarium-screen') as HTMLElement;
 const planetariumCanvas = document.getElementById('planetarium-canvas') as HTMLCanvasElement;
@@ -87,6 +110,13 @@ let webglRenderer: IRenderer | null = null;
 let xrRenderer: WebXRRenderer | null = null;
 const measure: MeasureState = { starA: null, starB: null };
 let lastScene: ReturnType<typeof buildSkyScene> | null = null;
+let playMode = false;
+let quest: QuestRuntime | null = null;
+let questAboveHorizon = true;
+const questSkipIds = new Set<string>();
+let alignDwellId: string | null = null;
+let alignDwellSince = 0;
+let lastAlignedId: string | null = null;
 
 const renderOptions: RenderOptions = {
   mode: 'AR',
@@ -98,9 +128,8 @@ const renderOptions: RenderOptions = {
 
 let layerSettings: LayerSettings = initLayerDrawer((s) => {
   layerSettings = s;
-  renderOptions.showStars = s.showStars;
-  renderOptions.showLines = s.showLines;
-  renderOptions.showLabels = s.showLabels;
+  if (playMode) layerSettings.measureMode = false;
+  syncRenderFlags();
   setContrast(s.contrast);
   setBrightness(s.brightness);
   setSobelEnabled(s.sobel);
@@ -111,6 +140,21 @@ let layerSettings: LayerSettings = initLayerDrawer((s) => {
     });
   }
 });
+
+function syncRenderFlags() {
+  const vis = visibilityFromMode(celestialMode);
+  if (!vis.stars) {
+    renderOptions.showStars = false;
+    renderOptions.showLines = false;
+    renderOptions.showLabels = false;
+    setStarLayerControlsEnabled(false);
+    return;
+  }
+  renderOptions.showStars = playMode ? true : layerSettings.showStars;
+  renderOptions.showLines = playMode ? true : layerSettings.showLines;
+  renderOptions.showLabels = playMode ? true : layerSettings.showLabels;
+  setStarLayerControlsEnabled(true);
+}
 
 function applyCelestialFilterMode(mode: CelestialFilterMode) {
   celestialMode = mode;
@@ -134,16 +178,124 @@ function applyCelestialFilterMode(mode: CelestialFilterMode) {
     planetBar?.classList.remove('hidden');
   }
 
+  if (playMode && mode !== 'CONSTELLATIONS') {
+    exitPlayMode();
+  }
+
   if (mode === 'PLANETS') {
     hideConstellationCard();
     guidedConstellationId = null;
   }
+
+  syncRenderFlags();
+}
+
+function refreshQuestHud() {
+  if (!quest) return;
+  const meta = catalog.constellations.find((c) => c.id.toLowerCase() === quest!.constellationId.toLowerCase());
+  updateQuestHud({
+    name: meta?.nameLatin ?? quest.constellationId,
+    english: meta?.nameEnglish ?? quest.constellationId,
+    done: quest.completed.size,
+    total: quest.edges.length,
+    message: quest.finished
+      ? `${meta?.mythology ?? meta?.nameEnglish ?? 'Figure complete.'} Tap Skip for another.`
+      : quest.message,
+    hintOn: quest.hint,
+    finished: quest.finished,
+    aboveHorizon: questAboveHorizon,
+  });
+}
+
+function lookAtQuestCenter() {
+  if (!quest || !planetarium || appMode !== 'PLANETARIUM') return;
+  const center = constellationCenters.get(quest.constellationId);
+  if (!center) return;
+  const hor = equatorialToHorizontal(center.ra, center.dec, currentLocation.lat, currentLocation.lon, simDate);
+  planetarium.lookAt(hor.azimuth, hor.altitude);
+}
+
+function beginQuest(skipCurrent: boolean) {
+  if (skipCurrent && quest) questSkipIds.add(quest.constellationId.toLowerCase());
+  const pick = pickQuestConstellation(
+    catalog.constellations,
+    catalog.lines,
+    constellationCenters,
+    currentLocation.lat,
+    currentLocation.lon,
+    simDate,
+    questSkipIds
+  );
+  if (!pick) {
+    questSkipIds.clear();
+    const retry = pickQuestConstellation(
+      catalog.constellations,
+      catalog.lines,
+      constellationCenters,
+      currentLocation.lat,
+      currentLocation.lon,
+      simDate,
+      questSkipIds
+    );
+    if (!retry) return;
+    quest = createQuest(retry.constellationId, catalog.lines);
+    questAboveHorizon = retry.aboveHorizon;
+  } else {
+    quest = createQuest(pick.constellationId, catalog.lines);
+    questAboveHorizon = pick.aboveHorizon;
+  }
+  if (!quest) return;
+  guidedConstellationId = quest.constellationId;
+  tracker.forceSelect(quest.constellationId);
+  lookAtQuestCenter();
+  refreshQuestHud();
+}
+
+function exitPlayMode() {
+  if (!playMode) return;
+  playMode = false;
+  quest = null;
+  guidedConstellationId = null;
+  setPlayModeChrome(false);
+  syncRenderFlags();
+}
+
+function startPlayMode(): boolean {
+  if (!catalogPlayReady(catalog)) {
+    showCatalogIncomplete();
+    return false;
+  }
+  playMode = true;
+  layerSettings.measureMode = false;
+  const measureEl = document.getElementById('layer-measure') as HTMLInputElement | null;
+  if (measureEl) measureEl.checked = false;
+  applyCelestialFilterMode('CONSTELLATIONS');
+  hideConstellationCard();
+  setPlayModeChrome(true);
+  questSkipIds.clear();
+  beginQuest(false);
+  syncRenderFlags();
+  return true;
 }
 
 filterBothBtn?.addEventListener('click', () => applyCelestialFilterMode('BOTH'));
 filterPlanetsBtn?.addEventListener('click', () => applyCelestialFilterMode('PLANETS'));
 filterConstellationsBtn?.addEventListener('click', () => applyCelestialFilterMode('CONSTELLATIONS'));
 applyCelestialFilterMode('BOTH');
+
+initQuestHud({
+  onHint: () => {
+    if (!quest) return;
+    quest.hint = !quest.hint;
+    quest.message = quest.hint ? 'Faint outline on — follow the dots.' : 'Hint off — connect the real stars.';
+    refreshQuestHud();
+  },
+  onSkip: () => beginQuest(true),
+  onExit: () => {
+    exitPlayMode();
+    applyCelestialFilterMode('BOTH');
+  },
+});
 
 function selectTargetPlanet(name: PlanetName | 'Sun' | 'Moon') {
   targetBody = name;
@@ -255,6 +407,8 @@ btnVr?.addEventListener('click', async () => {
 });
 
 btnCalibrate?.addEventListener('click', () => {
+  const slider = document.getElementById('azimuth-nudge') as HTMLInputElement | null;
+  if (slider) slider.value = String(azimuthNudge);
   showCalibrationModal(
     (cal) => {
       azimuthNudge = cal.azimuthNudge;
@@ -263,12 +417,26 @@ btnCalibrate?.addEventListener('click', () => {
       cameraReady,
       locationReady: locationLocked,
       headingDeg: getARAttitude().h,
+    },
+    (deg) => {
+      azimuthNudge = deg;
     }
   );
 });
 
 initSearchPanel(catalog.constellations, catalog.stars, {
   onSelectConstellation: (conId) => {
+    if (playMode) {
+      const next = createQuest(conId, catalog.lines);
+      if (next) {
+        quest = next;
+        guidedConstellationId = conId;
+        tracker.forceSelect(conId);
+        lookAtQuestCenter();
+        refreshQuestHud();
+      }
+      return;
+    }
     guidedConstellationId = conId;
     tracker.forceSelect(conId);
     if (celestialMode === 'PLANETS') applyCelestialFilterMode('BOTH');
@@ -286,6 +454,19 @@ initSearchPanel(catalog.constellations, catalog.stars, {
 
 canvas.addEventListener('click', (e) => {
   if (!lastScene) return;
+
+  if (playMode && quest) {
+    const star = hitTestStar(lastScene.stars, starIndex, e.clientX, e.clientY, 28);
+    const ids = questStarIds(quest.edges);
+    if (star && ids.has(star.id)) {
+      const onScreen = lastScene.stars.some((s) => s.id === star.id && s.onScreen);
+      if (onScreen) {
+        applyStarLock(quest, star.id);
+        refreshQuestHud();
+      }
+    }
+    return;
+  }
 
   if (layerSettings.measureMode) {
     const star = hitTestStar(lastScene.stars, starIndex, e.clientX, e.clientY);
@@ -354,8 +535,66 @@ function render() {
 
   // Recognition & Constellation Tracking (only when constellations are active)
   const nowMs = performance.now();
-  let activeConId: string | null = guidedConstellationId;
-  if (visibility.constellations) {
+  let activeConId: string | null = playMode && quest ? quest.constellationId : guidedConstellationId;
+
+  if (isCalibrationModalOpen()) {
+    const aim = boresightEquatorial(
+      orientation.h,
+      orientation.pitch,
+      orientation.roll,
+      currentLocation.lat,
+      currentLocation.lon,
+      simDate,
+      0
+    );
+    let alignId: string | null = null;
+    let alignAz = 0;
+    let alignLabel = '';
+    let alignSep = Infinity;
+
+    if (celestialMode !== 'CONSTELLATIONS') {
+      const moon = moonAltAz(simDate, currentLocation.lat, currentLocation.lon);
+      const moonSep = Math.hypot(wrap180(moon.azimuth - aim.az), moon.altitude - aim.alt);
+      if (moonSep < QUEST_ALIGN_RADIUS_DEG) {
+        alignId = 'moon';
+        alignAz = moon.azimuth;
+        alignLabel = 'Moon';
+        alignSep = moonSep;
+      }
+    }
+
+    if (!alignId) {
+      for (const star of catalog.stars) {
+        if (star.magnitude > 2.5) continue;
+        const sep = angularSeparationDeg(aim.ra, aim.dec, star.ra, star.dec);
+        if (sep < alignSep && sep <= QUEST_ALIGN_RADIUS_DEG) {
+          alignSep = sep;
+          alignId = star.id;
+          alignLabel = star.name || star.bayer || star.id;
+          const hor = equatorialToHorizontal(star.ra, star.dec, currentLocation.lat, currentLocation.lon, simDate);
+          alignAz = hor.azimuth;
+        }
+      }
+    }
+
+    if (alignId && alignId !== lastAlignedId) {
+      if (alignDwellId !== alignId) {
+        alignDwellId = alignId;
+        alignDwellSince = nowMs;
+        setCalibrationAlignHint(`Hold on ${alignLabel}…`);
+      } else if (nowMs - alignDwellSince >= QUEST_ALIGN_DWELL_MS) {
+        azimuthNudge = nudgeToAlignAzimuth(alignAz, orientation.h, azimuthNudge);
+        setCalibrationNudge(azimuthNudge);
+        lastAlignedId = alignId;
+        alignDwellId = null;
+        setCalibrationAlignHint(`Aligned on ${alignLabel}. Apply when the overlay looks right.`);
+      }
+    } else {
+      alignDwellId = null;
+    }
+  }
+
+  if (visibility.constellations && !isCalibrationModalOpen() && !playMode) {
     const magThresh = layerSettings.bortle <= 3 ? 6 : layerSettings.bortle <= 5 ? 4.8 : 3.2;
     const rec = coneSearch(
       catalog.stars,
@@ -424,8 +663,22 @@ function render() {
     }
   } else if (nowMs - lastUiUpdate > 250) {
     lastUiUpdate = nowMs;
-    hudBoresight.textContent = `Planet Mode (${targetBody})`;
+    hudBoresight.textContent = playMode && quest ? quest.message : `Planet Mode (${targetBody})`;
   }
+
+  const questScene =
+    playMode && quest
+      ? {
+          constellationId: quest.constellationId,
+          includeStarIds: questStarIds(quest.edges),
+          hideOfficialLines: true,
+          showGhost: quest.hint,
+          completedEdges: [...quest.completed].map((key) => {
+            const [a, b] = key.split('|');
+            return { a, b };
+          }),
+        }
+      : null;
 
   const scene = buildSkyScene({
     catalog,
@@ -444,10 +697,28 @@ function render() {
     lines: catalog.lines,
     visibility,
     activeConstellationId: activeConId,
-    selectedPlanetName,
-    measurePair,
+    selectedPlanetName: playMode ? null : selectedPlanetName,
+    measurePair: playMode ? null : measurePair,
+    quest: questScene,
   });
   lastScene = scene;
+
+  if (playMode && quest && !isCalibrationModalOpen() && !quest.finished) {
+    const aim = boresightEquatorial(
+      orientation.h,
+      orientation.pitch,
+      orientation.roll,
+      currentLocation.lat,
+      currentLocation.lon,
+      simDate,
+      0
+    );
+    const ids = questStarIds(quest.edges);
+    const nearest = nearestStarInSet(catalog.stars, ids, aim.ra, aim.dec);
+    const onScreen = !!(nearest && scene.stars.some((s) => s.id === nearest.star.id && s.onScreen));
+    tickQuestDwell(quest, nearest, onScreen, nowMs);
+    refreshQuestHud();
+  }
 
   // Update target Alt/Az telemetry
   let targetAz = 0;
@@ -480,7 +751,7 @@ function render() {
   }
 
   // Offscreen directional guidance arrow
-  if (visibility.planets) {
+  if (visibility.planets && !isCalibrationModalOpen()) {
     const targetSprite = scene.bodies.find((b) => b.label === targetBody);
     if (targetSprite && !targetSprite.onScreen) {
       drawDirectionalArrow(
@@ -492,6 +763,16 @@ function render() {
         targetSprite.color,
         targetBody
       );
+    }
+  } else if (playMode && quest) {
+    const hintId = nextHintStarId(quest);
+    const hintStar = hintId ? starIndex.get(hintId) : null;
+    if (hintStar) {
+      const hor = equatorialToHorizontal(hintStar.ra, hintStar.dec, currentLocation.lat, currentLocation.lon, simDate);
+      const onScreen = scene.stars.some((s) => s.id === hintStar.id && s.onScreen);
+      if (!onScreen) {
+        drawDirectionalArrow(ctx, canvas.width, canvas.height, orientation.h, hor.azimuth, '#fbbf24', hintStar.name || 'star');
+      }
     }
   } else if (guidedConstellationId) {
     const center = constellationCenters.get(guidedConstellationId);
@@ -572,4 +853,15 @@ startSkyBtn?.addEventListener('click', async () => {
   startSkyBtn.textContent = 'LOADING...';
   startSkyBtn.disabled = true;
   await startExperience('PLANETARIUM');
+});
+
+startPlayBtn?.addEventListener('click', async () => {
+  if (!catalogPlayReady(catalog)) {
+    showCatalogIncomplete();
+    return;
+  }
+  startPlayBtn.textContent = 'LOADING...';
+  startPlayBtn.disabled = true;
+  await startExperience('AR');
+  startPlayMode();
 });

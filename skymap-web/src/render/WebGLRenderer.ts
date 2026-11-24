@@ -50,6 +50,11 @@ export class WebGLRenderer implements IRenderer {
 
   render(sceneData: SkySceneData, _cameraMatrix: number[][]): void {
     if (!this.three || !this.renderer || !this.scene || !this.camera || !this.points) return;
+    if (!sceneData.visibility.stars || !this.options.showStars) {
+      this.points.geometry.setAttribute('position', new this.three.BufferAttribute(new Float32Array(0), 3));
+      this.renderer.render(this.scene, this.camera);
+      return;
+    }
     const visible = sceneData.stars.filter((s) => s.onScreen);
     const positions = new Float32Array(visible.length * 3);
     const sizes = new Float32Array(visible.length);

@@ -23,11 +23,15 @@ const both = visibilityFromMode('BOTH');
 assert.equal(both.planets && both.stars && both.constellations, true);
 const planetsOnly = visibilityFromMode('PLANETS');
 assert.equal(planetsOnly.planets, true);
+assert.equal(planetsOnly.stars, false);
 assert.equal(planetsOnly.constellations, false);
 assert.equal(planetsOnly.constellationLines, false);
+assert.equal(planetsOnly.deepSkyObjects, false);
 const conOnly = visibilityFromMode('CONSTELLATIONS');
 assert.equal(conOnly.planets, false);
+assert.equal(conOnly.stars, true);
 assert.equal(conOnly.constellations, true);
+assert.equal(conOnly.deepSkyObjects, false);
 console.log('✓ Mode filtering (BOTH / PLANETS / CONSTELLATIONS) passed');
 
 // 2. Test Rear-Camera Projection & Heading Alignment

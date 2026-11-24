@@ -51,4 +51,5 @@ export interface CatalogBundle {
   lines: ConstellationLine[];
   dso: DeepSkyObject[];
   loadTimeMs: number;
+  graphErrors: string[];
 }

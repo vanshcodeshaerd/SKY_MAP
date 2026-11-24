@@ -97,10 +97,21 @@ export function ARSkyView({
   const skyVisibility = useMemo(() => visibilityFromMode(celestialFilterMode), [celestialFilterMode]);
   const [showConstellations, setShowConstellations] = useState<boolean>(true);
   const [showAllPlanetsInAR, setShowAllPlanetsInAR] = useState<boolean>(true);
-  const constellationsLayerOn = (skyVisibility.stars || skyVisibility.constellationLines) && showConstellations;
+  const constellationsLayerOn =
+    skyVisibility.stars && skyVisibility.constellationLines && showConstellations;
   const planetsLayerOn = skyVisibility.planets;
   const applyCelestialFilterMode = useCallback((mode: CelestialFilterMode) => {
     setCelestialFilterMode(mode);
+    if (mode === 'CONSTELLATIONS') {
+      setShowConstellations(true);
+      setShowAllPlanetsInAR(false);
+    } else if (mode === 'PLANETS') {
+      setShowAllPlanetsInAR(true);
+      setShowConstellations(false);
+    } else {
+      setShowConstellations(true);
+      setShowAllPlanetsInAR(true);
+    }
   }, []);
   const [showEcliptic, setShowEcliptic] = useState<boolean>(true);
   const [skyOpacity, setSkyOpacity] = useState<number>(0.6);
@@ -961,7 +972,7 @@ export function ARSkyView({
         />
 
         {/* Sub-horizon underground sky band (matches 3D sky explorer ground disc) */}
-        {showSubHorizonPlanets && subHorizonCatalog.length > 0 && (
+        {planetsLayerOn && showSubHorizonPlanets && subHorizonCatalog.length > 0 && (
           <div
             className="absolute inset-x-0 bottom-0 pointer-events-none z-[4] border-t border-purple-500/25"
             style={{
@@ -975,7 +986,7 @@ export function ARSkyView({
         {/* Layer 3: SVG Celestial Vector Canvas */}
         <svg className="absolute inset-0 w-full h-full pointer-events-none z-5">
           {/* Ecliptic Line */}
-          {showEcliptic && projectedEcliptic.length > 2 && (
+          {planetsLayerOn && showEcliptic && projectedEcliptic.length > 2 && (
             <g opacity={nightVisionMode ? 0.35 : 0.65}>
               {projectedEcliptic.map((pt, i) => {
                 const next = projectedEcliptic[(i + 1) % projectedEcliptic.length];
@@ -1248,7 +1259,7 @@ export function ARSkyView({
                   : 'text-slate-400 hover:text-slate-200 border border-transparent'
               }`}
             >
-              {mode === 'BOTH' ? 'Both' : mode === 'PLANETS' ? 'Planets' : 'Stars'}
+              {mode === 'BOTH' ? 'Both' : mode === 'PLANETS' ? 'Planets' : 'Stars & Lines'}
             </button>
           ))}
         </div>
@@ -1634,7 +1645,7 @@ export function ARSkyView({
           })}
 
         {/* Primary Selected Target AR Reticle */}
-        {isCurrentPlacedOnSky && (
+        {planetsLayerOn && isCurrentPlacedOnSky && (
           <div
             onClick={() => {
               setDiscoveredBodyId(currentMeta.id);

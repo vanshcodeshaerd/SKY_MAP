@@ -43,6 +43,13 @@ export interface SceneBuildInput {
   activeConstellationId: string | null;
   selectedPlanetName: string | null;
   measurePair?: { a: Star; b: Star } | null;
+  quest?: {
+    constellationId: string;
+    includeStarIds: Set<string>;
+    hideOfficialLines: boolean;
+    showGhost: boolean;
+    completedEdges: { a: string; b: string }[];
+  } | null;
 }
 
 function buildSphericalMeasureArc(
@@ -98,6 +105,7 @@ export function buildSkyScene(input: SceneBuildInput): SkySceneData {
     activeConstellationId,
     selectedPlanetName,
     measurePair,
+    quest,
   } = input;
 
   const toCam = (enu: Vector3) => enuToCameraSpace(enu, heading, cameraPitch, cameraRoll);
@@ -135,7 +143,8 @@ export function buildSkyScene(input: SceneBuildInput): SkySceneData {
       const y = pt?.y ?? 0;
       screenPositions.set(star.id, { x, y, onScreen });
 
-      if (visibility.stars && star.magnitude <= magLimit) {
+      const questStar = !!quest?.includeStarIds.has(star.id);
+      if (visibility.stars && (star.magnitude <= magLimit || questStar)) {
         projectedStars.push({
           id: star.id,
           x,
@@ -145,6 +154,7 @@ export function buildSkyScene(input: SceneBuildInput): SkySceneData {
           name: star.name,
           constellationId: star.constellationId,
           onScreen,
+          questTarget: questStar,
         });
       }
     }
@@ -153,23 +163,17 @@ export function buildSkyScene(input: SceneBuildInput): SkySceneData {
       const conCentroidAcc = new Map<string, { sx: number; sy: number; count: number }>();
       const starById = new Map(catalog.stars.map((s) => [s.id, s]));
 
-      for (const line of lines) {
-        const sa = starById.get(line.fromStarId);
-        const sb = starById.get(line.toStarId);
-        if (!sa || !sb) continue;
-
+      const tessellatePair = (
+        sa: Star,
+        sb: Star,
+        constellationId: string,
+        flags: { highlighted?: boolean; ghost?: boolean; quest?: boolean }
+      ) => {
         const arcSamples = sampleGreatCircle(sa.ra, sa.dec, sb.ra, sb.dec, 14);
         let prevCam: Vector3 | null = null;
-        let prevPt: Point2D | null = null;
-
-        const highlighted =
-          activeConstellationId !== null &&
-          line.constellationId.toLowerCase() === activeConstellationId.toLowerCase();
-
         for (const sample of arcSamples) {
           const enu = icrsToEnu(unitFromRaDec(sample.ra, sample.dec), lat, lon, date);
           const cam = toCam(enu);
-
           if (prevCam) {
             const clipped = clipSegmentToNearPlane(prevCam, cam, 0.02);
             if (clipped) {
@@ -185,24 +189,52 @@ export function buildSkyScene(input: SceneBuildInput): SkySceneData {
                     y1: p1.y,
                     x2: p2.x,
                     y2: p2.y,
-                    constellationId: line.constellationId,
+                    constellationId,
                     visible: true,
-                    highlighted,
+                    highlighted: flags.highlighted,
+                    ghost: flags.ghost,
+                    quest: flags.quest,
                   });
-                  const acc = conCentroidAcc.get(line.constellationId) ?? { sx: 0, sy: 0, count: 0 };
+                  const acc = conCentroidAcc.get(constellationId) ?? { sx: 0, sy: 0, count: 0 };
                   acc.sx += (p1.x + p2.x) * 0.5;
                   acc.sy += (p1.y + p2.y) * 0.5;
                   acc.count += 1;
-                  conCentroidAcc.set(line.constellationId, acc);
+                  conCentroidAcc.set(constellationId, acc);
                 }
               }
             }
           }
-
-          const pt = project(cam, width, height, fov);
           prevCam = cam;
-          prevPt = pt;
-          void prevPt;
+        }
+      };
+
+      for (const line of lines) {
+        const sa = starById.get(line.fromStarId);
+        const sb = starById.get(line.toStarId);
+        if (!sa || !sb) continue;
+
+        const isQuestCon =
+          !!quest && line.constellationId.toLowerCase() === quest.constellationId.toLowerCase();
+        if (quest && !isQuestCon) continue;
+        if (isQuestCon && quest.hideOfficialLines && !quest.showGhost) continue;
+
+        const highlighted =
+          activeConstellationId !== null &&
+          line.constellationId.toLowerCase() === activeConstellationId.toLowerCase();
+
+        tessellatePair(sa, sb, line.constellationId, {
+          highlighted: highlighted && !isQuestCon,
+          ghost: !!(isQuestCon && quest?.showGhost),
+          quest: false,
+        });
+      }
+
+      if (quest) {
+        for (const edge of quest.completedEdges) {
+          const sa = starById.get(edge.a);
+          const sb = starById.get(edge.b);
+          if (!sa || !sb) continue;
+          tessellatePair(sa, sb, quest.constellationId, { highlighted: true, quest: true, ghost: false });
         }
       }
 

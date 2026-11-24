@@ -34,7 +34,7 @@ export function visibilityFromMode(mode: CelestialFilterMode): VisibilityConfig 
         constellations: true,
         constellationLines: true,
         constellationLabels: true,
-        deepSkyObjects: true,
+        deepSkyObjects: false,
       };
     case 'BOTH':
     default:
@@ -59,6 +59,7 @@ export interface ProjectedStar {
   name?: string;
   constellationId?: string;
   onScreen: boolean;
+  questTarget?: boolean;
 }
 
 export interface ConstellationSegment {
@@ -69,6 +70,8 @@ export interface ConstellationSegment {
   constellationId: string;
   visible: boolean;
   highlighted?: boolean;
+  ghost?: boolean;
+  quest?: boolean;
 }
 
 export interface CelestialSprite {
