@@ -8,6 +8,12 @@ import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const outDir = path.join(__dirname, '../src/data');
+
+if (fs.existsSync(path.join(outDir, 'stars.advanced.json')) && !process.env.FORCE_FETCH) {
+  console.log('Catalog files already exist in src/data. Skipping remote fetch.');
+  process.exit(0);
+}
+
 const BASE = 'https://raw.githubusercontent.com/ofrohn/d3-celestial/master/data';
 
 function lonToRa(lon) {
