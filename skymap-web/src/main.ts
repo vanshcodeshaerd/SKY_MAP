@@ -1,11 +1,6 @@
 import { initCamera } from './camera';
-import { watchLocation, type LocationData } from './location';
-import {
-  getScreenOrientationAngle,
-  getSensorCapabilities,
-  getSmoothedOrientation,
-  startOrientation,
-} from './orientation';
+import { watchLocation, fetchIpLocation, DEFAULT_CA_LOCATION, type LocationData } from './location';
+import { getSensorCapabilities, getSmoothedAttitude, startOrientation } from './orientation';
 import { initCalibrationUI, getCalibratedFOV } from './calibration';
 import { loadCatalog, indexStars } from './catalog';
 import { SkyState } from './sky/SkyState';
@@ -31,23 +26,21 @@ import { initSearchPanel } from './ui/searchPanel.ts';
 import { initLayerDrawer, type LayerSettings } from './ui/layerDrawer.ts';
 import { initTimeSlider } from './ui/timeSlider.ts';
 import { magneticDeclination } from './sensors/wmm.ts';
-import { OrientationFusion } from './sensors/fusion.ts';
 import { setBrightness, setContrast, setSobelEnabled, processSobelFrame } from './vision/cameraFilters.ts';
-import { hitTestStar, buildGeodesicArc, type MeasureState } from './measure.ts';
+import { hitTestStar, type MeasureState } from './measure.ts';
 import { drawDirectionalArrow } from './render/draw2d.ts';
 import { sunAltAz, moonAltAz } from './astronomy.ts';
 import { equatorialToHorizontal } from './astronomy/fast.ts';
 import { getPlanetDetails, type PlanetName } from './planets.ts';
 import { initPlanetariumControls, drawPlanetariumDome } from './planetarium.ts';
 import { WebXRRenderer } from './render/WebXRRenderer.ts';
-import { orientationMatrix } from './projection.ts';
+import { norm360 } from './astronomy.ts';
 
 const catalog = loadCatalog('advanced');
 const sky = new SkyState(catalog.stars);
 const starIndex = indexStars(catalog.stars);
 const constellationCenters = computeConstellationCenters(catalog.stars, catalog.constellations);
 const tracker = new ConstellationTracker();
-const fusion = new OrientationFusion();
 
 const video = document.getElementById('camera-feed') as HTMLVideoElement;
 const canvas = document.getElementById('ar-canvas') as HTMLCanvasElement;
@@ -77,7 +70,7 @@ const filterPlanetsBtn = document.getElementById('filter-planets') as HTMLButton
 const filterConstellationsBtn = document.getElementById('filter-constellations') as HTMLButtonElement;
 
 // Default observer fallback if GPS is still acquiring or denied on desktop
-let currentLocation: LocationData = { lat: 23.0225, lon: 72.5714 };
+let currentLocation: LocationData = { ...DEFAULT_CA_LOCATION };
 let locationLocked = false;
 let cameraReady = false;
 let currentFov = getCalibratedFOV();
@@ -269,7 +262,7 @@ btnCalibrate?.addEventListener('click', () => {
     {
       cameraReady,
       locationReady: locationLocked,
-      headingDeg: getFusedOrientation().h,
+      headingDeg: getARAttitude().h,
     }
   );
 });
@@ -327,15 +320,14 @@ canvas.addEventListener('click', (e) => {
   }
 });
 
-function getFusedOrientation() {
-  const raw = getSmoothedOrientation();
+function getARAttitude(): { h: number; pitch: number; roll: number } {
+  const att = getSmoothedAttitude();
   const caps = getSensorCapabilities();
-  const decl = magneticDeclination(currentLocation.lat, currentLocation.lon);
-  return fusion.updateFromEuler(
-    { h: raw.h + azimuthNudge, b: raw.b, g: raw.g },
-    decl,
-    caps.iosTrueNorth
-  );
+  let h = att.heading + azimuthNudge;
+  if (!caps.iosTrueNorth) {
+    h += magneticDeclination(currentLocation.lat, currentLocation.lon);
+  }
+  return { h: norm360(h), pitch: att.pitch, roll: att.roll };
 }
 
 let lastUiUpdate = 0;
@@ -343,23 +335,22 @@ let lastUiUpdate = 0;
 function render() {
   requestAnimationFrame(render);
 
-  const screenAngle = getScreenOrientationAngle();
   const orientation =
     appMode === 'PLANETARIUM' && planetarium
-      ? { h: planetarium.yaw(), b: planetarium.pitch(), g: 0 }
-      : getFusedOrientation();
+      ? {
+          h: planetarium.yaw(),
+          pitch: planetarium.pitch() - 90,
+          roll: 0,
+        }
+      : getARAttitude();
 
   updateCompassHud(orientation.h);
 
-  const R = orientationMatrix(orientation.h, orientation.b, orientation.g, appMode === 'PLANETARIUM' ? 0 : screenAngle);
+  const liveSky = Math.abs(simDate.getTime() - Date.now()) < 3000;
   const visibility = visibilityFromMode(celestialMode);
 
-  let measureArc = null;
-  if (measure.starA && measure.starB && lastScene) {
-    const pa = lastScene.stars.find((p) => p.id === measure.starA!.id);
-    const pb = lastScene.stars.find((p) => p.id === measure.starB!.id);
-    if (pa && pb) measureArc = buildGeodesicArc({ x: pa.x, y: pa.y }, { x: pb.x, y: pb.y }, measure.starA, measure.starB);
-  }
+  const measurePair =
+    measure.starA && measure.starB ? { a: measure.starA, b: measure.starB } : null;
 
   // Recognition & Constellation Tracking (only when constellations are active)
   const nowMs = performance.now();
@@ -372,11 +363,11 @@ function render() {
       currentLocation.lon,
       simDate,
       orientation.h,
-      orientation.b,
-      orientation.g,
+      orientation.pitch,
+      orientation.roll,
       currentFov / 2,
       magThresh,
-      appMode === 'PLANETARIUM' ? 0 : screenAngle
+      0
     );
     const tracked = tracker.update(rec, nowMs);
     activeConId = guidedConstellationId ?? tracked.constellationId;
@@ -443,9 +434,9 @@ function render() {
     lon: currentLocation.lon,
     date: simDate,
     heading: orientation.h,
-    beta: orientation.b,
-    gamma: orientation.g,
-    screenAngle: appMode === 'PLANETARIUM' ? 0 : screenAngle,
+    cameraPitch: orientation.pitch,
+    cameraRoll: orientation.roll,
+    refreshSky: liveSky,
     width: canvas.width,
     height: canvas.height,
     fov: currentFov,
@@ -454,7 +445,7 @@ function render() {
     visibility,
     activeConstellationId: activeConId,
     selectedPlanetName,
-    measureArc,
+    measurePair,
   });
   lastScene = scene;
 
@@ -481,8 +472,8 @@ function render() {
     drawPlanetariumDome(pCtx, planetariumCanvas.width, planetariumCanvas.height, layerSettings.bortle);
   }
 
-  renderer.render(scene, R);
-  webglRenderer?.render(scene, R);
+  renderer.render(scene, []);
+  webglRenderer?.render(scene, []);
 
   if (appMode === 'AR') {
     processSobelFrame(video);
@@ -492,7 +483,15 @@ function render() {
   if (visibility.planets) {
     const targetSprite = scene.bodies.find((b) => b.label === targetBody);
     if (targetSprite && !targetSprite.onScreen) {
-      drawDirectionalArrow(ctx, canvas.width, canvas.height, orientation.h, targetAz, targetSprite.color, targetBody);
+      drawDirectionalArrow(
+        ctx,
+        canvas.width,
+        canvas.height,
+        orientation.h,
+        targetAz,
+        targetSprite.color,
+        targetBody
+      );
     }
   } else if (guidedConstellationId) {
     const center = constellationCenters.get(guidedConstellationId);
@@ -512,12 +511,19 @@ async function startExperience(initialMode: 'AR' | 'PLANETARIUM') {
   renderer = await createRenderer('canvas', document.body, renderOptions);
   resizeCanvas();
 
+  const ipLoc = await fetchIpLocation();
+  if (ipLoc) {
+    currentLocation = ipLoc;
+    if (hudLoc) hudLoc.textContent = `${ipLoc.lat.toFixed(2)}°, ${ipLoc.lon.toFixed(2)}° (IP)`;
+  }
+
   try {
     watchLocation(
       (loc) => {
         currentLocation = loc;
         locationLocked = true;
-        if (hudLoc) hudLoc.textContent = `${loc.lat.toFixed(2)}°, ${loc.lon.toFixed(2)}°`;
+        if (hudLoc)
+          hudLoc.textContent = `${loc.lat.toFixed(2)}°, ${loc.lon.toFixed(2)}° (GPS ±${Math.round(loc.accuracy ?? 0)}m)`;
       },
       () => {
         if (hudLoc) hudLoc.textContent = `${currentLocation.lat.toFixed(2)}°, ${currentLocation.lon.toFixed(2)}° (Default)`;
@@ -538,7 +544,8 @@ async function startExperience(initialMode: 'AR' | 'PLANETARIUM') {
     try {
       await startOrientation(() => {});
     } catch {
-      // Fallback gracefully if device orientation is unavailable on desktop
+      const banner = document.getElementById('sensor-warning');
+      banner?.classList.remove('hidden');
     }
   }
 

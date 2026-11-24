@@ -1,18 +1,17 @@
 import type { ConstellationMeta, Star } from './data/types.ts';
 import { angularSeparationDeg } from './astronomy/precision.ts';
 import { equatorialToHorizontal, horizontalToEquatorial } from './astronomy/fast.ts';
-import { boresightENU, orientationMatrix } from './projection.ts';
+import { boresightFromAttitude } from './projection/enuCamera.ts';
 import { constellationFromRaDec } from './constellationLookup.ts';
 import { querySimbad, type SimbadHit } from './api/simbad.ts';
 
 export function boresightHorizontal(
   heading: number,
-  beta: number,
-  gamma: number,
-  screenAngle = 0
+  cameraPitch: number,
+  cameraRoll: number,
+  _screenAngle = 0
 ): { alt: number; az: number } {
-  const R = orientationMatrix(heading, beta, gamma, screenAngle);
-  const b = boresightENU(R);
+  const b = boresightFromAttitude(heading, cameraPitch, cameraRoll);
   const horiz = Math.sqrt(b.x * b.x + b.y * b.y);
   const alt = (Math.atan2(b.z, horiz) * 180) / Math.PI;
   let az = (Math.atan2(b.x, b.y) * 180) / Math.PI;
@@ -22,14 +21,14 @@ export function boresightHorizontal(
 
 export function boresightEquatorial(
   heading: number,
-  beta: number,
-  gamma: number,
+  cameraPitch: number,
+  cameraRoll: number,
   lat: number,
   lon: number,
   date: Date,
   screenAngle = 0
 ): { ra: number; dec: number; alt: number; az: number } {
-  const bore = boresightHorizontal(heading, beta, gamma, screenAngle);
+  const bore = boresightHorizontal(heading, cameraPitch, cameraRoll, screenAngle);
   const eq = horizontalToEquatorial(bore.alt, bore.az, lat, lon, date);
   return { ...eq, ...bore };
 }
@@ -53,13 +52,13 @@ export function coneSearch(
   lon: number,
   date: Date,
   heading: number,
-  beta: number,
-  gamma: number,
+  cameraPitch: number,
+  cameraRoll: number,
   halfFovDeg: number,
   magThreshold: number,
   screenAngle = 0
 ): RecognitionResult {
-  const aim = boresightEquatorial(heading, beta, gamma, lat, lon, date, screenAngle);
+  const aim = boresightEquatorial(heading, cameraPitch, cameraRoll, lat, lon, date, screenAngle);
   const iau = constellationFromRaDec(aim.ra, aim.dec);
 
   let best: Star | null = null;
@@ -146,7 +145,7 @@ export class ConstellationTracker {
 
     // Require 450ms dwell OR high confidence (>0.75) for smooth non-jittery transition
     const dwellMs = nowMs - this.candidateSince;
-    if (this.stableId === null || dwellMs >= 450 || result.confidence >= 0.78) {
+    if (this.stableId === null || dwellMs >= 180 || result.confidence >= 0.72) {
       this.stableId = nextId;
       this.lastConfidence = result.confidence;
       this.lastStatus = result.status;
@@ -287,12 +286,12 @@ export function findConstellationByStars(
   lon: number,
   date: Date,
   heading: number,
-  beta: number,
-  gamma: number,
+  cameraPitch: number,
+  cameraRoll: number,
   _radiusDeg: number,
   screenAngle = 0
 ): string | null {
-  const aim = boresightEquatorial(heading, beta, gamma, lat, lon, date, screenAngle);
+  const aim = boresightEquatorial(heading, cameraPitch, cameraRoll, lat, lon, date, screenAngle);
   const fromBounds = constellationFromRaDec(aim.ra, aim.dec);
   if (fromBounds) return fromBounds;
 

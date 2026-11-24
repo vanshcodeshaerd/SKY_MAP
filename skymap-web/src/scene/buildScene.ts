@@ -1,12 +1,15 @@
-import type { CatalogBundle, ConstellationLine } from '../data/types.ts';
+import type { CatalogBundle, ConstellationLine, Star } from '../data/types.ts';
 import type { SkyState } from '../sky/SkyState.ts';
+import { sampleGreatCircle, unitFromRaDec } from '../astronomy/spherical.ts';
+import { icrsToEnu } from '../astronomy/skyTransform.ts';
+import { formatArcDms } from '../astronomy/precision.ts';
+import { separationBetweenStars } from '../recognition.ts';
+import { enuToCameraSpace } from '../projection/enuCamera.ts';
 import {
-  boresightENU,
   clipSegmentToNearPlane,
-  orientationMatrix,
   project,
   toENU,
-  worldToCamera,
+  type Point2D,
   type Vector3,
 } from '../projection.ts';
 import { sunAltAz, moonAltAz } from '../astronomy.ts';
@@ -28,9 +31,9 @@ export interface SceneBuildInput {
   lon: number;
   date: Date;
   heading: number;
-  beta: number;
-  gamma: number;
-  screenAngle?: number;
+  cameraPitch: number;
+  cameraRoll: number;
+  refreshSky?: boolean;
   width: number;
   height: number;
   fov: number;
@@ -39,7 +42,32 @@ export interface SceneBuildInput {
   visibility: VisibilityConfig;
   activeConstellationId: string | null;
   selectedPlanetName: string | null;
-  measureArc?: GeodesicArc | null;
+  measurePair?: { a: Star; b: Star } | null;
+}
+
+function buildSphericalMeasureArc(
+  a: Star,
+  b: Star,
+  lat: number,
+  lon: number,
+  date: Date,
+  heading: number,
+  pitch: number,
+  roll: number,
+  width: number,
+  height: number,
+  fov: number
+): GeodesicArc | null {
+  const samples = sampleGreatCircle(a.ra, a.dec, b.ra, b.dec, 36);
+  const points: Point2D[] = [];
+  for (const s of samples) {
+    const enu = icrsToEnu(unitFromRaDec(s.ra, s.dec), lat, lon, date);
+    const cam = enuToCameraSpace(enu, heading, pitch, roll);
+    const pt = project(cam, width, height, fov);
+    if (pt && cam.z > 0.001) points.push(pt);
+  }
+  if (points.length < 2) return null;
+  return { points, label: formatArcDms(separationBetweenStars(a, b)) };
 }
 
 const PLANET_COLORS: Record<string, string> = {
@@ -58,9 +86,9 @@ export function buildSkyScene(input: SceneBuildInput): SkySceneData {
     lon,
     date,
     heading,
-    beta,
-    gamma,
-    screenAngle = 0,
+    cameraPitch,
+    cameraRoll,
+    refreshSky = false,
     width,
     height,
     fov,
@@ -69,18 +97,17 @@ export function buildSkyScene(input: SceneBuildInput): SkySceneData {
     visibility,
     activeConstellationId,
     selectedPlanetName,
-    measureArc,
+    measurePair,
   } = input;
 
-  const R = orientationMatrix(heading, beta, gamma, screenAngle);
-  void boresightENU(R);
+  const toCam = (enu: Vector3) => enuToCameraSpace(enu, heading, cameraPitch, cameraRoll);
 
   const projectedStars: ProjectedStar[] = [];
   const segments: ConstellationSegment[] = [];
   const labels: SkySceneData['labels'] = [];
 
   if (visibility.stars || visibility.constellations) {
-    sky.updateEnu(lat, lon, date, false);
+    sky.updateEnu(lat, lon, date, refreshSky);
     const enuVectors = sky.getEnuVectors();
     const stars = sky.getStars();
 
@@ -92,7 +119,7 @@ export function buildSkyScene(input: SceneBuildInput): SkySceneData {
     for (let i = 0; i < stars.length; i++) {
       const star = stars[i];
       const enu = enuVectors[i];
-      const cam = worldToCamera(enu, R);
+      const cam = toCam(enu);
       camMap.set(star.id, cam);
 
       const pt = project(cam, width, height, fov);
@@ -124,43 +151,59 @@ export function buildSkyScene(input: SceneBuildInput): SkySceneData {
 
     if (visibility.constellations && visibility.constellationLines) {
       const conCentroidAcc = new Map<string, { sx: number; sy: number; count: number }>();
+      const starById = new Map(catalog.stars.map((s) => [s.id, s]));
 
       for (const line of lines) {
-        const camA = camMap.get(line.fromStarId);
-        const camB = camMap.get(line.toStarId);
-        if (!camA || !camB) continue;
+        const sa = starById.get(line.fromStarId);
+        const sb = starById.get(line.toStarId);
+        if (!sa || !sb) continue;
 
-        const clipped = clipSegmentToNearPlane(camA, camB, 0.02);
-        if (!clipped) continue;
-
-        const p1 = project(clipped[0], width, height, fov);
-        const p2 = project(clipped[1], width, height, fov);
-        if (!p1 || !p2) continue;
-
-        const inBounds =
-          (p1.x >= -120 && p1.x <= width + 120 && p1.y >= -120 && p1.y <= height + 120) ||
-          (p2.x >= -120 && p2.x <= width + 120 && p2.y >= -120 && p2.y <= height + 120);
-        if (!inBounds) continue;
+        const arcSamples = sampleGreatCircle(sa.ra, sa.dec, sb.ra, sb.dec, 14);
+        let prevCam: Vector3 | null = null;
+        let prevPt: Point2D | null = null;
 
         const highlighted =
           activeConstellationId !== null &&
           line.constellationId.toLowerCase() === activeConstellationId.toLowerCase();
 
-        segments.push({
-          x1: p1.x,
-          y1: p1.y,
-          x2: p2.x,
-          y2: p2.y,
-          constellationId: line.constellationId,
-          visible: true,
-          highlighted,
-        });
+        for (const sample of arcSamples) {
+          const enu = icrsToEnu(unitFromRaDec(sample.ra, sample.dec), lat, lon, date);
+          const cam = toCam(enu);
 
-        const acc = conCentroidAcc.get(line.constellationId) ?? { sx: 0, sy: 0, count: 0 };
-        acc.sx += (p1.x + p2.x) * 0.5;
-        acc.sy += (p1.y + p2.y) * 0.5;
-        acc.count += 1;
-        conCentroidAcc.set(line.constellationId, acc);
+          if (prevCam) {
+            const clipped = clipSegmentToNearPlane(prevCam, cam, 0.02);
+            if (clipped) {
+              const p1 = project(clipped[0], width, height, fov);
+              const p2 = project(clipped[1], width, height, fov);
+              if (p1 && p2) {
+                const inBounds =
+                  (p1.x >= -120 && p1.x <= width + 120 && p1.y >= -120 && p1.y <= height + 120) ||
+                  (p2.x >= -120 && p2.x <= width + 120 && p2.y >= -120 && p2.y <= height + 120);
+                if (inBounds) {
+                  segments.push({
+                    x1: p1.x,
+                    y1: p1.y,
+                    x2: p2.x,
+                    y2: p2.y,
+                    constellationId: line.constellationId,
+                    visible: true,
+                    highlighted,
+                  });
+                  const acc = conCentroidAcc.get(line.constellationId) ?? { sx: 0, sy: 0, count: 0 };
+                  acc.sx += (p1.x + p2.x) * 0.5;
+                  acc.sy += (p1.y + p2.y) * 0.5;
+                  acc.count += 1;
+                  conCentroidAcc.set(line.constellationId, acc);
+                }
+              }
+            }
+          }
+
+          const pt = project(cam, width, height, fov);
+          prevCam = cam;
+          prevPt = pt;
+          void prevPt;
+        }
       }
 
       if (visibility.constellationLabels) {
@@ -192,7 +235,7 @@ export function buildSkyScene(input: SceneBuildInput): SkySceneData {
     for (const dso of catalog.dso) {
       const hor = equatorialToHorizontal(dso.ra, dso.dec, lat, lon, date);
       const enu = toENU(hor.altitude, hor.azimuth);
-      const cam = worldToCamera(enu, R);
+      const cam = toCam(enu);
       const pt = project(cam, width, height, fov);
       bodies.push({
         id: dso.id,
@@ -217,7 +260,7 @@ export function buildSkyScene(input: SceneBuildInput): SkySceneData {
       ['Moon', moon, '#f1f5f9', 'moon'],
     ] as const) {
       const enu = toENU(pos.altitude, pos.azimuth);
-      const cam = worldToCamera(enu, R);
+      const cam = toCam(enu);
       const pt = project(cam, width, height, fov);
       bodies.push({
         id: name.toLowerCase(),
@@ -236,7 +279,7 @@ export function buildSkyScene(input: SceneBuildInput): SkySceneData {
     for (const planet of NAKED_EYE_PLANETS) {
       const pos = planetAltAz(planet, date, lat, lon);
       const enu = toENU(pos.altitude, pos.azimuth);
-      const cam = worldToCamera(enu, R);
+      const cam = toCam(enu);
       const pt = project(cam, width, height, fov);
       bodies.push({
         id: planet.toLowerCase(),
@@ -255,6 +298,22 @@ export function buildSkyScene(input: SceneBuildInput): SkySceneData {
       });
     }
   }
+
+  const measureArc = measurePair
+    ? buildSphericalMeasureArc(
+        measurePair.a,
+        measurePair.b,
+        lat,
+        lon,
+        date,
+        heading,
+        cameraPitch,
+        cameraRoll,
+        width,
+        height,
+        fov
+      )
+    : null;
 
   return {
     stars: projectedStars,

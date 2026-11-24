@@ -86,7 +86,7 @@ console.log('✓ 5-location RA/Dec <-> Alt/Az round-trip & Polaris latitude vali
 
 // 5. Planetary Ephemeris Validation (Mercury, Venus, Mars, Jupiter, Saturn + Sun/Moon)
 for (const p of NAKED_EYE_PLANETS) {
-  const eq = planetEquatorial(p, testDate);
+  const eq = planetEquatorial(p, testDate, 23.0225, 72.5714);
   assert.ok(eq.ra >= 0 && eq.ra < 360 && eq.dec >= -35 && eq.dec <= 35, `Invalid planet coords for ${p}`);
   assert.ok(eq.distanceAU > 0.2 && eq.distanceAU < 12, `Invalid AU distance for ${p}`);
   const hor = planetAltAz(p, testDate, 23.0225, 72.5714);

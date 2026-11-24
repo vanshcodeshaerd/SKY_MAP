@@ -173,10 +173,26 @@ for (const f of consGeo.features ?? []) {
   });
 }
 
+const lineStarIds = new Set();
+for (const l of uniqueLines) {
+  lineStarIds.add(l.fromStarId);
+  lineStarIds.add(l.toStarId);
+}
+
+const byId = new Map(stars.map((s) => [s.id, s]));
+const advancedBase = stars.filter((s) => s.magnitude <= 5.8);
+const advancedIds = new Set(advancedBase.map((s) => s.id));
+for (const id of lineStarIds) {
+  if (!advancedIds.has(id) && byId.has(id)) {
+    advancedBase.push(byId.get(id));
+    advancedIds.add(id);
+  }
+}
+
 const stages = {
   initial: stars.filter((s) => s.magnitude <= 3.5),
   intermediate: stars.filter((s) => s.magnitude <= 4.5),
-  advanced: stars.filter((s) => s.magnitude <= 5.8),
+  advanced: advancedBase,
 };
 
 fs.mkdirSync(outDir, { recursive: true });

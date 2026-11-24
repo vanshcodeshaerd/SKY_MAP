@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState, useMemo } from 'react';
+import { useEffect, useRef, useState, useMemo, useCallback } from 'react';
+import { visibilityFromMode, type CelestialFilterMode } from '../../services/celestialVisibility';
 import {
   Camera,
   RefreshCw,
@@ -92,8 +93,15 @@ export function ARSkyView({
   // Mode: AR (Camera Passthrough) vs VR (Gyro Cosmic Planetarium)
   const [viewMode, setViewMode] = useState<'ar' | 'vr'>('ar');
   const [nightVisionMode, setNightVisionMode] = useState<boolean>(false);
+  const [celestialFilterMode, setCelestialFilterMode] = useState<CelestialFilterMode>('BOTH');
+  const skyVisibility = useMemo(() => visibilityFromMode(celestialFilterMode), [celestialFilterMode]);
   const [showConstellations, setShowConstellations] = useState<boolean>(true);
   const [showAllPlanetsInAR, setShowAllPlanetsInAR] = useState<boolean>(true);
+  const constellationsLayerOn = (skyVisibility.stars || skyVisibility.constellationLines) && showConstellations;
+  const planetsLayerOn = skyVisibility.planets;
+  const applyCelestialFilterMode = useCallback((mode: CelestialFilterMode) => {
+    setCelestialFilterMode(mode);
+  }, []);
   const [showEcliptic, setShowEcliptic] = useState<boolean>(true);
   const [skyOpacity, setSkyOpacity] = useState<number>(0.6);
 
@@ -267,7 +275,11 @@ export function ARSkyView({
 
       const motionSpeed = Math.abs(dHeading) + Math.abs(dPitch);
       const adaptiveFactor = hasSensor
-        ? motionSpeed > 4.0 ? 0.65 : (motionSpeed > 1.0 ? 0.35 : 0.20)
+        ? motionSpeed > 4.0
+          ? 0.82
+          : motionSpeed > 1.0
+            ? 0.52
+            : 0.24
         : 0.55;
 
       smoothedAnglesRef.current.heading = (smoothedAnglesRef.current.heading + dHeading * adaptiveFactor + 360) % 360;
@@ -387,7 +399,7 @@ export function ARSkyView({
       }
 
       // Project stars and constellation lines (every 3rd frame)
-      if (showConstellations && refreshDecorLayers) {
+      if (constellationsLayerOn && refreshDecorLayers) {
         const projectedStarCoords = new Map<string, { u: number; v: number; inFront: boolean }>();
         const starList: any[] = [];
 
@@ -454,7 +466,7 @@ export function ARSkyView({
     eclipticEnuPoints,
     cardinalEnuPoints,
     horizonEnuPoints,
-    showConstellations,
+    constellationsLayerOn,
     showEcliptic,
     invertPitch,
     showSubHorizonPlanets,
@@ -987,7 +999,7 @@ export function ARSkyView({
           )}
 
           {/* Constellation Lines */}
-          {showConstellations &&
+          {constellationsLayerOn &&
             projectedConstellations.map((line, i) => (
               <line
                 key={`line-${i}`}
@@ -1002,7 +1014,7 @@ export function ARSkyView({
             ))}
 
           {/* Stars */}
-          {showConstellations &&
+          {constellationsLayerOn &&
             projectedStars.map((star, i) => (
               <g key={`star-${i}`} transform={`translate(${star.u}, ${star.v})`}>
                 <circle
@@ -1221,6 +1233,24 @@ export function ARSkyView({
               ))}
             </div>
           )}
+        </div>
+
+        {/* Celestial filter: BOTH | PLANETS | CONSTELLATIONS (instant scene-layer switch) */}
+        <div className="absolute top-[4.25rem] left-1/2 -translate-x-1/2 z-30 flex rounded-full border border-slate-700/80 bg-slate-950/90 backdrop-blur-md p-0.5 pointer-events-auto shadow-lg">
+          {(['BOTH', 'PLANETS', 'CONSTELLATIONS'] as const).map((mode) => (
+            <button
+              key={mode}
+              type="button"
+              onClick={() => applyCelestialFilterMode(mode)}
+              className={`px-2.5 sm:px-3 py-1 rounded-full text-[10px] sm:text-[11px] font-semibold tracking-wide transition ${
+                celestialFilterMode === mode
+                  ? 'bg-sky-500/25 text-sky-200 border border-sky-400/50'
+                  : 'text-slate-400 hover:text-slate-200 border border-transparent'
+              }`}
+            >
+              {mode === 'BOTH' ? 'Both' : mode === 'PLANETS' ? 'Planets' : 'Stars'}
+            </button>
+          ))}
         </div>
 
         {/* Uncluttered Top Right Action Bar (Mode Pill + Layers Button) */}
@@ -1469,7 +1499,7 @@ export function ARSkyView({
         </div>
 
         {/* Render ALL Visible Solar System Planets with Photorealistic 3D Appearance */}
-        {showAllPlanetsInAR &&
+        {planetsLayerOn && showAllPlanetsInAR &&
           CELESTIAL_BODY_LIST.map((b) => {
             if (b.id === currentTargetBodyId) return null;
 
@@ -1549,7 +1579,7 @@ export function ARSkyView({
 
         {/* Sub-horizon azimuth beacons on the horizon arc (when body is below ground) */}
         {showSubHorizonPlanets &&
-          showAllPlanetsInAR &&
+          planetsLayerOn && showAllPlanetsInAR &&
           subHorizonCatalog.map(({ bodyId, coords }) => {
             if (bodyId === currentTargetBodyId) return null;
             const vis = classifyArBodyVisibility(

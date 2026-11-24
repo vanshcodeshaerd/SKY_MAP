@@ -1,3 +1,5 @@
+import { attitudeFromEvent, getSmoothedAttitude, pushAttitudeSample } from './ar/deviceAttitude.ts';
+
 export interface OrientationData {
   h: number; // clockwise compass heading [0, 360)
   b: number; // pitch (beta)
@@ -43,7 +45,7 @@ export function getScreenOrientationAngle(): number {
   return typeof legacy === 'number' ? legacy : 0;
 }
 
-function lowPass(next: OrientationData, a = 0.22) {
+function lowPass(next: OrientationData, a = 0.55) {
   if (!hasInitialized) {
     smoothed = { ...next };
     hasInitialized = true;
@@ -55,8 +57,11 @@ function lowPass(next: OrientationData, a = 0.22) {
 }
 
 export function getSmoothedOrientation(): OrientationData {
-  return smoothed;
+  const att = getSmoothedAttitude();
+  return { h: att.heading, b: 90 + att.pitch, g: att.roll };
 }
+
+export { getSmoothedAttitude, getLatestAttitude } from './ar/deviceAttitude.ts';
 
 export function resetOrientationFilter() {
   hasInitialized = false;
@@ -86,16 +91,13 @@ export async function startOrientation(onUpdate: (h: number, b: number, g: numbe
       capabilities.absolute = true;
     }
 
-    const heading =
-      iosHeading != null
-        ? iosHeading
-        : (((360 - (e.alpha ?? 0)) % 360) + 360) % 360;
-
     capabilities.lastEventTimestamp = Date.now();
+    const att = attitudeFromEvent(e);
+    pushAttitudeSample(att);
     lowPass({
-      h: heading,
-      b: e.beta ?? 90,
-      g: e.gamma ?? 0,
+      h: att.heading,
+      b: 90 + att.pitch,
+      g: att.roll,
     });
     onUpdate(smoothed.h, smoothed.b, smoothed.g);
   };

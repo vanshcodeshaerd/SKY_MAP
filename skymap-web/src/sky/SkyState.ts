@@ -8,7 +8,7 @@ export class SkyState {
   private icrs: Vector3[] = [];
   private enu: Vector3[] = [];
   private lastTransformMs = 0;
-  private transformIntervalMs = 1500;
+  private transformIntervalMs = 120;
   private stars: Star[];
 
   constructor(stars: Star[]) {
