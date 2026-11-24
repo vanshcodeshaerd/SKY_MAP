@@ -1,0 +1,21 @@
+# Dependency directories
+node_modules
+.venv
+backend/.venv
+
+# Build artifacts
+frontend/dist
+dist
+
+# Python caches
+__pycache__
+*.py[cod]
+.pytest_cache
+.mypy_cache
+
+# Git and OS metadata
+.git
+.gitignore
+.vscode
+.DS_Store
+*.log

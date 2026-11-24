@@ -1,0 +1,9 @@
+fastapi
+uvicorn
+skyfield
+numpy
+opencv-python-headless
+python-multipart
+pydantic
+pytest
+httpx

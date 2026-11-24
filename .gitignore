@@ -1,11 +1,30 @@
+node_modules/
 **/node_modules/
+dist/
 **/dist/
+.venv/
 **/.venv/
+backend/.venv/
+CGIP LAB/.venv/
+skymap-web/node_modules/
+skymap-web/dist/
 **/*.local
 **/.DS_Store
 **/.vscode/
 **/.idea/
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+*.egg-info/
 *.log
-skymap-web/node_modules/
-skymap-web/dist/
-CGIP LAB/.venv/
+.DS_Store
+.env
+.env.local
+**/de421.bsp
+backend/static/
+
+# Local import artifacts (integrated code lives in frontend/)
+_import_orbitarium/
+orbitarium-planet-atlas*.zip
